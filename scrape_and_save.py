@@ -124,15 +124,17 @@ def fetch_and_store_listings():
         if doc_ref.get().exists:
             print(f"DB: Listing {listing_id} already exists. Skipping.")
         else:
-            print(f"DB: Saving new listing {listing_id}...")
-            # ### MODIFIED LINES ###
-            # Add our status fields to the CLEAN data.
-            clean_data['status'] = 'to be reviewed'
-            clean_data['scrapedAt'] = firestore.SERVER_TIMESTAMP
-            
-            # Save the CLEAN data to Firestore, not the raw item.
-            doc_ref.set(clean_data)
-            processed_count += 1
+            if clean_data.get('isInInnerRing'):
+                print(f"DB: Saving new listing {listing_id} (in inner ring)...")
+                # Add our status fields to the CLEAN data.
+                clean_data['status'] = 'to be reviewed'
+                clean_data['scrapedAt'] = firestore.SERVER_TIMESTAMP
+                
+                # Save the CLEAN data to Firestore, not the raw item.
+                doc_ref.set(clean_data)
+                processed_count += 1
+            else:
+                print(f"DB: Skipping new listing {listing_id} (not in inner ring).")
             
     print(f"--- ✨ Run Complete. Saved {processed_count} new listings to Firebase. ---")
 
@@ -169,6 +171,8 @@ def transform_listing_data(raw_item):
     apartment_type_str = find_kenmerk_value(raw_item, 'bouw', 'bouw-soortobject')
     if apartment_type_str and "Benedenwoning" in apartment_type_str:
         apartment_floor = "Ground"
+    elif apartment_type_str and "Bovenwoning" in apartment_type_str:
+        apartment_floor = "Top floor"
     else:
         floor_str = find_kenmerk_value(raw_item, 'indeling', 'indeling-locatedat')
         apartment_floor = parse_number_from_string(floor_str)
