@@ -1,9 +1,9 @@
-import os
-from dotenv import load_dotenv
-import firebase_admin
-from firebase_admin import credentials, firestore
-from apify_client import ApifyClient
 import re 
+import os
+import firebase_admin
+from dotenv import load_dotenv
+from apify_client import ApifyClient
+from firebase_admin import credentials, firestore
 
 # --- INITIALIZATION ---
 print("--- Initializing Script ---")
@@ -35,8 +35,50 @@ except Exception as e:
 
 # --- MAIN SCRIPT LOGIC ---
 
+
+kml_coordinates_string = """
+  4.8954475,52.3803562,0 4.8825728,52.385176,0 4.8789679,52.3856999,0
+  4.8480686,52.3850713,0 4.8539909,52.3806179,0 4.8466094,52.3780508,0
+  4.8478969,52.3697715,0 4.8504719,52.3636921,0 4.8489269,52.3586602,0
+  4.8456654,52.3522646,0 4.844807,52.3469168,0 4.8516735,52.345239,0
+  4.8848044,52.3495384,0 4.8858344,52.3454487,0 4.8918426,52.3431415,0
+  4.9131288,52.3426172,0 4.9115838,52.3477557,0 4.930295,52.3533131,0
+  4.9266901,52.3584505,0 4.9314967,52.3609665,0 4.9309817,52.3655789,0
+  4.9126996,52.3698501,0 4.9098242,52.3692213,0 4.9017133,52.3659195,0
+  4.8957479,52.3647404,0 4.8906839,52.3654217,0 4.8869073,52.36778,0
+  4.8871648,52.3726799,0 4.8954475,52.3803562,0
+"""
+
+amsterdam_inner_ring_polygon = [
+    (float(lon), float(lat))
+    for lon, lat, _ in (
+        coords.strip().split(',') for coords in kml_coordinates_string.strip().split()
+    )
+]
+
+def point_in_polygon(lon, lat, polygon):
+    """
+    Checks if a point (lon, lat) is inside a polygon using the ray-casting algorithm.
+    The polygon is a list of (lon, lat) tuples.
+    """
+    n = len(polygon)
+    inside = False
+    p1lon, p1lat = polygon[0]
+    for i in range(n + 1):
+        p2lon, p2lat = polygon[i % n]
+        if lat > min(p1lat, p2lat):
+            if lat <= max(p1lat, p2lat):
+                if lon <= max(p1lon, p2lon):
+                    if p1lat != p2lat:
+                        lon_intersection = (lat - p1lat) * (p2lon - p1lon) / (p2lat - p1lat) + p1lon
+                    if p1lon == p2lon or lon <= lon_intersection:
+                        inside = not inside
+        p1lon, p1lat = p2lon, p2lat
+    return inside
+
 def fetch_and_store_listings():
     """Runs the Apify actor, transforms the data, and stores the clean result in Firestore."""
+
     
     # 1. Prepare the input for the Apify Actor
     run_input = {
@@ -165,15 +207,22 @@ def transform_listing_data(raw_item):
         if relative_url:
             agent_url = f"https://www.funda.nl{relative_url}"
 
+    lat = raw_item.get("Coordinates", {}).get("Latitude")
+    lon = raw_item.get("Coordinates", {}).get("Longitude")
+    is_in_inner_ring = False
+    if lat and lon:
+        is_in_inner_ring = point_in_polygon(lon, lat, amsterdam_inner_ring_polygon)
+
     clean_listing = {
         "fundaId": raw_item.get("_id"),
         "url": raw_item.get("Advertising", {}).get("ContentUrl"),
         "address": raw_item.get("AddressTitle"),
         "postalCode": raw_item.get("AddressSubTitle"),
         "neighborhood": raw_item.get("BuurtName"),
+        "isInInnerRing": is_in_inner_ring,
         "coordinates": {
-            "lat": raw_item.get("Coordinates", {}).get("Latitude"),
-            "lon": raw_item.get("Coordinates", {}).get("Longitude")
+            "lat": lat,
+            "lon": lon
         },
         "price": price_info.get("NumericSellingPrice"),
         "livingArea": parse_number_from_string(raw_item.get("WoonOppervlakteSubTitle")),
