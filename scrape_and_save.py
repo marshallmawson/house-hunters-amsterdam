@@ -4,6 +4,10 @@ import firebase_admin
 from dotenv import load_dotenv
 from apify_client import ApifyClient
 from firebase_admin import credentials, firestore
+from google.cloud.translate import v2 as translate
+import google.generativeai as genai
+import vertexai
+from vertexai.language_models import TextEmbeddingModel
 
 # --- INITIALIZATION ---
 print("--- Initializing Script ---")
@@ -40,6 +44,31 @@ try:
 except Exception as e:
     print(f"❗️ Error initializing Google Translate: {e}")
     exit()
+
+# Initialize the Generative Model
+try:
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_api_key:
+        raise ValueError("GEMINI_API_KEY not found in .env file")
+    genai.configure(api_key=gemini_api_key)
+    model = genai.GenerativeModel('gemini-pro')
+    print("✅ Generative model initialized successfully.")
+except Exception as e:
+    print(f"❗️ Error initializing generative model: {e}")
+    # Continue without this feature if it fails. The field will be missing.
+    model = None
+
+# Initialize Vertex AI
+try:
+    project_id = os.getenv("GCP_PROJECT_ID")
+    if not project_id:
+        raise ValueError("GCP_PROJECT_ID not found in .env file")
+    vertexai.init(project=project_id)
+    embedding_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
+    print("✅ Vertex AI initialized successfully.")
+except Exception as e:
+    print(f"❗️ Error initializing Vertex AI: {e}")
+    embedding_model = None # Continue without embedding generation
 
 # --- MAIN SCRIPT LOGIC ---
 
@@ -84,6 +113,17 @@ def point_in_polygon(lon, lat, polygon):
         p1lon, p1lat = p2lon, p2lat
     return inside
 
+def generate_embedding(text):
+    """Generates an embedding vector for a given text."""
+    if not embedding_model or not text:
+        return None
+    try:
+        embeddings = embedding_model.get_embeddings([text])
+        return embeddings[0].values
+    except Exception as e:
+        print(f"❗️ Could not generate embedding: {e}")
+        return None
+
 def fetch_and_store_listings():
     """Runs the Apify actor, transforms the data, and stores the clean result in Firestore."""
 
@@ -113,38 +153,43 @@ def fetch_and_store_listings():
     processed_count = 0
     for item in apify_client.dataset(run["defaultDatasetId"]).iterate_items():
         
-        # ### NEW LINE ###
-        # First, transform the raw data into our clean structure.
         clean_data = transform_listing_data(item)
-        
-        # ### MODIFIED LINE ###
-        # Get the unique ID from our new clean_data object.
         listing_id = clean_data.get("fundaId")
         
         if not listing_id:
             print("❗️ Skipping item, could not find 'fundaId' after transformation.")
             continue
 
-        # Create a reference to a document in the 'listings' collection
+        # Only process listings that are in the desired area.
+        if not clean_data.get('isInInnerRing'):
+            print(f"DB: Skipping listing {listing_id} (not in inner ring).")
+            continue
+
+        # Generate embedding for the text.
+        embedding_text = clean_data.get("embeddingText")
+        listing_embedding = generate_embedding(embedding_text)
+        if listing_embedding:
+            clean_data['listingEmbedding'] = listing_embedding
+
         doc_ref = db.collection('listings').document(str(listing_id))
 
-        # Check if the document already exists
+        # Check if the document already exists to determine if it's a new listing or an update.
         if doc_ref.get().exists:
-            print(f"DB: Listing {listing_id} already exists. Skipping.")
+            print(f"DB: Updating existing listing {listing_id}...")
+            # For existing listings, we merge the new data to avoid overwriting fields
+            # that might be updated manually (like 'status').
+            clean_data['scrapedAt'] = firestore.SERVER_TIMESTAMP # Always update the scraped time
+            doc_ref.set(clean_data, merge=True)
         else:
-            if clean_data.get('isInInnerRing'):
-                print(f"DB: Saving new listing {listing_id} (in inner ring)...")
-                # Add our status fields to the CLEAN data.
-                clean_data['status'] = 'to be reviewed'
-                clean_data['scrapedAt'] = firestore.SERVER_TIMESTAMP
-                
-                # Save the CLEAN data to Firestore, not the raw item.
-                doc_ref.set(clean_data)
-                processed_count += 1
-            else:
-                print(f"DB: Skipping new listing {listing_id} (not in inner ring).")
+            print(f"DB: Saving new listing {listing_id}...")
+            # For new listings, we set the initial status.
+            clean_data['status'] = 'to be reviewed'
+            clean_data['scrapedAt'] = firestore.SERVER_TIMESTAMP
+            doc_ref.set(clean_data)
+        
+        processed_count += 1
             
-    print(f"--- ✨ Run Complete. Saved {processed_count} new listings to Firebase. ---")
+    print(f"--- ✨ Run Complete. Processed {processed_count} listings. ---")
 
 def parse_number_from_string(text):
     """Finds the first number in a string and returns it as an integer."""
@@ -163,7 +208,129 @@ def find_kenmerk_value(raw_item, section_id, feature_id):
                 if feature.get('Id') == feature_id:
                     return feature.get('Value')
     return None
+
+
+def clean_description(description):
+    """
+    Extracts the English portion of a listing description and removes boilerplate.
+    """
+    if not description:
+        return ""
+
+    english_text = ""
+    # Descriptions often have a Dutch part then "--- English text ---" or similar.
+    # We'll try a few common separators.
+    separators = [
+        "english version",
+        "english text below",
+        "--- english ---",
+        "--- en ---",
+    ]
+
+    found = False
+    for sep in separators:
+        if sep in description.lower():
+            # Split and take the second part
+            parts = re.split(sep, description, flags=re.IGNORECASE)
+            if len(parts) > 1:
+                english_text = parts[1]
+                found = True
+                break
     
+    if not found:
+        # If no clear separator is found, it's likely the description is either
+        # all in one language or doesn't follow the expected format.
+        # We will proceed with the entire description and clean it.
+        english_text = description
+
+    # 2. Clean the Text
+    # Remove boilerplate legal disclaimers (both English and Dutch)
+    boilerplate_patterns = [
+        r'ASBESTOS CLAUSE.*',
+        r'AGE CLAUSE.*',
+        r'NEN CLAUSE.*',
+        r'OWNERS DID NOT LIVE IN THE APARTMENT RECENTLY.*',
+        r'This information has been compiled by us with due care.*',
+        r'Deze informatie is door ons met de nodige zorgvuldigheid samengesteld.*'
+    ]
+    cleaned_text = english_text
+    for pattern in boilerplate_patterns:
+        cleaned_text = re.sub(pattern, '', cleaned_text, flags=re.IGNORECASE | re.DOTALL)
+
+    return cleaned_text.strip()
+
+    
+def generate_embedding_text(clean_listing):
+    """
+    Generates a summary and combines it with key features for AI processing.
+    """
+    summary = "No description available."
+    cleaned_description = clean_listing.get("cleanedDescription", "")
+
+    if model and cleaned_description: # Check if model was initialized
+        try:
+            prompt = f'''
+            Based on the following apartment description, write a concise, one-paragraph summary.
+            Focus on the apartment's overall vibe and its key selling points.
+            Do not include any HTML or markdown.
+
+            Description:
+            ---
+            {cleaned_description}
+            ---
+            Summary:
+            '''
+            response = model.generate_content(prompt)
+            summary = response.text
+        except Exception as e:
+            print(f"❗️ Could not generate summary: {e}")
+            summary = "Summary generation failed."
+    elif not model:
+        summary = "Summary generation skipped: model not initialized."
+
+    # Combine with structured data
+    features = []
+    if clean_listing.get("bedrooms"):
+        features.append(f'{clean_listing["bedrooms"]}-bedroom')
+    if clean_listing.get("bathrooms"):
+        features.append(f'{clean_listing["bathrooms"]}-bathroom')
+    
+    feature_str = ", ".join(features)
+    
+    location_str = ""
+    if clean_listing.get("neighborhood"):
+        location_str = f' in the {clean_listing["neighborhood"]} neighborhood'
+
+    apartment_type_str = ""
+    if clean_listing.get("apartmentFloor"):
+        floor = clean_listing["apartmentFloor"]
+        if isinstance(floor, int):
+            apartment_type_str = f" on floor {floor}"
+        else:
+            apartment_type_str = f" a {floor}-floor unit"
+
+    outdoor_space_parts = []
+    if clean_listing.get("hasBalcony"):
+        outdoor_space_parts.append("a balcony")
+    if clean_listing.get("hasGarden"):
+        outdoor_space_parts.append("a garden")
+    if clean_listing.get("hasRooftopTerrace"):
+        outdoor_space_parts.append("a rooftop terrace")
+
+    outdoor_space_str = ""
+    if not outdoor_space_parts:
+        outdoor_space_str = " with no balcony or garden."
+    else:
+        outdoor_space_str = " with " + " and ".join(outdoor_space_parts) + "."
+
+
+    features_summary = f"Features: This is a {feature_str} apartment{location_str}. It is{apartment_type_str}{outdoor_space_str}"
+
+    embedding_text = f"Summary: {summary}. {features_summary}"
+    
+    return embedding_text
+
+
 #transform the data for our DB
 def transform_listing_data(raw_item):
     """Takes the raw scraper output and returns a clean, detailed dictionary."""
@@ -173,7 +340,7 @@ def transform_listing_data(raw_item):
     source_info = raw_item.get('basicInfo', {}).get('_source', {})
     address_details = raw_item.get('AddressDetails', {})
     fast_view = raw_item.get('FastView', {})
-    listing_description = raw_item.get('ListingDescription', {})
+    listing_description_text = raw_item.get('ListingDescription', {}).get("Description")
     urls = raw_item.get('Urls', {}).get('FriendlyUrl', {})
 
     bathroom_str = find_kenmerk_value(raw_item, 'indeling', 'indeling-totalbathroom')
@@ -238,6 +405,9 @@ def transform_listing_data(raw_item):
     if lat and lon:
         is_in_inner_ring = point_in_polygon(lon, lat, amsterdam_inner_ring_polygon)
 
+    # Clean the description
+    cleaned_description = clean_description(listing_description_text)
+
     clean_listing = {
         "fundaId": raw_item.get("_id"),
         "url": urls.get("FullUrl"),
@@ -265,11 +435,16 @@ def transform_listing_data(raw_item):
         "agentName": agent_name,
         "agentUrl": agent_url,
         "vveContribution": parse_number_from_string(vve_str),
-        "description": listing_description.get("Description"),
+        "description": listing_description_text,
+        "cleanedDescription": cleaned_description,
         "mainImage": main_image,
         "imageGallery": gallery,
         "floorPlans": floor_plans
     }
+    
+    # Generate the final text for AI embedding
+    embedding_text = generate_embedding_text(clean_listing)
+    clean_listing['embeddingText'] = embedding_text
     
     return clean_listing
 
