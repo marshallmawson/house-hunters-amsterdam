@@ -82,7 +82,7 @@ def fetch_and_store_listings():
     
     # 1. Prepare the input for the Apify Actor
     run_input = {
-        "startUrls": [{ "url": "https://www.funda.nl/zoeken/koop?selected_area=[%22amsterdam%22]&price=%22400000-750000%22&publication_date=%2210%22&availability=[%22available%22]&bedrooms=%222-%22&sort=%22date_down%22&custom_area=_uy%255Cigs~HkDkb%2540od%2540aa%2540%257C%255BiSa%2540uc%2540pd%2540~%2540rVrRpuEfByJ~%257DAePtuCsiJte%2540wdA%257DWmjCwgA%257CdBagAwf%2540c%255DhmAqXja%2540eDloArc%2540ja%2540hSvg%2540i%2540rHyF" }],
+        "startUrls": [{ "url": "https://www.funda.nl/zoeken/koop?price=%22400000-750000%22&publication_date=%2210%22&availability=[%22available%22]&bedrooms=%222-%22&sort=%22date_down%22&custom_area=_uy%255Cigs~HkDkb%2540od%2540aa%2540%257C%255BiSa%2540uc%2540pd%2540~%2540rVrRpuEfByJ~%257DAePtuCsiJte%2540wdA%257DWmjCwgA%257CdBagAwf%2540c%255DhmAqXja%2540eDloArc%2540ja%2540hSvg%2540i%2540rHyF" }],
         "maxItems": 1000, #free limit is 100 anyway it seems
         "maxConcurrency": 100,
         "minConcurrency": 1,
@@ -163,6 +163,10 @@ def transform_listing_data(raw_item):
     price_info = raw_item.get('Price', {})
     targeting_options = raw_item.get('Advertising', {}).get('TargetingOptions', {})
     source_info = raw_item.get('basicInfo', {}).get('_source', {})
+    address_details = raw_item.get('AddressDetails', {})
+    fast_view = raw_item.get('FastView', {})
+    listing_description = raw_item.get('ListingDescription', {})
+    urls = raw_item.get('Urls', {}).get('FriendlyUrl', {})
 
     bathroom_str = find_kenmerk_value(raw_item, 'indeling', 'indeling-totalbathroom')
     vve_str = find_kenmerk_value(raw_item, 'overdracht', 'overdracht-bijdragevve')
@@ -196,11 +200,14 @@ def transform_listing_data(raw_item):
     if not outdoor_space_str:
         outdoor_space_str = find_kenmerk_value(raw_item, 'buitenruimte', 'buitenruimte-hoofdtuin')
 
-    photos = raw_item.get("Media", {}).get("Photos", [])
-    gallery = [p.get('PhotoUrl') for p in photos[:5]]
-    
-    floor_plans_raw = raw_item.get("Media", {}).get("FloorPlan", {}).get("Floors", [])
-    floor_plans = [fp.get('ThumbnailUrl') for fp in floor_plans_raw]
+    photos_info = raw_item.get("Media", {}).get("Photos", {})
+    photo_items = photos_info.get("Items", [])
+    photo_base_url = photos_info.get("MediaBaseUrl", "")
+    gallery = [photo_base_url.replace("{id}", p.get("Id")) for p in photo_items[:5]]
+    main_image = gallery[0] if gallery else None
+
+    floor_plans_raw = raw_item.get("Media", {}).get("LegacyFloorPlan", {}).get("Items", [])
+    floor_plans = [f"https://cloud.funda.nl/valentina_media/{fp.get('ThumbnailId')}.png" for fp in floor_plans_raw]
 
     agent_info_list = source_info.get('agent', [])
     agent_name = None
@@ -219,22 +226,22 @@ def transform_listing_data(raw_item):
 
     clean_listing = {
         "fundaId": raw_item.get("_id"),
-        "url": raw_item.get("Advertising", {}).get("ContentUrl"),
-        "address": raw_item.get("AddressTitle"),
-        "postalCode": raw_item.get("AddressSubTitle"),
-        "neighborhood": raw_item.get("BuurtName"),
+        "url": urls.get("FullUrl"),
+        "address": address_details.get("Title"),
+        "postalCode": address_details.get("SubTitle"),
+        "neighborhood": address_details.get("NeighborhoodName"),
         "isInInnerRing": is_in_inner_ring,
         "coordinates": {
             "lat": lat,
             "lon": lon
         },
         "price": price_info.get("NumericSellingPrice"),
-        "livingArea": parse_number_from_string(raw_item.get("WoonOppervlakteSubTitle")),
-        "bedrooms": parse_number_from_string(raw_item.get("NumberOfBedrooms")),
+        "livingArea": parse_number_from_string(fast_view.get("LivingArea")),
+        "bedrooms": parse_number_from_string(fast_view.get("NumberOfBedrooms")),
         "bathrooms": parse_number_from_string(bathroom_str),
         "apartmentFloor": apartment_floor,
         "numberOfStories": number_of_stories,
-        "energyLabel": raw_item.get("FastView", {}).get("EnergyLabel"),
+        "energyLabel": fast_view.get("EnergyLabel"),
         "hasBalcony": targeting_options.get('balkon') == 'true',
         "hasGarden": targeting_options.get('tuin') == 'true',
         "hasRooftopTerrace": targeting_options.get('dakterras') == 'true',
@@ -244,8 +251,8 @@ def transform_listing_data(raw_item):
         "agentName": agent_name,
         "agentUrl": agent_url,
         "vveContribution": parse_number_from_string(vve_str),
-        "description": raw_item.get("Aanbiedingstekst"),
-        "mainImage": raw_item.get("Media", {}).get("HoofdfotoUrl"),
+        "description": listing_description.get("Description"),
+        "mainImage": main_image,
         "imageGallery": gallery,
         "floorPlans": floor_plans
     }
