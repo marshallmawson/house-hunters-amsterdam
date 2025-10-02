@@ -173,13 +173,19 @@ def transform_listing_data(raw_item):
     
     apartment_floor = None
     apartment_type_str = find_kenmerk_value(raw_item, 'bouw', 'bouw-soortobject')
-    if apartment_type_str and "Benedenwoning" in apartment_type_str:
-        apartment_floor = "Ground"
-    elif apartment_type_str and "Bovenwoning" in apartment_type_str:
-        apartment_floor = "Top floor"
-    else:
+    if apartment_type_str:
+        if "Ground-floor apartment" in apartment_type_str or "Benedenwoning" in apartment_type_str:
+            apartment_floor = "Ground"
+        elif "Upstairs apartment" in apartment_type_str or "Bovenwoning" in apartment_type_str:
+            apartment_floor = "Top floor"
+
+    if apartment_floor is None:
         floor_str = find_kenmerk_value(raw_item, 'indeling', 'indeling-locatedat')
-        apartment_floor = parse_number_from_string(floor_str)
+        if floor_str:
+            if "Ground floor" in floor_str:
+                apartment_floor = "Ground"
+            else:
+                apartment_floor = parse_number_from_string(floor_str)
 
     stories_str = find_kenmerk_value(raw_item, 'indeling', 'indeling-totalstories')
     number_of_stories = parse_number_from_string(stories_str)
