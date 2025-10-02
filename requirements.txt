@@ -1,3 +1,4 @@
 apify-client
 firebase-admin
 python-dotenv
+google-cloud-translate

@@ -33,6 +33,14 @@ except Exception as e:
     print(f"❗️ Error initializing Apify: {e}")
     exit()
 
+# Initialize Google Translate Client
+try:
+    translate_client = translate.Client()
+    print("✅ Google Translate client initialized successfully.")
+except Exception as e:
+    print(f"❗️ Error initializing Google Translate: {e}")
+    exit()
+
 # --- MAIN SCRIPT LOGIC ---
 
 
