@@ -4,7 +4,7 @@ import firebase_admin
 from dotenv import load_dotenv
 from apify_client import ApifyClient
 from firebase_admin import credentials, firestore
-from google.cloud.translate import v2 as translate
+from google.cloud import translate_v2 as translate
 import google.generativeai as genai
 import vertexai
 from vertexai.language_models import TextEmbeddingModel
@@ -51,7 +51,7 @@ try:
     if not gemini_api_key:
         raise ValueError("GEMINI_API_KEY not found in .env file")
     genai.configure(api_key=gemini_api_key)
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-pro-latest')
     print("✅ Generative model initialized successfully.")
 except Exception as e:
     print(f"❗️ Error initializing generative model: {e}")
@@ -212,7 +212,7 @@ def find_kenmerk_value(raw_item, section_id, feature_id):
 
 def clean_description(description):
     """
-    Extracts the English portion of a listing description and removes boilerplate.
+    Extracts the English portion of a listing description, translating if necessary, and removes boilerplate.
     """
     if not description:
         return ""
@@ -221,6 +221,7 @@ def clean_description(description):
     # Descriptions often have a Dutch part then "--- English text ---" or similar.
     # We'll try a few common separators.
     separators = [
+        "**english**"
         "english version",
         "english text below",
         "--- english ---",
@@ -240,9 +241,20 @@ def clean_description(description):
     if not found:
         # If no clear separator is found, it's likely the description is either
         # all in one language or doesn't follow the expected format.
-        # We will proceed with the entire description and clean it.
-        english_text = description
-
+        # We will proceed with the entire description and translate if needed.
+        try:
+            # Detect language
+            detection = translate_client.detect_language([description])
+            if detection[0]['language'] != 'en':
+                # Translate to English
+                translation = translate_client.translate(description, target_language='en')
+                english_text = translation['translatedText']
+            else:
+                english_text = description
+        except Exception as e:
+            print(f"❗️ Error during translation: {e}")
+            english_text = description # Fallback to original description
+    
     # 2. Clean the Text
     # Remove boilerplate legal disclaimers (both English and Dutch)
     boilerplate_patterns = [
