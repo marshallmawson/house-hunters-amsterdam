@@ -4,19 +4,15 @@ import firebase_admin
 from dotenv import load_dotenv
 from apify_client import ApifyClient
 from firebase_admin import credentials, firestore
-from google.cloud import translate_v2 as translate
-import google.generativeai as genai
-import vertexai
-from vertexai.language_models import TextEmbeddingModel
+from google.cloud.firestore_v1.field_path import FieldPath
 
 # --- INITIALIZATION ---
-print("--- Initializing Script ---")
+print("--- Initializing Scraper ---")
 
 # Load API keys from .env file
 load_dotenv()
 
 # Initialize Firebase
-# This uses the credentials file you downloaded
 try:
     cred = credentials.Certificate("firebase-credentials.json")
     firebase_admin.initialize_app(cred)
@@ -36,39 +32,6 @@ try:
 except Exception as e:
     print(f"❗️ Error initializing Apify: {e}")
     exit()
-
-# Initialize Google Translate Client
-try:
-    translate_client = translate.Client()
-    print("✅ Google Translate client initialized successfully.")
-except Exception as e:
-    print(f"❗️ Error initializing Google Translate: {e}")
-    exit()
-
-# Initialize the Generative Model
-try:
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_api_key:
-        raise ValueError("GEMINI_API_KEY not found in .env file")
-    genai.configure(api_key=gemini_api_key)
-    model = genai.GenerativeModel('gemini-pro-latest')
-    print("✅ Generative model initialized successfully.")
-except Exception as e:
-    print(f"❗️ Error initializing generative model: {e}")
-    # Continue without this feature if it fails. The field will be missing.
-    model = None
-
-# Initialize Vertex AI
-try:
-    project_id = os.getenv("GCP_PROJECT_ID")
-    if not project_id:
-        raise ValueError("GCP_PROJECT_ID not found in .env file")
-    vertexai.init(project=project_id)
-    embedding_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
-    print("✅ Vertex AI initialized successfully.")
-except Exception as e:
-    print(f"❗️ Error initializing Vertex AI: {e}")
-    embedding_model = None # Continue without embedding generation
 
 # --- MAIN SCRIPT LOGIC ---
 
@@ -113,21 +76,9 @@ def point_in_polygon(lon, lat, polygon):
         p1lon, p1lat = p2lon, p2lat
     return inside
 
-def generate_embedding(text):
-    """Generates an embedding vector for a given text."""
-    if not embedding_model or not text:
-        return None
-    try:
-        embeddings = embedding_model.get_embeddings([text])
-        return embeddings[0].values
-    except Exception as e:
-        print(f"❗️ Could not generate embedding: {e}")
-        return None
-
 def fetch_and_store_listings():
     """Runs the Apify actor, transforms the data, and stores the clean result in Firestore."""
 
-    
     # 1. Prepare the input for the Apify Actor
     run_input = {
         "startUrls": [{ "url": "https://www.funda.nl/zoeken/koop?price=%22400000-750000%22&publication_date=%2210%22&availability=[%22available%22]&bedrooms=%222-%22&sort=%22date_down%22&custom_area=_uy%255Cigs~HkDkb%2540od%2540aa%2540%257C%255BiSa%2540uc%2540pd%2540~%2540rVrRpuEfByJ~%257DAePtuCsiJte%2540wdA%257DWmjCwgA%257CdBagAwf%2540c%255DhmAqXja%2540eDloArc%2540ja%2540hSvg%2540i%2540rHyF" }],
@@ -148,11 +99,13 @@ def fetch_and_store_listings():
         print(f"❗️ Actor run failed: {e}")
         return
 
-    # 3. Iterate through the results and save each one to Firestore
-    print("🏘️ Fetching results, transforming, and saving to Firestore...")
-    processed_count = 0
-    for item in apify_client.dataset(run["defaultDatasetId"]).iterate_items():
-        
+    # 3. Iterate through the results and prepare data for Firestore
+    print("🏘️ Fetching results, transforming, and preparing for Firestore...")
+    
+    all_items = list(apify_client.dataset(run["defaultDatasetId"]).iterate_items())
+    
+    listings_to_process = {}
+    for item in all_items:
         clean_data = transform_listing_data(item)
         listing_id = clean_data.get("fundaId")
         
@@ -160,34 +113,52 @@ def fetch_and_store_listings():
             print("❗️ Skipping item, could not find 'fundaId' after transformation.")
             continue
 
-        # Only process listings that are in the desired area.
         if not clean_data.get('isInInnerRing'):
-            print(f"DB: Skipping listing {listing_id} (not in inner ring).")
+            # print(f"DB: Skipping listing {listing_id} (not in inner ring).")
             continue
+            
+        listings_to_process[str(listing_id)] = clean_data
 
-        # Generate embedding for the text.
-        embedding_text = clean_data.get("embeddingText")
-        listing_embedding = generate_embedding(embedding_text)
-        if listing_embedding:
-            clean_data['listingEmbedding'] = listing_embedding
+    if not listings_to_process:
+        print("No listings to process that are within the inner ring.")
+        print(f"--- ✨ Run Complete. Processed 0 listings. ---")
+        return
 
-        doc_ref = db.collection('listings').document(str(listing_id))
+    # Check for existing documents in batches of 30
+    print(f"Checking for {len(listings_to_process)} listings in Firestore...")
+    existing_listing_ids = set()
+    listing_ids = list(listings_to_process.keys())
+    for i in range(0, len(listing_ids), 30):
+        chunk = listing_ids[i:i+30]
+        docs = db.collection('listings').where(FieldPath.document_id(), 'in', chunk).stream()
+        for doc in docs:
+            existing_listing_ids.add(doc.id)
+    
+    print(f"Found {len(existing_listing_ids)} existing listings. Preparing batch write...")
 
-        # Check if the document already exists to determine if it's a new listing or an update.
-        if doc_ref.get().exists:
-            print(f"DB: Updating existing listing {listing_id}...")
-            # For existing listings, we merge the new data to avoid overwriting fields
-            # that might be updated manually (like 'status').
-            clean_data['scrapedAt'] = firestore.SERVER_TIMESTAMP # Always update the scraped time
-            doc_ref.set(clean_data, merge=True)
+    batch = db.batch()
+    processed_count = 0
+    
+    for listing_id, clean_data in listings_to_process.items():
+        doc_ref = db.collection('listings').document(listing_id)
+
+        clean_data['scrapedAt'] = firestore.SERVER_TIMESTAMP
+        clean_data['status'] = 'needs_processing'
+
+        if listing_id in existing_listing_ids:
+            # print(f"DB: Queuing update for existing listing {listing_id}...")
+            batch.set(doc_ref, clean_data, merge=True)
         else:
-            print(f"DB: Saving new listing {listing_id}...")
-            # For new listings, we set the initial status.
-            clean_data['status'] = 'to be reviewed'
-            clean_data['scrapedAt'] = firestore.SERVER_TIMESTAMP
-            doc_ref.set(clean_data)
+            # print(f"DB: Queuing save for new listing {listing_id}...")
+            batch.set(doc_ref, clean_data)
         
         processed_count += 1
+
+    try:
+        batch.commit()
+        print(f"✅ Batch write of {processed_count} listings successful.")
+    except Exception as e:
+        print(f"❗️ Error during batch write: {e}")
             
     print(f"--- ✨ Run Complete. Processed {processed_count} listings. ---")
 
@@ -208,140 +179,6 @@ def find_kenmerk_value(raw_item, section_id, feature_id):
                 if feature.get('Id') == feature_id:
                     return feature.get('Value')
     return None
-
-
-def clean_description(description):
-    """
-    Extracts the English portion of a listing description, translating if necessary, and removes boilerplate.
-    """
-    if not description:
-        return ""
-
-    english_text = ""
-    # Descriptions often have a Dutch part then "--- English text ---" or similar.
-    # We'll try a few common separators.
-    separators = [
-        "**english**"
-        "english version",
-        "english text below",
-        "--- english ---",
-        "--- en ---",
-    ]
-
-    found = False
-    for sep in separators:
-        if sep in description.lower():
-            # Split and take the second part
-            parts = re.split(sep, description, flags=re.IGNORECASE)
-            if len(parts) > 1:
-                english_text = parts[1]
-                found = True
-                break
-    
-    if not found:
-        # If no clear separator is found, it's likely the description is either
-        # all in one language or doesn't follow the expected format.
-        # We will proceed with the entire description and translate if needed.
-        try:
-            # Detect language
-            detection = translate_client.detect_language([description])
-            if detection[0]['language'] != 'en':
-                # Translate to English
-                translation = translate_client.translate(description, target_language='en')
-                english_text = translation['translatedText']
-            else:
-                english_text = description
-        except Exception as e:
-            print(f"❗️ Error during translation: {e}")
-            english_text = description # Fallback to original description
-    
-    # 2. Clean the Text
-    # Remove boilerplate legal disclaimers (both English and Dutch)
-    boilerplate_patterns = [
-        r'ASBESTOS CLAUSE.*',
-        r'AGE CLAUSE.*',
-        r'NEN CLAUSE.*',
-        r'OWNERS DID NOT LIVE IN THE APARTMENT RECENTLY.*',
-        r'This information has been compiled by us with due care.*',
-        r'Deze informatie is door ons met de nodige zorgvuldigheid samengesteld.*'
-    ]
-    cleaned_text = english_text
-    for pattern in boilerplate_patterns:
-        cleaned_text = re.sub(pattern, '', cleaned_text, flags=re.IGNORECASE | re.DOTALL)
-
-    return cleaned_text.strip()
-
-    
-def generate_embedding_text(clean_listing):
-    """
-    Generates a summary and combines it with key features for AI processing.
-    """
-    summary = "No description available."
-    cleaned_description = clean_listing.get("cleanedDescription", "")
-
-    if model and cleaned_description: # Check if model was initialized
-        try:
-            prompt = f'''
-            Based on the following apartment description, write a concise, one-paragraph summary.
-            Focus on the apartment's overall vibe and its key selling points.
-            Do not include any HTML or markdown.
-
-            Description:
-            ---
-            {cleaned_description}
-            ---
-            Summary:
-            '''
-            response = model.generate_content(prompt)
-            summary = response.text
-        except Exception as e:
-            print(f"❗️ Could not generate summary: {e}")
-            summary = "Summary generation failed."
-    elif not model:
-        summary = "Summary generation skipped: model not initialized."
-
-    # Combine with structured data
-    features = []
-    if clean_listing.get("bedrooms"):
-        features.append(f'{clean_listing["bedrooms"]}-bedroom')
-    if clean_listing.get("bathrooms"):
-        features.append(f'{clean_listing["bathrooms"]}-bathroom')
-    
-    feature_str = ", ".join(features)
-    
-    location_str = ""
-    if clean_listing.get("neighborhood"):
-        location_str = f' in the {clean_listing["neighborhood"]} neighborhood'
-
-    apartment_type_str = ""
-    if clean_listing.get("apartmentFloor"):
-        floor = clean_listing["apartmentFloor"]
-        if isinstance(floor, int):
-            apartment_type_str = f" on floor {floor}"
-        else:
-            apartment_type_str = f" a {floor}-floor unit"
-
-    outdoor_space_parts = []
-    if clean_listing.get("hasBalcony"):
-        outdoor_space_parts.append("a balcony")
-    if clean_listing.get("hasGarden"):
-        outdoor_space_parts.append("a garden")
-    if clean_listing.get("hasRooftopTerrace"):
-        outdoor_space_parts.append("a rooftop terrace")
-
-    outdoor_space_str = ""
-    if not outdoor_space_parts:
-        outdoor_space_str = " with no balcony or garden."
-    else:
-        outdoor_space_str = " with " + " and ".join(outdoor_space_parts) + "."
-
-
-    features_summary = f"Features: This is a {feature_str} apartment{location_str}. It is{apartment_type_str}{outdoor_space_str}"
-
-    embedding_text = f"Summary: {summary}. {features_summary}"
-    
-    return embedding_text
-
 
 #transform the data for our DB
 def transform_listing_data(raw_item):
@@ -396,7 +233,7 @@ def transform_listing_data(raw_item):
     photos_info = raw_item.get("Media", {}).get("Photos", {})
     photo_items = photos_info.get("Items", [])
     photo_base_url = photos_info.get("MediaBaseUrl", "")
-    gallery = [photo_base_url.replace("{id}", p.get("Id")) for p in photo_items[:5]]
+    gallery = [photo_base_url.replace("{id}", p.get("Id")) for p in photo_items[:10]]
     main_image = gallery[0] if gallery else None
 
     floor_plans_raw = raw_item.get("Media", {}).get("LegacyFloorPlan", {}).get("Items", [])
@@ -416,9 +253,6 @@ def transform_listing_data(raw_item):
     is_in_inner_ring = False
     if lat and lon:
         is_in_inner_ring = point_in_polygon(lon, lat, amsterdam_inner_ring_polygon)
-
-    # Clean the description
-    cleaned_description = clean_description(listing_description_text)
 
     clean_listing = {
         "fundaId": raw_item.get("_id"),
@@ -448,15 +282,10 @@ def transform_listing_data(raw_item):
         "agentUrl": agent_url,
         "vveContribution": parse_number_from_string(vve_str),
         "description": listing_description_text,
-        "cleanedDescription": cleaned_description,
         "mainImage": main_image,
         "imageGallery": gallery,
         "floorPlans": floor_plans
     }
-    
-    # Generate the final text for AI embedding
-    embedding_text = generate_embedding_text(clean_listing)
-    clean_listing['embeddingText'] = embedding_text
     
     return clean_listing
 
