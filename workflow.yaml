@@ -1,0 +1,26 @@
+main:
+  steps:
+    - init:
+        assign:
+          - project_id: house-hunters-amsterdam
+          - location: europe-west4
+    - run_scraper:
+        call: googleapis.run.v2.projects.locations.jobs.run
+        args:
+          name: ${"projects/" + project_id + "/locations/" + location + "/jobs/scraper-job"}
+        result: scraper_run
+    - log_scraper_run:
+        call: sys.log
+        args:
+          - "Scraper job run result:"
+          - ${scraper_run}
+    - run_processor:
+        call: googleapis.run.v2.projects.locations.jobs.run
+        args:
+          name: ${"projects/" + project_id + "/locations/" + location + "/jobs/processor-job"}
+        result: processor_run
+    - log_processor_run:
+        call: sys.log
+        args:
+          - "Processor job run result:"
+          - ${processor_run}
