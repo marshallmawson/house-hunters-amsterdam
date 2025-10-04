@@ -44,7 +44,7 @@ try:
     print("✅ Generative model initialized successfully.")
 except Exception as e:
     print(f"❗️ Error initializing generative model: {e}")
-    model = None
+    exit()
 
 # Initialize Vertex AI
 try:
@@ -56,7 +56,7 @@ try:
     print("✅ Vertex AI initialized successfully.")
 except Exception as e:
     print(f"❗️ Error initializing Vertex AI: {e}")
-    embedding_model = None
+    exit()
 
 def clean_description(description):
     """
@@ -200,7 +200,7 @@ def generate_embedding_text(clean_listing):
     
     return embedding_text
 
-def process_listings(limit=50):
+def process_listings(limit=100):
     """
     Queries Firestore for listings that need AI processing,
     generates the data, and updates them in a batch.
