@@ -14,8 +14,10 @@ load_dotenv()
 
 # Initialize Firebase
 try:
-    cred = credentials.Certificate("firebase-credentials.json")
-    firebase_admin.initialize_app(cred)
+    # When running on Google Cloud, the SDK automatically detects the project's
+    # service account credentials. For local development, you can use the
+    # GOOGLE_APPLICATION_CREDENTIALS environment variable.
+    firebase_admin.initialize_app()
     db = firestore.client()
     print("✅ Firebase initialized successfully.")
 except Exception as e:
@@ -26,11 +28,12 @@ except Exception as e:
 try:
     apify_token = os.getenv("APIFY_API_TOKEN")
     if not apify_token:
-        raise ValueError("APIFY_API_TOKEN not found in .env file")
+        raise ValueError("APIFY_API_TOKEN environment variable not found.")
     apify_client = ApifyClient(apify_token)
     print("✅ Apify client initialized successfully.")
 except Exception as e:
     print(f"❗️ Error initializing Apify: {e}")
+    print("Please ensure the APIFY_API_TOKEN environment variable is set.")
     exit()
 
 # --- MAIN SCRIPT LOGIC ---

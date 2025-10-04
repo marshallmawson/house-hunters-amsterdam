@@ -16,12 +16,14 @@ load_dotenv()
 
 # Initialize Firebase
 try:
-    cred = credentials.Certificate("firebase-credentials.json")
-    firebase_admin.initialize_app(cred)
+    # The SDK will automatically look for the GOOGLE_APPLICATION_CREDENTIALS environment
+    # variable and use the service account file it points to.
+    firebase_admin.initialize_app()
     db = firestore.client()
     print("✅ Firebase initialized successfully.")
 except Exception as e:
     print(f"❗️ Error initializing Firebase: {e}")
+    print("Ensure the GOOGLE_APPLICATION_CREDENTIALS environment variable is set to the path of your Firebase service account key file.")
     exit()
 
 # Initialize Google Translate Client
