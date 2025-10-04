@@ -194,6 +194,7 @@ def transform_listing_data(raw_item):
     fast_view = raw_item.get('FastView', {})
     listing_description_text = raw_item.get('ListingDescription', {}).get("Description")
     urls = raw_item.get('Urls', {}).get('FriendlyUrl', {})
+    google_maps_url = raw_item.get("GoogleMapsObjectUrl")
 
     bathroom_str = find_kenmerk_value(raw_item, 'indeling', 'indeling-totalbathroom')
     vve_str = find_kenmerk_value(raw_item, 'overdracht', 'overdracht-bijdragevve')
@@ -287,7 +288,8 @@ def transform_listing_data(raw_item):
         "description": listing_description_text,
         "mainImage": main_image,
         "imageGallery": gallery,
-        "floorPlans": floor_plans
+        "floorPlans": floor_plans,
+        "googleMapsUrl": google_maps_url
     }
     
     return clean_listing
