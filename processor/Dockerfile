@@ -7,5 +7,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the processor script
 COPY processor.py .
 
-# Command to run the processor
-CMD ["python", "processor.py"]
+# Command to run the processor with unbuffered output
+CMD ["python", "-u", "processor.py"]

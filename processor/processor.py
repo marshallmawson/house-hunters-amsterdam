@@ -7,55 +7,63 @@ from google.cloud import translate_v2 as translate
 import google.generativeai as genai
 import vertexai
 from vertexai.language_models import TextEmbeddingModel
+import datetime
+
+def log_timestamp(message):
+    print(f"[{datetime.datetime.now()}] {message}")
 
 # --- INITIALIZATION ---
-print("--- Initializing Processor ---")
+log_timestamp("--- Initializing Processor ---")
 
 # Load API keys from .env file
+log_timestamp("Loading environment variables...")
 load_dotenv()
+log_timestamp("✅ Environment variables loaded.")
 
 # Initialize Firebase
 try:
-    # The SDK will automatically look for the GOOGLE_APPLICATION_CREDENTIALS environment
-    # variable and use the service account file it points to.
+    log_timestamp("Initializing Firebase...")
     firebase_admin.initialize_app()
     db = firestore.client()
-    print("✅ Firebase initialized successfully.")
+    log_timestamp("✅ Firebase initialized successfully.")
 except Exception as e:
-    print(f"❗️ Error initializing Firebase: {e}")
-    print("Ensure the GOOGLE_APPLICATION_CREDENTIALS environment variable is set to the path of your Firebase service account key file.")
+    log_timestamp(f"❗️ Error initializing Firebase: {e}")
+    log_timestamp("Ensure the GOOGLE_APPLICATION_CREDENTIALS environment variable is set to the path of your Firebase service account key file.")
     exit()
 
 # Initialize Google Translate Client
 try:
+    log_timestamp("Initializing Google Translate client...")
     translate_client = translate.Client()
-    print("✅ Google Translate client initialized successfully.")
+    log_timestamp("✅ Google Translate client initialized successfully.")
 except Exception as e:
-    print(f"❗️ Error initializing Google Translate: {e}")
+    log_timestamp(f"❗️ Error initializing Google Translate: {e}")
     exit()
 
 # Initialize the Generative Model
 try:
+    log_timestamp("Initializing Generative Model...")
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     if not gemini_api_key:
         raise ValueError("GEMINI_API_KEY not found in .env file")
     genai.configure(api_key=gemini_api_key)
     model = genai.GenerativeModel('gemini-pro-latest')
-    print("✅ Generative model initialized successfully.")
+    log_timestamp("✅ Generative model initialized successfully.")
 except Exception as e:
-    print(f"❗️ Error initializing generative model: {e}")
+    log_timestamp(f"❗️ Error initializing generative model: {e}")
     exit()
 
 # Initialize Vertex AI
 try:
+    log_timestamp("Initializing Vertex AI...")
     project_id = os.getenv("GCP_PROJECT_ID")
     if not project_id:
         raise ValueError("GCP_PROJECT_ID not found in .env file")
     vertexai.init(project=project_id)
     embedding_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
-    print("✅ Vertex AI initialized successfully.")
+    log_timestamp("✅ Vertex AI initialized successfully.")
 except Exception as e:
-    print(f"❗️ Error initializing Vertex AI: {e}")
+    log_timestamp(f"❗️ Error initializing Vertex AI: {e}")
     exit()
 
 def clean_description(description):
