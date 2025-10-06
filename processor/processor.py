@@ -108,13 +108,24 @@ def clean_description(description):
 
     return cleaned_text.strip()
 
+from langdetect import detect, LangDetectException
+
 def translate_text(text, translate_client):
     if not text:
         return ""
     try:
-        # The API is idempotent, it won't re-translate if it's already in English.
+        # Detect the language of the text
+        lang = detect(text)
+        # If the language is English, no need to translate
+        if lang == 'en':
+            return text
+        
+        # If the language is not English, translate the text
         result = translate_client.translate(text, target_language='en')
         return result['translatedText']
+    except LangDetectException:
+        # If language detection fails, fallback to the original text
+        return text
     except Exception as e:
         print(f"❗️ Error during translation: {e}")
         return text # Fallback to original text
