@@ -3,12 +3,12 @@ import google.auth
 from google.cloud.workflows import executions_v1
 from google.cloud.workflows.executions_v1.types import Execution
 
-def trigger_workflow(request):
-    """Triggers a Cloud Workflow."""
+def trigger_processor_workflow(request):
+    """Triggers the processor Cloud Workflow."""
 
     _, project = google.auth.default()
     location = "europe-west4"
-    workflow = "daily-job-runner"
+    workflow = "processor-workflow"
 
     executions_client = executions_v1.ExecutionsClient()
 

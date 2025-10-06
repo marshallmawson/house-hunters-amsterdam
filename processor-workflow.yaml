@@ -4,20 +4,6 @@ main:
         assign:
           - project_id: house-hunters-amsterdam
           - location: europe-west4
-    - run_scraper:
-        call: googleapis.run.v2.projects.locations.jobs.run
-        args:
-          name: ${"projects/" + project_id + "/locations/" + location + "/jobs/scraper-job"}
-        result: scraper_run
-    - log_scraper_run:
-        call: sys.log
-        args:
-          - "Scraper job run result:"
-          - ${scraper_run.name}
-    - wait_for_scraper:
-        call: sys.sleep
-        args:
-          seconds: 600
     - run_processor:
         call: googleapis.run.v2.projects.locations.jobs.run
         args:
