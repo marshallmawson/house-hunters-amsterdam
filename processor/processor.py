@@ -152,7 +152,8 @@ def generate_embedding_text(clean_listing):
         try:
             prompt = f'''
             Based on the following apartment description, write a concise, one-paragraph summary.
-            Focus on the apartment's overall vibe and its key selling points.
+            Focus on the apartment's overall vibe and its key selling points. 
+            Write it as it would be useful to a buyer, not trying to sell the place with fluffy selling points.
             Do not include any HTML or markdown.
 
             Description:
