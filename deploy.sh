@@ -8,7 +8,6 @@
 #To deploy the processor:   
 #                         ./deploy.sh processor
 
-
 # --- Configuration ---
 # Your Google Cloud Project ID
 PROJECT_ID="house-hunters-amsterdam"
@@ -41,10 +40,11 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Deploy the job to Cloud Run
+# Deploy the job to Cloud Run with an increased timeout
 echo "Deploying job: ${SERVICE_NAME}-job"
 gcloud run jobs deploy "${SERVICE_NAME}-job" \
   --image "${IMAGE_NAME}" \
-  --region "${REGION}"
+  --region "${REGION}" \
+  --task-timeout 1800 # Set timeout to 30 minutes (1800 seconds)
 
 echo "Deployment of ${SERVICE_NAME}-job complete."
