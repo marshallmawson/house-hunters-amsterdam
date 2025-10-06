@@ -13,7 +13,11 @@ main:
         call: sys.log
         args:
           - "Scraper job run result:"
-          - ${scraper_run}
+          - ${scraper_run.name}
+    - wait_for_scraper:
+        call: sys.sleep
+        args:
+          seconds: 600
     - run_processor:
         call: googleapis.run.v2.projects.locations.jobs.run
         args:
@@ -23,4 +27,4 @@ main:
         call: sys.log
         args:
           - "Processor job run result:"
-          - ${processor_run}
+          - ${processor_run.name}

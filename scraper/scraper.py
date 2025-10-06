@@ -129,15 +129,15 @@ def fetch_and_store_listings():
 
     # Check for existing documents in batches of 30
     print(f"Checking for {len(listings_to_process)} listings in Firestore...")
-    existing_listing_ids = set()
+    existing_listings = {}
     listing_ids = list(listings_to_process.keys())
     for i in range(0, len(listing_ids), 30):
         chunk = listing_ids[i:i+30]
         docs = db.collection('listings').where(FieldPath.document_id(), 'in', chunk).stream()
         for doc in docs:
-            existing_listing_ids.add(doc.id)
+            existing_listings[doc.id] = doc.to_dict()
     
-    print(f"Found {len(existing_listing_ids)} existing listings. Preparing batch write...")
+    print(f"Found {len(existing_listings)} existing listings. Preparing batch write...")
 
     batch = db.batch()
     processed_count = 0
@@ -145,14 +145,15 @@ def fetch_and_store_listings():
     for listing_id, clean_data in listings_to_process.items():
         doc_ref = db.collection('listings').document(listing_id)
 
+        if listing_id in existing_listings and existing_listings[listing_id].get('status') == 'processed':
+            continue
+
         clean_data['scrapedAt'] = firestore.SERVER_TIMESTAMP
         clean_data['status'] = 'needs_processing'
 
-        if listing_id in existing_listing_ids:
-            # print(f"DB: Queuing update for existing listing {listing_id}...")
+        if listing_id in existing_listings:
             batch.set(doc_ref, clean_data, merge=True)
         else:
-            # print(f"DB: Queuing save for new listing {listing_id}...")
             batch.set(doc_ref, clean_data)
         
         processed_count += 1
