@@ -33,12 +33,12 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
         <ListGroup.Item>Price: €{listing.price?.toLocaleString()}</ListGroup.Item>
         <ListGroup.Item>Bedrooms: {listing.bedrooms}</ListGroup.Item>
         <ListGroup.Item>Bathrooms: {listing.bathrooms}</ListGroup.Item>
-        <ListGroup.Item>Surface: {listing.surface} m²</ListGroup.Item>
+        <ListGroup.Item>Surface: {listing.livingArea} m²</ListGroup.Item>
         <ListGroup.Item>Energy Label: {listing.energyLabel}</ListGroup.Item>
         <ListGroup.Item>Added: {scrapedAtDate.toLocaleDateString()}</ListGroup.Item>
       </ListGroup>
       <Card.Body>
-        <Card.Link href={listing.fundaUrl} target="_blank">View on Funda</Card.Link>
+        <Card.Link href={listing.url} target="_blank">View on Funda</Card.Link>
       </Card.Body>
     </Card>
   );

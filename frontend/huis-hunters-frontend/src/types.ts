@@ -5,10 +5,10 @@ export interface Listing {
   price: number;
   bedrooms: number;
   bathrooms: number;
-  surface: number;
+  livingArea: number;
   energyLabel: string;
   scrapedAt: any; 
-  fundaUrl: string;
+  url: string;
   imageGallery: string[];
   embeddingText: string;
 }
