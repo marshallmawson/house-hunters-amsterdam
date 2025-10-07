@@ -4,15 +4,18 @@ import { db } from '../firebase';
 import ListingCard from './ListingCard';
 import { Container, Row, Col, Form, FormGroup } from 'react-bootstrap';
 import { Listing } from '../types';
+import Slider from 'rc-slider';
+import 'rc-slider/assets/index.css';
 
 const Listings = () => {
   const [listings, setListings] = useState<Listing[]>([]);
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [sortOrder, setSortOrder] = useState('date-new-old');
-  const [priceRange, setPriceRange] = useState({ min: 200000, max: 1500000 });
+  const [priceRange, setPriceRange] = useState({ min: 300000, max: 1000000 });
   const [bedrooms, setBedrooms] = useState('any');
   const [floorLevel, setFloorLevel] = useState('any');
   const [outdoorSpace, setOutdoorSpace] = useState('any');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchListings = async () => {
@@ -55,7 +58,8 @@ const Listings = () => {
       const passesBedrooms = bedrooms === 'any' || (listing.bedrooms || 0) >= parseInt(bedrooms, 10);
       
       const passesFloorLevel = floorLevel === 'any' ||
-        (floorLevel === 'ground' && listing.apartmentFloor === 'Ground') || (floorLevel === 'top' && listing.apartmentFloor === 'Top floor');
+        (floorLevel === 'ground' && listing.apartmentFloor === 'Ground') ||
+        (floorLevel === 'top' && (listing.apartmentFloor === 'Upper floor' || listing.apartmentFloor === 'Top floor'));
       const passesOutdoorSpace = outdoorSpace === 'any' || 
         (outdoorSpace === 'garden' && listing.hasGarden) ||
         (outdoorSpace === 'rooftop' && listing.hasRooftopTerrace) ||
@@ -85,24 +89,26 @@ const Listings = () => {
               </Col>
               <Col md={3}>
                 <FormGroup>
-                  <Form.Label>Min Price (€{priceRange.min.toLocaleString()})</Form.Label>
-                  <Form.Range 
-                    min={0} 
-                    max={2000000} 
-                    step={50000}
-                    value={priceRange.min} 
-                    onChange={e => setPriceRange({ ...priceRange, min: parseInt(e.target.value) })}
-                  />
-                </FormGroup>
-                <FormGroup>
-                  <Form.Label>Max Price (€{priceRange.max.toLocaleString()})</Form.Label>
-                  <Form.Range 
-                    min={0} 
-                    max={2000000} 
-                    step={50000}
-                    value={priceRange.max} 
-                    onChange={e => setPriceRange({ ...priceRange, max: parseInt(e.target.value) })}
-                  />
+                  <Form.Label>Price Range</Form.Label>
+                  <div style={{ padding: '0 10px' }}>
+                    <Slider
+                      range
+                      min={200000}
+                      max={1200000}
+                      step={25000}
+                      value={[priceRange.min, priceRange.max]}
+                      onChange={(values: number | number[]) => {
+                        if (Array.isArray(values) && values.length === 2) {
+                          setPriceRange({ min: values[0], max: values[1] });
+                        }
+                      }}
+                      allowCross={false}
+                    />
+                  </div>
+                  <div className="d-flex justify-content-between mt-2">
+                    <small>€{priceRange.min.toLocaleString()}</small>
+                    <small>€{priceRange.max.toLocaleString()}</small>
+                  </div>
                 </FormGroup>
               </Col>
               <Col md={2}>
@@ -122,7 +128,7 @@ const Listings = () => {
                   <Form.Label>Floor Level</Form.Label>
                   <Form.Control as="select" value={floorLevel} onChange={e => setFloorLevel(e.target.value)}>
                     <option value="any">Any</option>
-                    <option value="top">Top Floor</option>
+                    <option value="top">Upper / Top Floor</option>
                     <option value="ground">Ground Floor</option>
                   </Form.Control>
                 </FormGroup>
@@ -145,7 +151,7 @@ const Listings = () => {
       <Row>
         {filteredListings.map(listing => (
           <Col key={listing.id} sm={12} md={6} lg={6} xl={4}>
-            <ListingCard listing={listing} />
+            <ListingCard listing={listing} isAnyModalOpen={isModalOpen} onModalToggle={setIsModalOpen} />
           </Col>
         ))}
       </Row>

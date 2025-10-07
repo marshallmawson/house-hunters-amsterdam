@@ -205,7 +205,7 @@ def transform_listing_data(raw_item):
         if "Ground-floor apartment" in apartment_type_str or "Benedenwoning" in apartment_type_str:
             apartment_floor = "Ground"
         elif "Upstairs apartment" in apartment_type_str or "Bovenwoning" in apartment_type_str:
-            apartment_floor = "Top floor"
+            apartment_floor = "Upper floor"
 
     if apartment_floor is None:
         floor_str = find_kenmerk_value(raw_item, 'indeling', 'indeling-locatedat')

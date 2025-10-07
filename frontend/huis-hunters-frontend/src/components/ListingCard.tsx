@@ -14,6 +14,8 @@ import { GlobeIcon } from './icons/GlobeIcon';
 
 interface ListingCardProps {
   listing: Listing;
+  isAnyModalOpen: boolean;
+  onModalToggle: (isOpen: boolean) => void;
 }
 
 const getOutdoorSpaceString = (listing: Listing) => {
@@ -28,7 +30,7 @@ const getOutdoorSpaceString = (listing: Listing) => {
   return `${outdoorSpaces.join(' + ')}${area}`;
 };
 
-const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
+const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onModalToggle }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const scrapedAtDate = listing.scrapedAt ? listing.scrapedAt.toDate() : null;
@@ -38,11 +40,19 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
     ? `https://maps.google.com/maps?q=${listing.coordinates.lat},${listing.coordinates.lon}&z=15&output=embed`
     : listing.googleMapsUrl;
 
+  const handleShowModal = () => {
+    setShowModal(true);
+    onModalToggle(true);
+  };
 
+  const handleHideModal = () => {
+    setShowModal(false);
+    onModalToggle(false);
+  };
   return (
     <>
     <Card style={{ width: '24rem', margin: '1rem' }}>
-      <Carousel interval={null}>
+      <Carousel interval={isAnyModalOpen ? null : 5000}>
         {listing.imageGallery && listing.imageGallery.slice(0, 10).map((url: string, index: number) => (
           <Carousel.Item key={index}>
             <img
@@ -58,7 +68,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
         <div className="d-flex justify-content-between align-items-baseline">
           <Card.Title 
             style={{ fontSize: '1.1rem', marginRight: '1rem', cursor: 'pointer', textDecoration: 'underline' }}
-            onClick={() => setShowModal(true)}
+            onClick={handleShowModal}
           >
             {listing.address}
           </Card.Title>
@@ -78,7 +88,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
               <BuildingIcon />{' '}
               {typeof listing.apartmentFloor === 'number'
                 ? `Floor ${listing.apartmentFloor}`
-                : listing.apartmentFloor.includes('floor')
+                : listing.apartmentFloor.toLowerCase().includes('floor')
                 ? listing.apartmentFloor
                 : `${listing.apartmentFloor} floor`}
             </span>
@@ -101,7 +111,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
       </Card.Body>
     </Card>
 
-    <Modal show={showModal} onHide={() => setShowModal(false)} size="lg" centered>
+    <Modal show={showModal} onHide={handleHideModal} size="lg" centered>
         <Modal.Header closeButton>
           <div className="d-flex justify-content-between align-items-center w-100 pr-3">
             <Modal.Title>{listing.address}</Modal.Title>
@@ -138,7 +148,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
                     <BuildingIcon />{' '}
                     {typeof listing.apartmentFloor === 'number'
                       ? `Floor ${listing.apartmentFloor}`
-                      : listing.apartmentFloor.includes('floor')
+                      : listing.apartmentFloor.toLowerCase().includes('floor')
                       ? listing.apartmentFloor
                       : `${listing.apartmentFloor} floor`}
                   </span>
