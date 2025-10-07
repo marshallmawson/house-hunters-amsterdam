@@ -50,19 +50,16 @@ const Listings = () => {
     // Filtering
     result = result.filter(listing => {
       const price = listing.price || 0;
-      const embeddingText = listing.embeddingText?.toLowerCase() || '';
 
       const passesPrice = price >= priceRange.min && price <= priceRange.max;
       const passesBedrooms = bedrooms === 'any' || (listing.bedrooms || 0) >= parseInt(bedrooms, 10);
       
-      const passesFloorLevel = floorLevel === 'any' || 
-        (floorLevel === 'top' && embeddingText.includes('top floor')) ||
-        (floorLevel === 'ground' && embeddingText.includes('ground floor'));
-
-      const passesOutdoorSpace = outdoorSpace === 'any' ||
-        (outdoorSpace === 'garden' && embeddingText.includes('garden')) ||
-        (outdoorSpace === 'rooftop' && (embeddingText.includes('roof terrace') || embeddingText.includes('rooftop'))) ||
-        (outdoorSpace === 'balcony' && embeddingText.includes('balcony'));
+      const passesFloorLevel = floorLevel === 'any' ||
+        (floorLevel === 'ground' && listing.apartmentFloor === 'Ground') || (floorLevel === 'top' && listing.apartmentFloor === 'Top floor');
+      const passesOutdoorSpace = outdoorSpace === 'any' || 
+        (outdoorSpace === 'garden' && listing.hasGarden) ||
+        (outdoorSpace === 'rooftop' && listing.hasRooftopTerrace) ||
+        (outdoorSpace === 'balcony' && listing.hasBalcony);
 
       return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace;
     });
