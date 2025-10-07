@@ -147,7 +147,7 @@ const Listings = () => {
       </Row>
       <Row>
         {filteredListings.map(listing => (
-          <Col key={listing.id} sm={12} md={6} lg={4} xl={3}>
+          <Col key={listing.id} sm={12} md={6} lg={6} xl={4}>
             <ListingCard listing={listing} />
           </Col>
         ))}
