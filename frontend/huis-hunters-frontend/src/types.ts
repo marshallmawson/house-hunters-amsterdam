@@ -1,4 +1,3 @@
-
 export interface Listing {
   id: string;
   address: string;
@@ -7,8 +6,17 @@ export interface Listing {
   bathrooms: number;
   livingArea: number;
   energyLabel: string;
-  scrapedAt: any; 
+  scrapedAt: { 
+    seconds: number; 
+    nanoseconds: number; 
+    toDate: () => Date; 
+  };
   url: string;
   imageGallery: string[];
   embeddingText: string;
+  floor?: string;
+  garden?: boolean;
+  roofTerrace?: boolean;
+  balcony?: boolean;
+  status?: string;
 }

@@ -8,17 +8,18 @@ interface ListingCardProps {
 }
 
 const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
-  const scrapedAtDate = listing.scrapedAt?.toDate ? listing.scrapedAt.toDate() : new Date(listing.scrapedAt);
+  const scrapedAtDate = listing.scrapedAt ? listing.scrapedAt.toDate() : null;
 
   return (
     <Card style={{ width: '18rem', margin: '1rem' }}>
       <Carousel>
         {listing.imageGallery && Object.values(listing.imageGallery)?.map((url: string, index: number) => (
-          <Carousel.Item key={index}>
+          <Carousel.Item key={index} style={{ backgroundColor: 'white' }}>
             <img
               className="d-block w-100"
               src={url}
               alt={`Slide ${index}`}
+              style={{ height: '200px', objectFit: 'contain' }}
             />
           </Carousel.Item>
         ))}
@@ -35,7 +36,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
         <ListGroup.Item>Bathrooms: {listing.bathrooms}</ListGroup.Item>
         <ListGroup.Item>Surface: {listing.livingArea} m²</ListGroup.Item>
         <ListGroup.Item>Energy Label: {listing.energyLabel}</ListGroup.Item>
-        <ListGroup.Item>Added: {scrapedAtDate.toLocaleDateString()}</ListGroup.Item>
+        <ListGroup.Item>Added: {scrapedAtDate?.toLocaleDateString()}</ListGroup.Item>
       </ListGroup>
       <Card.Body>
         <Card.Link href={listing.url} target="_blank">View on Funda</Card.Link>
