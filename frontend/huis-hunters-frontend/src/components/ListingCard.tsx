@@ -10,6 +10,7 @@ import CalendarIcon from './icons/CalendarIcon';
 import LayersIcon from './icons/LayersIcon';
 import { BuildingIcon } from './icons/BuildingIcon';
 import { Feature } from './Feature';
+import { GlobeIcon } from './icons/GlobeIcon';
 
 interface ListingCardProps {
   listing: Listing;
@@ -42,7 +43,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
     <>
     <Card style={{ width: '24rem', margin: '1rem' }}>
       <Carousel>
-        {listing.imageGallery && Object.values(listing.imageGallery)?.map((url: string, index: number) => (
+        {listing.imageGallery && listing.imageGallery.map((url: string, index: number) => (
           <Carousel.Item key={index}>
             <img
               className="d-block w-100"
@@ -105,17 +106,73 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
           <Modal.Title>{listing.address}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          <Carousel className="mb-4">
+            {listing.imageGallery && listing.imageGallery.map((url: string, index: number) => (
+              <Carousel.Item key={index}>
+                <img
+                  className="d-block w-100"
+                  src={url}
+                  alt={`Slide ${index}`}
+                  style={{ height: '400px', objectFit: 'cover', borderRadius: '8px' }}
+                />
+              </Carousel.Item>
+            ))}
+          </Carousel>
           <Row>
             <Col md={6}>
               <h5>Details</h5>
-              <p><strong>Agent:</strong> <a href={listing.agentUrl} target="_blank" rel="noopener noreferrer">{listing.agentName}</a></p>
+              <div className="mb-2" style={{ fontSize: '0.9rem', color: 'black' }}>
+                {listing.livingArea && <span><RulerIcon /> {listing.livingArea} m²</span>}
+                {listing.bedrooms && <Feature icon={<BedIcon />}>{listing.bedrooms}</Feature>}
+                {listing.bathrooms && <Feature icon={<BathIcon />}>{listing.bathrooms}</Feature>}
+                {listing.energyLabel && <Feature icon={<BoltIcon />}>{listing.energyLabel}</Feature>}
+              </div>
+              <div className="mb-3" style={{ fontSize: '0.9rem', color: 'black' }}>
+                {listing.apartmentFloor && (
+                  <span>
+                    <BuildingIcon />{' '}
+                    {typeof listing.apartmentFloor === 'number'
+                      ? `Floor ${listing.apartmentFloor}`
+                      : listing.apartmentFloor.includes('floor')
+                      ? listing.apartmentFloor
+                      : `${listing.apartmentFloor} floor`}
+                  </span>
+                )}
+                {listing.numberOfStories && listing.numberOfStories >= 2 && (
+                  <Feature icon={<LayersIcon />}>{listing.numberOfStories} stories</Feature>
+                )}
+                {listing.yearBuilt && <Feature icon={<CalendarIcon />}>Built {listing.yearBuilt}</Feature>}
+              </div>
+              {outdoorSpaceString && <p style={{ fontSize: '0.9rem' }}><LeafIcon /> {outdoorSpaceString}</p>}
+              {listing.neighborhood && <p style={{ fontSize: '0.9rem' }}><GlobeIcon /> {listing.neighborhood}</p>}
+
+              <hr />
+
+              <p><strong>Agent:</strong> {listing.agentUrl ? <a href={listing.agentUrl} target="_blank" rel="noopener noreferrer">{listing.agentName}</a> : listing.agentName}</p>
               {listing.vveContribution && <p><strong>VVE Contribution:</strong> €{listing.vveContribution} per month</p>}
+              <Card.Link href={listing.url} target="_blank">View on Funda</Card.Link>
               
               <h5 className="mt-4">Description</h5>
               <p style={{ maxHeight: '200px', overflowY: 'auto', fontSize: '0.9rem' }}>
                 {listing.cleanedDescription}
               </p>
-
+            </Col>
+            <Col md={6}>
+              {mapUrl && (
+                <>
+                  <h5>Location</h5>
+                  <iframe
+                    src={mapUrl}
+                    width="100%"
+                    height="300"
+                    style={{ border: 0 }}
+                    allowFullScreen={false}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    title={`Map of ${listing.address}`}
+                  ></iframe>
+                </>
+              )}
               {listing.floorPlans && listing.floorPlans.length > 0 && (
                 <>
                   <h5 className="mt-4">Floor Plans</h5>
@@ -126,28 +183,11 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
                           className="d-block w-100"
                           src={url}
                           alt={`Floor Plan ${index + 1}`}
-                          style={{ maxHeight: '400px', objectFit: 'contain' }}
+                          style={{ maxHeight: '350px', objectFit: 'contain' }}
                         />
                       </Carousel.Item>
                     ))}
                   </Carousel>
-                </>
-              )}
-            </Col>
-            <Col md={6}>
-              {mapUrl && (
-                <>
-                  <h5>Location</h5>
-                  <iframe
-                    src={mapUrl}
-                    width="100%"
-                    height="450"
-                    style={{ border: 0 }}
-                    allowFullScreen={false}
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    title={`Map of ${listing.address}`}
-                  ></iframe>
                 </>
               )}
             </Col>

@@ -32,4 +32,6 @@ export interface Listing {
   cleanedDescription?: string;
   floorPlans?: string[];
   googleMapsUrl?: string;
+  yearBuilt?: string | number;
+  neighborhood?: string;
 }
