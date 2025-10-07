@@ -195,7 +195,6 @@ def transform_listing_data(raw_item):
     fast_view = raw_item.get('FastView', {})
     listing_description_text = raw_item.get('ListingDescription', {}).get("Description")
     urls = raw_item.get('Urls', {}).get('FriendlyUrl', {})
-    google_maps_url = raw_item.get("GoogleMapsObjectUrl")
 
     bathroom_str = find_kenmerk_value(raw_item, 'indeling', 'indeling-totalbathroom')
     vve_str = find_kenmerk_value(raw_item, 'overdracht', 'overdracht-bijdragevve')
@@ -258,6 +257,10 @@ def transform_listing_data(raw_item):
     is_in_inner_ring = False
     if lat and lon:
         is_in_inner_ring = point_in_polygon(lon, lat, amsterdam_inner_ring_polygon)
+    
+    google_maps_url = None
+    if lat and lon:
+        google_maps_url = f"https://maps.google.com/maps?q={lat},{lon}&z=15&output=embed"
 
     clean_listing = {
         "fundaId": raw_item.get("_id"),

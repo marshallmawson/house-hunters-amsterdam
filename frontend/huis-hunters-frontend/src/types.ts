@@ -22,4 +22,14 @@ export interface Listing {
   apartmentFloor?: string | number;
   status?: string;
   numberOfStories?: number;
+  coordinates?: {
+    lat: number;
+    lon: number;
+  };
+  agentName?: string;
+  agentUrl?: string;
+  vveContribution?: number;
+  cleanedDescription?: string;
+  floorPlans?: string[];
+  googleMapsUrl?: string;
 }
