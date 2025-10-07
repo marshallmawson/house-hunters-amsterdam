@@ -216,7 +216,7 @@ def generate_embedding_text(clean_listing):
 
     features_summary = f"Features: This is a {feature_str} apartment{location_str}. It is{apartment_type_str}{outdoor_space_str}"
 
-    embedding_text = f"Summary: {summary}.\n\n{features_summary}"
+    embedding_text = f"{summary} {features_summary}"
     
     return embedding_text
 
