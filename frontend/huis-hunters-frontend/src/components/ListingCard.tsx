@@ -8,6 +8,7 @@ import LeafIcon from './icons/LeafIcon';
 import BoltIcon from './icons/BoltIcon';
 import CalendarIcon from './icons/CalendarIcon';
 import TreeIcon from './icons/TreeIcon';
+import LayersIcon from './icons/LayersIcon';
 
 interface ListingCardProps {
   listing: Listing;
@@ -57,6 +58,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
           {listing.bathrooms && <span className="ms-3"><BathIcon /> {listing.bathrooms}</span>}
           {listing.energyLabel && <span className="ms-3"><BoltIcon /> {listing.energyLabel}</span>}
           {outdoorSpaceString && <span className="ms-3"><LeafIcon /> {outdoorSpaceString}</span>}
+          {listing.numberOfStories && listing.numberOfStories >= 2 && <span className="ms-3"><LayersIcon /> {listing.numberOfStories} stories</span>}
         </div>
         <Card.Text>
           {isExpanded ? listing.embeddingText : `${listing.embeddingText.substring(0, 100)}...`}

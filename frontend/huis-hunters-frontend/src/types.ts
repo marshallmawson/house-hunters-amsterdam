@@ -20,4 +20,5 @@ export interface Listing {
   hasBalcony?: boolean;
   outdoorSpaceArea?: number;
   status?: string;
+  numberOfStories?: number;
 }
