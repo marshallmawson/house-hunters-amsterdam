@@ -19,6 +19,7 @@ export interface Listing {
   hasRooftopTerrace?: boolean;
   hasBalcony?: boolean;
   outdoorSpaceArea?: number;
+  apartmentFloor?: string | number;
   status?: string;
   numberOfStories?: number;
 }
