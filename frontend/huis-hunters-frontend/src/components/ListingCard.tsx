@@ -52,7 +52,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
             €{listing.price?.toLocaleString()}
           </Badge>
         </div>
-        <div className="text-muted" style={{ fontSize: '0.9rem' }}>
+        <div className="text-muted mb-2" style={{ fontSize: '0.9rem' }}>
           {listing.livingArea && <span><RulerIcon /> {listing.livingArea} m²</span>}
           {listing.bedrooms && <span className="ms-3"><BedIcon /> {listing.bedrooms}</span>}
           {listing.bathrooms && <span className="ms-3"><BathIcon /> {listing.bathrooms}</span>}
@@ -60,9 +60,9 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
           {outdoorSpaceString && <span className="ms-3"><LeafIcon /> {outdoorSpaceString}</span>}
           {listing.numberOfStories && listing.numberOfStories >= 2 && <span className="ms-3"><LayersIcon /> {listing.numberOfStories} stories</span>}
         </div>
-        <Card.Text>
-          {isExpanded ? listing.embeddingText : `${listing.embeddingText.substring(0, 100)}...`}
-          <Button variant="link" onClick={() => setIsExpanded(!isExpanded)}>
+        <Card.Text style={{ fontSize: '0.85rem' }}>
+          {isExpanded ? listing.embeddingText : `${listing.embeddingText.substring(0, 220)}...`}
+          <Button variant="link" onClick={() => setIsExpanded(!isExpanded)} style={{ fontSize: '0.8rem', verticalAlign: 'baseline', padding: '0 0.2rem' }}>
             {isExpanded ? 'Show Less' : 'Show More'}
           </Button>
         </Card.Text>
