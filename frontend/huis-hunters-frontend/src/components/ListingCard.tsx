@@ -42,8 +42,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
   return (
     <>
     <Card style={{ width: '24rem', margin: '1rem' }}>
-      <Carousel>
-        {listing.imageGallery && listing.imageGallery.map((url: string, index: number) => (
+      <Carousel interval={null}>
+        {listing.imageGallery && listing.imageGallery.slice(0, 10).map((url: string, index: number) => (
           <Carousel.Item key={index}>
             <img
               className="d-block w-100"
