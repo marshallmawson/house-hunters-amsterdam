@@ -103,7 +103,12 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
 
     <Modal show={showModal} onHide={() => setShowModal(false)} size="lg" centered>
         <Modal.Header closeButton>
-          <Modal.Title>{listing.address}</Modal.Title>
+          <div className="d-flex justify-content-between align-items-center w-100 pr-3">
+            <Modal.Title>{listing.address}</Modal.Title>
+            <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap' }}>
+              €{listing.price?.toLocaleString()}
+            </span>
+          </div>
         </Modal.Header>
         <Modal.Body>
           <Carousel className="mb-4">
