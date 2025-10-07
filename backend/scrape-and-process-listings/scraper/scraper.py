@@ -237,7 +237,7 @@ def transform_listing_data(raw_item):
     photos_info = raw_item.get("Media", {}).get("Photos", {})
     photo_items = photos_info.get("Items", [])
     photo_base_url = photos_info.get("MediaBaseUrl", "")
-    gallery = [photo_base_url.replace("{id}", p.get("Id")) for p in photo_items[:10]]
+    gallery = [photo_base_url.replace("{id}", p.get("Id")) for p in photo_items[:30]]
     main_image = gallery[0] if gallery else None
 
     floor_plans_raw = raw_item.get("Media", {}).get("LegacyFloorPlan", {}).get("Items", [])
