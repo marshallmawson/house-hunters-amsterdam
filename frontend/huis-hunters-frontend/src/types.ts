@@ -15,8 +15,9 @@ export interface Listing {
   imageGallery: string[];
   embeddingText: string;
   floor?: string;
-  garden?: boolean;
-  roofTerrace?: boolean;
-  balcony?: boolean;
+  hasGarden?: boolean;
+  hasRooftopTerrace?: boolean;
+  hasBalcony?: boolean;
+  outdoorSpaceArea?: number;
   status?: string;
 }
