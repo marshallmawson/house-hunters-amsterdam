@@ -8,6 +8,43 @@ import google.generativeai as genai
 import vertexai
 from vertexai.language_models import TextEmbeddingModel
 import datetime
+import xml.etree.ElementTree as ET
+
+def point_in_polygon(lon, lat, polygon):
+    """
+    Checks if a point (lon, lat) is inside a polygon using the ray-casting algorithm.
+    The polygon is a list of (lon, lat) tuples.
+    """
+    n = len(polygon)
+    inside = False
+    p1lon, p1lat = polygon[0]
+    for i in range(n + 1):
+        p2lon, p2lat = polygon[i % n]
+        if lat > min(p1lat, p2lat):
+            if lat <= max(p1lat, p2lat):
+                if lon <= max(p1lon, p2lon):
+                    if p1lat != p2lat:
+                        lon_intersection = (lat - p1lat) * (p2lon - p1lon) / (p2lat - p1lat) + p1lon
+                    if p1lon == p2lon or lon <= lon_intersection:
+                        inside = not inside
+        p1lon, p1lat = p2lon, p2lat
+    return inside
+
+def parse_kml_file(file_path):
+    """Parses a KML file to extract area polygons."""
+    namespaces = {'kml': 'http://www.opengis.net/kml/2.2'}
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+    areas = []
+    for placemark in root.findall('.//kml:Placemark', namespaces):
+        name = placemark.find('kml:name', namespaces).text
+        coordinates_str = placemark.find('.//kml:coordinates', namespaces).text.strip()
+        polygon = []
+        for coord in coordinates_str.split():
+            lon, lat, _ = coord.split(',')
+            polygon.append((float(lon), float(lat)))
+        areas.append({'name': name, 'polygon': polygon})
+    return areas
 
 def log_timestamp(message):
     print(f"[{datetime.datetime.now()}] {message}")
@@ -226,6 +263,8 @@ def process_listings(limit=100):
     generates the data, and updates them in a batch.
     """
     print(f"--- Starting AI Processing Run (limit: {limit}) ---")
+
+    areas = parse_kml_file('backend/scrape-and-process-listings/processor/neighborhoods.kml')
     
     docs_to_process = db.collection('listings').where('status', '==', 'needs_processing').limit(limit).stream()
     
@@ -245,6 +284,23 @@ def process_listings(limit=100):
         listing_data = doc.to_dict()
         listing_id = doc.id
 
+        # Assign area
+        listing_area = None
+        coords = listing_data.get('coordinates')
+        if coords and coords.get('lon') and coords.get('lat'):
+            for hood in areas:
+                if point_in_polygon(coords['lon'], coords['lat'], hood['polygon']):
+                    listing_area = hood['name']
+                    break
+        
+        if not listing_area:
+            print(f"❗️ Listing {listing_id} is not in any defined area. Skipping.")
+            doc_ref = db.collection('listings').document(listing_id)
+            batch.update(doc_ref, {'status': 'processed_without_area'})
+            continue
+
+        listing_data['area'] = listing_area
+
         raw_description = listing_data.get('description', '')
         
         # 1. Clean the description
@@ -262,6 +318,7 @@ def process_listings(limit=100):
         listing_embedding = generate_embedding(embedding_text)
 
         update_data = {
+            'area': listing_area,
             'cleanedDescription': translated_description,
             'embeddingText': embedding_text,
             'listingEmbedding': listing_embedding,

@@ -7,3 +7,4 @@ count_listings.py
 get_listing.py
 test_google_services.py
 node_modules/
+test_area_assignment.py
