@@ -23,7 +23,7 @@ IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE_NAME}
 # Build and push the image from the current directory
 echo "Building and pushing image: ${IMAGE_NAME}"
 # The '.' tells gcloud to build from the current directory where this script and the Dockerfile are located.
-gcloud builds submit . --tag "${IMAGE_NAME}" --no-cache
+gcloud builds submit . --tag "${IMAGE_NAME}" --async
 
 # Check if the build was successful
 if [ $? -ne 0 ]; then
