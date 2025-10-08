@@ -2,6 +2,8 @@
 # This script builds and deploys a service to Cloud Run Jobs.
 # It ensures that the correct naming convention is always used.
 
+#Go to directory cd house-hunters-amsterdam/backend/scrape-and-process-listings
+
 #To deploy the scraper:   
 #                          ./deploy.sh scraper
 
