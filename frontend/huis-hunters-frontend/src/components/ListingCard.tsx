@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Carousel, Modal, Button, Row, Col } from 'react-bootstrap';
 import { Listing } from '../types';
 import BedIcon from './icons/BedIcon';
@@ -11,11 +11,13 @@ import LayersIcon from './icons/LayersIcon';
 import { BuildingIcon } from './icons/BuildingIcon';
 import { Feature } from './Feature';
 import { GlobeIcon } from './icons/GlobeIcon';
+import { useNavigate } from 'react-router-dom';
 
 interface ListingCardProps {
   listing: Listing;
   isAnyModalOpen: boolean;
   onModalToggle: (isOpen: boolean) => void;
+  forceOpen?: boolean;
 }
 
 const getOutdoorSpaceString = (listing: Listing) => {
@@ -30,10 +32,11 @@ const getOutdoorSpaceString = (listing: Listing) => {
   return `${outdoorSpaces.join(' + ')}${area}`;
 };
 
-const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onModalToggle }) => {
+const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onModalToggle, forceOpen }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const navigate = useNavigate();
   const scrapedAtDate = listing.scrapedAt ? listing.scrapedAt.toDate() : null;
   const outdoorSpaceString = getOutdoorSpaceString(listing);
 
@@ -41,15 +44,23 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     ? `https://maps.google.com/maps?q=${listing.coordinates.lat},${listing.coordinates.lon}&z=15&output=embed`
     : listing.googleMapsUrl;
 
+  useEffect(() => {
+    if (forceOpen) {
+      handleShowModal();
+    }
+  }, [forceOpen]);
+
   const handleShowModal = (imageIndex: number = 0) => {
     setSelectedImageIndex(imageIndex);
     setShowModal(true);
     onModalToggle(true);
+    navigate(`/listings/${listing.id}`);
   };
 
   const handleHideModal = () => {
     setShowModal(false);
     onModalToggle(false);
+    navigate(`/`);
   };
   return (
     <>

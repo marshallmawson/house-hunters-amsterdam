@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import ListingCard from './ListingCard';
@@ -6,16 +6,24 @@ import { Container, Row, Col, Form, FormGroup } from 'react-bootstrap';
 import { Listing } from '../types';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
+import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 
 const Listings = () => {
   const [listings, setListings] = useState<Listing[]>([]);
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
-  const [sortOrder, setSortOrder] = useState('date-new-old');
-  const [priceRange, setPriceRange] = useState({ min: 300000, max: 1000000 });
-  const [bedrooms, setBedrooms] = useState('any');
-  const [floorLevel, setFloorLevel] = useState('any');
-  const [outdoorSpace, setOutdoorSpace] = useState('any');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { id: modalListingId } = useParams();
+  const navigate = useNavigate();
+
+  const [sortOrder, setSortOrder] = useState(searchParams.get('sort') || 'date-new-old');
+  const [priceRange, setPriceRange] = useState({ 
+    min: parseInt(searchParams.get('minPrice') || '300000', 10),
+    max: parseInt(searchParams.get('maxPrice') || '1000000', 10)
+  });
+  const [bedrooms, setBedrooms] = useState(searchParams.get('bedrooms') || 'any');
+  const [floorLevel, setFloorLevel] = useState(searchParams.get('floor') || 'any');
+  const [outdoorSpace, setOutdoorSpace] = useState(searchParams.get('outdoor') || 'any');
+  const [isModalOpen, setIsModalOpen] = useState(!!modalListingId);
 
   useEffect(() => {
     const fetchListings = async () => {
@@ -28,10 +36,19 @@ const Listings = () => {
     fetchListings();
   }, []);
 
+  const updateURLParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (sortOrder !== 'date-new-old') params.set('sort', sortOrder);
+    if (priceRange.min !== 300000) params.set('minPrice', priceRange.min.toString());
+    if (priceRange.max !== 1000000) params.set('maxPrice', priceRange.max.toString());
+    if (bedrooms !== 'any') params.set('bedrooms', bedrooms);
+    if (floorLevel !== 'any') params.set('floor', floorLevel);
+    if (outdoorSpace !== 'any') params.set('outdoor', outdoorSpace);
+    setSearchParams(params, { replace: true });
+  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, setSearchParams]);
+
   useEffect(() => {
-    if (listings.length > 0) {
-      console.log("First listing data:", listings[0]);
-    }
+    updateURLParams();
     let result = [...listings];
 
     // Sorting
@@ -53,10 +70,8 @@ const Listings = () => {
     // Filtering
     result = result.filter(listing => {
       const price = listing.price || 0;
-
       const passesPrice = price >= priceRange.min && price <= priceRange.max;
       const passesBedrooms = bedrooms === 'any' || (listing.bedrooms || 0) >= parseInt(bedrooms, 10);
-      
       const passesFloorLevel = floorLevel === 'any' ||
         (floorLevel === 'ground' && listing.apartmentFloor === 'Ground') ||
         (floorLevel === 'top' && (listing.apartmentFloor === 'Upper floor' || listing.apartmentFloor === 'Top floor'));
@@ -69,7 +84,14 @@ const Listings = () => {
     });
 
     setFilteredListings(result);
-  }, [listings, sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace]);
+  }, [listings, sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, updateURLParams]);
+
+  const handleModalToggle = (isOpen: boolean) => {
+    setIsModalOpen(isOpen);
+    if (!isOpen) {
+      navigate('/');
+    }
+  };
 
   return (
     <Container>
@@ -151,7 +173,12 @@ const Listings = () => {
       <Row>
         {filteredListings.map(listing => (
           <Col key={listing.id} sm={12} md={6} lg={6} xl={4}>
-            <ListingCard listing={listing} isAnyModalOpen={isModalOpen} onModalToggle={setIsModalOpen} />
+            <ListingCard 
+              listing={listing} 
+              isAnyModalOpen={isModalOpen}
+              onModalToggle={handleModalToggle} 
+              forceOpen={listing.id === modalListingId}
+            />
           </Col>
         ))}
       </Row>
