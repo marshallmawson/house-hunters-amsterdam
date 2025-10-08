@@ -74,7 +74,7 @@ const Listings = () => {
       const passesBedrooms = bedrooms === 'any' || (listing.bedrooms || 0) >= parseInt(bedrooms, 10);
       const passesFloorLevel = floorLevel === 'any' ||
         (floorLevel === 'ground' && listing.apartmentFloor === 'Ground') ||
-        (floorLevel === 'top' && (listing.apartmentFloor === 'Upper floor' || listing.apartmentFloor === 'Top floor'));
+        (floorLevel === 'top' && (listing.apartmentFloor === 'Upper' || listing.apartmentFloor === 'Top floor' || listing.apartmentFloor === 'Upper floor'));
       const passesOutdoorSpace = outdoorSpace === 'any' || 
         (outdoorSpace === 'garden' && listing.hasGarden) ||
         (outdoorSpace === 'rooftop' && listing.hasRooftopTerrace) ||
