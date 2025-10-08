@@ -33,6 +33,7 @@ const getOutdoorSpaceString = (listing: Listing) => {
 const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onModalToggle }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const scrapedAtDate = listing.scrapedAt ? listing.scrapedAt.toDate() : null;
   const outdoorSpaceString = getOutdoorSpaceString(listing);
 
@@ -40,7 +41,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     ? `https://maps.google.com/maps?q=${listing.coordinates.lat},${listing.coordinates.lon}&z=15&output=embed`
     : listing.googleMapsUrl;
 
-  const handleShowModal = () => {
+  const handleShowModal = (imageIndex: number = 0) => {
+    setSelectedImageIndex(imageIndex);
     setShowModal(true);
     onModalToggle(true);
   };
@@ -59,7 +61,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
               className="d-block w-100"
               src={url}
               alt={`Slide ${index}`}
-              style={{ height: '250px', objectFit: 'cover' }}
+              style={{ height: '250px', objectFit: 'cover', cursor: 'pointer' }}
+              onClick={() => handleShowModal(index)}
             />
           </Carousel.Item>
         ))}
@@ -68,7 +71,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
         <div className="d-flex justify-content-between align-items-baseline">
           <Card.Title 
             style={{ fontSize: '1.1rem', marginRight: '1rem', cursor: 'pointer', textDecoration: 'underline' }}
-            onClick={handleShowModal}
+            onClick={() => handleShowModal()}
           >
             {listing.address}
           </Card.Title>
@@ -121,7 +124,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
           </div>
         </Modal.Header>
         <Modal.Body>
-          <Carousel className="mb-4">
+          <Carousel className="mb-4" activeIndex={selectedImageIndex} onSelect={(selectedIndex) => setSelectedImageIndex(selectedIndex || 0)}>
             {listing.imageGallery && listing.imageGallery.map((url: string, index: number) => (
               <Carousel.Item key={index}>
                 <img
