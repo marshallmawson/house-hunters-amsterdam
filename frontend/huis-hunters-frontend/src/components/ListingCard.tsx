@@ -90,6 +90,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
             €{listing.price?.toLocaleString()}
           </span>
         </div>
+        {listing.area && <span className="badge bg-secondary mb-2">{listing.area}</span>}
         <div className="mb-2" style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'black' }}>
           {listing.livingArea && <span><RulerIcon /> {listing.livingArea} m²</span>}
           {listing.bedrooms && <Feature icon={<BedIcon />}>{listing.bedrooms}</Feature>}
@@ -128,7 +129,10 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     <Modal show={showModal} onHide={handleHideModal} size="lg" centered>
         <Modal.Header closeButton>
           <div className="d-flex justify-content-between align-items-center w-100 pr-3">
-            <Modal.Title>{listing.address}</Modal.Title>
+            <div>
+              <Modal.Title>{listing.address}</Modal.Title>
+              {listing.area && <span className="badge bg-secondary mt-1">{listing.area}</span>}
+            </div>
             <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap' }}>
               €{listing.price?.toLocaleString()}
             </span>

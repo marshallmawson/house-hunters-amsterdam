@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import ListingCard from './ListingCard';
@@ -7,6 +7,43 @@ import { Listing } from '../types';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
+import Select, { components, OptionProps, MultiValue, ValueContainerProps, StylesConfig } from 'react-select';
+
+const Option = (props: OptionProps<{ value: string; label: string; }, true>) => {
+  return (
+    <div>
+      <components.Option {...props}>
+        <input
+          type="checkbox"
+          checked={props.isSelected}
+          onChange={() => null}
+        />{' '}
+        <label>{props.label}</label>
+      </components.Option>
+    </div>
+  );
+};
+
+const ValueContainer = (props: ValueContainerProps<{ value: string; label: string; }, true>) => {
+  const { children } = props;
+  const { length } = props.getValue();
+  if (length > 1) {
+    return (
+      <components.ValueContainer {...props}>
+        <>Multiple</>
+      </components.ValueContainer>
+    );
+  }
+  return (
+    <components.ValueContainer {...props}>
+      {children}
+    </components.ValueContainer>
+  );
+};
+
+const areaSelectStyles: StylesConfig<{ value: string; label: string; }, true> = {
+  menu: (provided) => ({ ...provided, zIndex: 9999 }),
+};
 
 const Listings = () => {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -23,7 +60,18 @@ const Listings = () => {
   const [bedrooms, setBedrooms] = useState(searchParams.get('bedrooms') || 'any');
   const [floorLevel, setFloorLevel] = useState(searchParams.get('floor') || 'any');
   const [outdoorSpace, setOutdoorSpace] = useState(searchParams.get('outdoor') || 'any');
+  const [selectedAreas, setSelectedAreas] = useState<string[]>(searchParams.get('areas')?.split(',').filter(Boolean) || []);
   const [isModalOpen, setIsModalOpen] = useState(!!modalListingId);
+
+  const uniqueAreas = useMemo(() => {
+    const areas = new Set<string>();
+    listings.forEach(listing => {
+        if (listing.area) {
+            areas.add(listing.area);
+        }
+    });
+    return Array.from(areas).sort();
+  }, [listings]);
 
   useEffect(() => {
     const fetchListings = async () => {
@@ -44,8 +92,9 @@ const Listings = () => {
     if (bedrooms !== 'any') params.set('bedrooms', bedrooms);
     if (floorLevel !== 'any') params.set('floor', floorLevel);
     if (outdoorSpace !== 'any') params.set('outdoor', outdoorSpace);
+    if (selectedAreas.length > 0) params.set('areas', selectedAreas.join(','));
     setSearchParams(params, { replace: true });
-  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, setSearchParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, selectedAreas, setSearchParams]);
 
   useEffect(() => {
     updateURLParams();
@@ -79,12 +128,13 @@ const Listings = () => {
         (outdoorSpace === 'garden' && listing.hasGarden) ||
         (outdoorSpace === 'rooftop' && listing.hasRooftopTerrace) ||
         (outdoorSpace === 'balcony' && listing.hasBalcony);
+      const passesArea = selectedAreas.length === 0 || (listing.area && selectedAreas.includes(listing.area));
 
-      return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace;
+      return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesArea;
     });
 
     setFilteredListings(result);
-  }, [listings, sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, updateURLParams]);
+  }, [listings, sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, selectedAreas, updateURLParams]);
 
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
@@ -99,7 +149,7 @@ const Listings = () => {
         <Col>
           <Form>
             <Row>
-              <Col md={3}>
+              <Col md={2}>
                 <FormGroup>
                   <Form.Label>Sort by</Form.Label>
                   <Form.Control as="select" value={sortOrder} onChange={e => setSortOrder(e.target.value)}>
@@ -109,7 +159,7 @@ const Listings = () => {
                   </Form.Control>
                 </FormGroup>
               </Col>
-              <Col md={3}>
+              <Col md={2}>
                 <FormGroup>
                   <Form.Label>Price Range</Form.Label>
                   <div style={{ padding: '0 10px' }}>
@@ -133,9 +183,9 @@ const Listings = () => {
                   </div>
                 </FormGroup>
               </Col>
-              <Col md={2}>
+              <Col md={1}>
                 <FormGroup>
-                  <Form.Label>Min Bedrooms</Form.Label>
+                  <Form.Label>Min beds</Form.Label>
                   <Form.Control as="select" value={bedrooms} onChange={e => setBedrooms(e.target.value)}>
                     <option value="any">Any</option>
                     <option value="1">1+</option>
@@ -153,6 +203,21 @@ const Listings = () => {
                     <option value="top">Upper / Top Floor</option>
                     <option value="ground">Ground Floor</option>
                   </Form.Control>
+                </FormGroup>
+              </Col>
+              <Col md={3}>
+                <FormGroup>
+                  <Form.Label>Area</Form.Label>
+                  <Select
+                      isMulti
+                      options={uniqueAreas.map(area => ({ value: area, label: area }))}
+                      value={selectedAreas.map(area => ({ value: area, label: area }))}
+                      onChange={(selectedOptions: MultiValue<{ value: string; label: string; }>) => setSelectedAreas(selectedOptions.map(option => option.value))}
+                      closeMenuOnSelect={false}
+                      hideSelectedOptions={false}
+                      components={{ Option, ValueContainer }}
+                      styles={areaSelectStyles}
+                  />
                 </FormGroup>
               </Col>
               <Col md={2}>

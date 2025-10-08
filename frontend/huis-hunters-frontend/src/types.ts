@@ -34,4 +34,5 @@ export interface Listing {
   googleMapsUrl?: string;
   yearBuilt?: string | number;
   neighborhood?: string;
+  area?: string;
 }
