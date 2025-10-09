@@ -197,6 +197,17 @@ const Listings = () => {
               </Col>
               <Col md={2}>
                 <FormGroup>
+                  <Form.Label>Outdoor Space</Form.Label>
+                  <Form.Control as="select" value={outdoorSpace} onChange={e => setOutdoorSpace(e.target.value)}>
+                    <option value="any">Any</option>
+                    <option value="garden">Garden</option>
+                    <option value="rooftop">Rooftop</option>
+                    <option value="balcony">Balcony</option>
+                  </Form.Control>
+                </FormGroup>
+              </Col>              
+              <Col md={2}>
+                <FormGroup>
                   <Form.Label>Floor Level</Form.Label>
                   <Form.Control as="select" value={floorLevel} onChange={e => setFloorLevel(e.target.value)}>
                     <option value="any">Any</option>
@@ -218,17 +229,6 @@ const Listings = () => {
                       components={{ Option, ValueContainer }}
                       styles={areaSelectStyles}
                   />
-                </FormGroup>
-              </Col>
-              <Col md={2}>
-                <FormGroup>
-                  <Form.Label>Outdoor Space</Form.Label>
-                  <Form.Control as="select" value={outdoorSpace} onChange={e => setOutdoorSpace(e.target.value)}>
-                    <option value="any">Any</option>
-                    <option value="garden">Garden</option>
-                    <option value="rooftop">Rooftop</option>
-                    <option value="balcony">Balcony</option>
-                  </Form.Control>
                 </FormGroup>
               </Col>
             </Row>
