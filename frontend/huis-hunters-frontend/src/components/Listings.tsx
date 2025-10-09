@@ -77,12 +77,29 @@ const Listings = () => {
     const fetchListings = async () => {
       const q = query(collection(db, "listings"), where("status", "==", "processed"));
       const querySnapshot = await getDocs(q);
-      const listingsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Listing));
+      const listingsData = querySnapshot.docs.map(doc => {
+        const { publishDate, ...rest } = doc.data();
+        let finalPublishedDate;
+
+        if (typeof publishDate === 'string') {
+          const date = new Date(publishDate);
+          finalPublishedDate = {
+            toDate: () => date,
+            seconds: Math.floor(date.getTime() / 1000),
+            nanoseconds: (date.getTime() % 1000) * 1000000
+          };
+        } else {
+          finalPublishedDate = publishDate;
+        }
+
+        return { id: doc.id, ...rest, publishedDate: finalPublishedDate } as Listing;
+      });
       setListings(listingsData);
     };
 
     fetchListings();
   }, []);
+
 
   const updateURLParams = useCallback(() => {
     const params = new URLSearchParams();
@@ -106,13 +123,13 @@ const Listings = () => {
         case 'price-low-high':
           return (a.price || 0) - (b.price || 0);
         case 'date-new-old':
-          const dateDiff = (b.scrapedAt?.seconds || 0) - (a.scrapedAt?.seconds || 0);
+          const dateDiff = (b.publishedDate?.seconds || 0) - (a.publishedDate?.seconds || 0);
           if (dateDiff !== 0) return dateDiff;
           return (a.price || 0) - (b.price || 0);
         case 'date-old-new':
-          return (a.scrapedAt?.seconds || 0) - (b.scrapedAt?.seconds || 0);
+          return (a.publishedDate?.seconds || 0) - (b.publishedDate?.seconds || 0);
         default:
-          return (b.scrapedAt?.seconds || 0) - (a.scrapedAt?.seconds || 0);
+          return (b.publishedDate?.seconds || 0) - (a.publishedDate?.seconds || 0);
       }
     });
 

@@ -6,10 +6,15 @@ export interface Listing {
   bathrooms: number;
   livingArea: number;
   energyLabel: string;
-  scrapedAt: { 
-    seconds: number; 
-    nanoseconds: number; 
-    toDate: () => Date; 
+  scrapedAt: {
+    seconds: number;
+    nanoseconds: number;
+    toDate: () => Date;
+  };
+  publishedDate: {
+    seconds: number;
+    nanoseconds: number;
+    toDate: () => Date;
   };
   url: string;
   imageGallery: string[];

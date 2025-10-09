@@ -37,7 +37,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   const [showModal, setShowModal] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const navigate = useNavigate();
-  const scrapedAtDate = listing.scrapedAt ? listing.scrapedAt.toDate() : null;
+  const publishedDate = listing.publishedDate ? listing.publishedDate.toDate() : null;
   const outdoorSpaceString = getOutdoorSpaceString(listing);
 
   const mapUrl = listing.coordinates?.lat && listing.coordinates?.lon
@@ -121,7 +121,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
         </Card.Text>
         <div className="d-flex justify-content-between align-items-center">
             <Card.Link href={listing.url} target="_blank">View on Funda</Card.Link>
-            <small className="text-muted"><CalendarIcon /> {scrapedAtDate?.toLocaleDateString()}</small>
+            <small className="text-muted"><CalendarIcon /> {publishedDate?.toLocaleDateString()}</small>
         </div>
       </Card.Body>
     </Card>
