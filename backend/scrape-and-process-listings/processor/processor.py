@@ -264,7 +264,7 @@ def process_listings(limit=100):
     """
     print(f"--- Starting AI Processing Run (limit: {limit}) ---")
 
-    areas = parse_kml_file('backend/scrape-and-process-listings/processor/neighborhoods.kml')
+    areas = parse_kml_file('neighborhoods.kml')
     
     docs_to_process = db.collection('listings').where('status', '==', 'needs_processing').limit(limit).stream()
     

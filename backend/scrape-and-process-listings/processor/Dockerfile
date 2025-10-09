@@ -4,8 +4,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the processor script
+# Copy the processor script and KML file
 COPY processor.py .
+COPY neighborhoods.kml .
 
 # Command to run the processor with unbuffered output
 CMD ["python", "-u", "processor.py"]
