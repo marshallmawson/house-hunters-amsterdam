@@ -36,6 +36,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   const [isExpanded, setIsExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [showFloorPlanModal, setShowFloorPlanModal] = useState(false);
+  const [selectedFloorPlanIndex, setSelectedFloorPlanIndex] = useState(0);
   const navigate = useNavigate();
   const publishedDate = listing.publishedDate ? listing.publishedDate.toDate() : null;
   const outdoorSpaceString = getOutdoorSpaceString(listing);
@@ -61,6 +63,11 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     setShowModal(false);
     onModalToggle(false);
     navigate(`/`);
+  };
+
+  const handleFloorPlanClick = (index: number) => {
+    setSelectedFloorPlanIndex(index);
+    setShowFloorPlanModal(true);
   };
   return (
     <>
@@ -92,14 +99,14 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
         </div>
         {listing.area && <span className="badge bg-secondary mb-2">{listing.area}</span>}
         <div className="mb-2" style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'black' }}>
-          {listing.livingArea && <span><RulerIcon /> {listing.livingArea} m²</span>}
-          {listing.bedrooms && <Feature icon={<BedIcon />}>{listing.bedrooms}</Feature>}
-          {listing.bathrooms && <Feature icon={<BathIcon />}>{listing.bathrooms}</Feature>}
-          {listing.energyLabel && <Feature icon={<BoltIcon />}>{listing.energyLabel}</Feature>}
+          {listing.livingArea && <span style={{ marginRight: '1rem' }}><RulerIcon /> {listing.livingArea} m²</span>}
+          {listing.bedrooms && <span style={{ marginRight: '1rem' }}><BedIcon /> {listing.bedrooms}</span>}
+          {listing.bathrooms && <span style={{ marginRight: '1rem' }}><BathIcon /> {listing.bathrooms}</span>}
+          {listing.energyLabel && <span style={{ marginRight: '1rem' }}><BoltIcon /> {listing.energyLabel}</span>}
         </div>
         <div className="mb-2" style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'black' }}>
           {listing.apartmentFloor && (
-            <span>
+            <span style={{ marginRight: '1rem' }}>
               <BuildingIcon />{' '}
               {typeof listing.apartmentFloor === 'number'
                 ? `Floor ${listing.apartmentFloor}`
@@ -109,9 +116,9 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
             </span>
           )}
           {listing.numberOfStories && listing.numberOfStories >= 2 && (
-            <Feature icon={<LayersIcon />}>{listing.numberOfStories} stories</Feature>
+            <span style={{ marginRight: '1rem' }}><LayersIcon /> {listing.numberOfStories} stories</span>
           )}
-          {outdoorSpaceString && <Feature icon={<LeafIcon />}>{outdoorSpaceString}</Feature>}
+          {outdoorSpaceString && <span style={{ marginRight: '1rem' }}><LeafIcon /> {outdoorSpaceString}</span>}
         </div>
         <Card.Text style={{ fontSize: '0.85rem' }}>
           {isExpanded ? listing.embeddingText : `${listing.embeddingText.substring(0, 220)}...`}
@@ -120,7 +127,19 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
           </Button>
         </Card.Text>
         <div className="d-flex justify-content-between align-items-center">
-            <Card.Link href={listing.url} target="_blank">View on Funda</Card.Link>
+            <Button 
+              variant="link" 
+              onClick={() => handleShowModal()} 
+              style={{ 
+                fontSize: '0.8rem', 
+                padding: '0', 
+                color: '#6c757d',
+                textDecoration: 'none'
+              }}
+              className="p-0"
+            >
+              View all details
+            </Button>
             <small className="text-muted"><CalendarIcon /> {publishedDate?.toLocaleDateString()}</small>
         </div>
       </Card.Body>
@@ -154,39 +173,60 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
           <Row>
             <Col md={6}>
               <h5>Details</h5>
-              <div className="mb-2" style={{ fontSize: '0.9rem', color: 'black' }}>
-                {listing.livingArea && <span><RulerIcon /> {listing.livingArea} m²</span>}
-                {listing.bedrooms && <Feature icon={<BedIcon />}>{listing.bedrooms}</Feature>}
-                {listing.bathrooms && <Feature icon={<BathIcon />}>{listing.bathrooms}</Feature>}
-                {listing.energyLabel && <Feature icon={<BoltIcon />}>{listing.energyLabel}</Feature>}
-              </div>
-              <div className="mb-3" style={{ fontSize: '0.9rem', color: 'black' }}>
-                {listing.apartmentFloor && (
-                  <span>
-                    <BuildingIcon />{' '}
-                    {typeof listing.apartmentFloor === 'number'
-                      ? `Floor ${listing.apartmentFloor}`
-                      : listing.apartmentFloor.toLowerCase().includes('floor')
-                      ? listing.apartmentFloor
-                      : `${listing.apartmentFloor} floor`}
-                  </span>
-                )}
-                {listing.numberOfStories && listing.numberOfStories >= 2 && (
-                  <Feature icon={<LayersIcon />}>{listing.numberOfStories} stories</Feature>
-                )}
-                {listing.yearBuilt && <Feature icon={<CalendarIcon />}>Built {listing.yearBuilt}</Feature>}
-              </div>
-              {outdoorSpaceString && <p style={{ fontSize: '0.9rem' }}><LeafIcon /> {outdoorSpaceString}</p>}
-              {listing.neighborhood && <p style={{ fontSize: '0.9rem' }}><GlobeIcon /> {listing.neighborhood}</p>}
-
-              <hr />
-
-              <p><strong>Agent:</strong> {listing.agentUrl ? <a href={listing.agentUrl} target="_blank" rel="noopener noreferrer">{listing.agentName}</a> : listing.agentName}</p>
-              {listing.vveContribution && <p><strong>VVE Contribution:</strong> €{listing.vveContribution} per month</p>}
-              <Card.Link href={listing.url} target="_blank">View on Funda</Card.Link>
               
-              <h5 className="mt-4">Description</h5>
-              <p style={{ maxHeight: '200px', overflowY: 'auto', fontSize: '0.9rem' }}>
+              {/* Property Specifications */}
+              <div className="mb-3">
+                <div className="mb-2" style={{ fontSize: '0.9rem', color: 'black' }}>
+                  {listing.livingArea && <span style={{ marginRight: '1rem' }}><RulerIcon /> {listing.livingArea} m²</span>}
+                  {listing.bedrooms && <span style={{ marginRight: '1rem' }}><BedIcon /> {listing.bedrooms}</span>}
+                  {listing.bathrooms && <span style={{ marginRight: '1rem' }}><BathIcon /> {listing.bathrooms}</span>}
+                  {listing.energyLabel && <span style={{ marginRight: '1rem' }}><BoltIcon /> {listing.energyLabel}</span>}
+                </div>
+                <div className="mb-2" style={{ fontSize: '0.9rem', color: 'black' }}>
+                  {listing.apartmentFloor && (
+                    <span style={{ marginRight: '1rem' }}>
+                      <BuildingIcon />{' '}
+                      {typeof listing.apartmentFloor === 'number'
+                        ? `Floor ${listing.apartmentFloor}`
+                        : listing.apartmentFloor.toLowerCase().includes('floor')
+                        ? listing.apartmentFloor
+                        : `${listing.apartmentFloor} floor`}
+                    </span>
+                  )}
+                  {listing.numberOfStories && listing.numberOfStories >= 2 && (
+                    <span style={{ marginRight: '1rem' }}><LayersIcon /> {listing.numberOfStories} stories</span>
+                  )}
+                  {listing.yearBuilt && <span style={{ marginRight: '1rem' }}><CalendarIcon /> Built {listing.yearBuilt}</span>}
+                </div>
+                {outdoorSpaceString && (
+                  <div className="mb-2" style={{ fontSize: '0.9rem', color: 'black' }}>
+                    <span style={{ marginRight: '1rem' }}><LeafIcon /> {outdoorSpaceString}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Additional Information */}
+              <div className="mb-3">
+                {listing.neighborhood && (
+                  <p className="mb-2" style={{ fontSize: '0.9rem' }}>
+                    <strong><GlobeIcon /> Neighborhood:</strong> {listing.neighborhood}
+                  </p>
+                )}
+                {listing.vveContribution && (
+                  <p className="mb-2" style={{ fontSize: '0.9rem' }}>
+                    <strong>VVE Contribution:</strong> €{listing.vveContribution} per month
+                  </p>
+                )}
+                <p className="mb-2" style={{ fontSize: '0.9rem' }}>
+                  <strong>Agent:</strong> {listing.agentUrl ? <a href={listing.agentUrl} target="_blank" rel="noopener noreferrer">{listing.agentName}</a> : listing.agentName}
+                </p>
+                <Card.Link href={listing.url} target="_blank">View on Funda</Card.Link>
+              </div>
+              
+              <hr />
+              
+              <h5>Full Description</h5>
+              <p style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
                 {listing.cleanedDescription}
               </p>
             </Col>
@@ -216,7 +256,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
                           className="d-block w-100"
                           src={url}
                           alt={`Floor Plan ${index + 1}`}
-                          style={{ maxHeight: '350px', objectFit: 'contain' }}
+                          style={{ maxHeight: '350px', objectFit: 'contain', cursor: 'pointer' }}
+                          onClick={() => handleFloorPlanClick(index)}
                         />
                       </Carousel.Item>
                     ))}
@@ -225,6 +266,22 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
               )}
             </Col>
           </Row>
+        </Modal.Body>
+      </Modal>
+
+      {/* Floor Plan Modal */}
+      <Modal show={showFloorPlanModal} onHide={() => setShowFloorPlanModal(false)} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Floor Plan {selectedFloorPlanIndex + 1}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center">
+          {listing.floorPlans && listing.floorPlans[selectedFloorPlanIndex] && (
+            <img
+              src={listing.floorPlans[selectedFloorPlanIndex]}
+              alt={`Floor Plan ${selectedFloorPlanIndex + 1}`}
+              style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }}
+            />
+          )}
         </Modal.Body>
       </Modal>
     </>

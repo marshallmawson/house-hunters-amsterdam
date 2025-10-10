@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import ListingCard from './ListingCard';
-import { Container, Row, Col, Form, FormGroup } from 'react-bootstrap';
+import { Container, Row, Col, Form, FormGroup, Pagination } from 'react-bootstrap';
 import { Listing } from '../types';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
@@ -60,8 +60,13 @@ const Listings = () => {
   const [bedrooms, setBedrooms] = useState(searchParams.get('bedrooms') || 'any');
   const [floorLevel, setFloorLevel] = useState(searchParams.get('floor') || 'any');
   const [outdoorSpace, setOutdoorSpace] = useState(searchParams.get('outdoor') || 'any');
+  const [minSize, setMinSize] = useState(searchParams.get('minSize') || '');
   const [selectedAreas, setSelectedAreas] = useState<string[]>(searchParams.get('areas')?.split(',').filter(Boolean) || []);
   const [isModalOpen, setIsModalOpen] = useState(!!modalListingId);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
 
   const uniqueAreas = useMemo(() => {
     const areas = new Set<string>();
@@ -109,9 +114,10 @@ const Listings = () => {
     if (bedrooms !== 'any') params.set('bedrooms', bedrooms);
     if (floorLevel !== 'any') params.set('floor', floorLevel);
     if (outdoorSpace !== 'any') params.set('outdoor', outdoorSpace);
+    if (minSize) params.set('minSize', minSize);
     if (selectedAreas.length > 0) params.set('areas', selectedAreas.join(','));
     setSearchParams(params, { replace: true });
-  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, selectedAreas, setSearchParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, setSearchParams]);
 
   useEffect(() => {
     updateURLParams();
@@ -123,13 +129,36 @@ const Listings = () => {
         case 'price-low-high':
           return (a.price || 0) - (b.price || 0);
         case 'date-new-old':
-          const dateDiff = (b.publishedDate?.seconds || 0) - (a.publishedDate?.seconds || 0);
-          if (dateDiff !== 0) return dateDiff;
+          // Primary sort: Date (day only) DESC (newest day first)
+          const dateA = new Date((a.publishedDate?.seconds || 0) * 1000);
+          const dateB = new Date((b.publishedDate?.seconds || 0) * 1000);
+          
+          // Normalize to day level (remove time component)
+          const dayA = new Date(dateA.getFullYear(), dateA.getMonth(), dateA.getDate()).getTime();
+          const dayB = new Date(dateB.getFullYear(), dateB.getMonth(), dateB.getDate()).getTime();
+          const dayDiff = dayB - dayA;
+          
+          // Secondary sort: Price ASC (lowest first) when on same day
+          if (dayDiff !== 0) return dayDiff;
           return (a.price || 0) - (b.price || 0);
         case 'date-old-new':
-          return (a.publishedDate?.seconds || 0) - (b.publishedDate?.seconds || 0);
+          // Primary sort: Date ASC (oldest first)
+          const dateA_old = a.publishedDate?.seconds || 0;
+          const dateB_old = b.publishedDate?.seconds || 0;
+          return dateA_old - dateB_old;
         default:
-          return (b.publishedDate?.seconds || 0) - (a.publishedDate?.seconds || 0);
+          // Default: Date (day only) DESC, then Price DESC
+          const defaultDateA = new Date((a.publishedDate?.seconds || 0) * 1000);
+          const defaultDateB = new Date((b.publishedDate?.seconds || 0) * 1000);
+          
+          // Normalize to day level (remove time component)
+          const defaultDayA = new Date(defaultDateA.getFullYear(), defaultDateA.getMonth(), defaultDateA.getDate()).getTime();
+          const defaultDayB = new Date(defaultDateB.getFullYear(), defaultDateB.getMonth(), defaultDateB.getDate()).getTime();
+          const defaultDayDiff = defaultDayB - defaultDayA;
+          
+          // Secondary sort: Price ASC when on same day
+          if (defaultDayDiff !== 0) return defaultDayDiff;
+          return (a.price || 0) - (b.price || 0);
       }
     });
 
@@ -145,13 +174,16 @@ const Listings = () => {
         (outdoorSpace === 'garden' && listing.hasGarden) ||
         (outdoorSpace === 'rooftop' && listing.hasRooftopTerrace) ||
         (outdoorSpace === 'balcony' && listing.hasBalcony);
+      const passesMinSize = !minSize || (listing.livingArea && listing.livingArea >= parseInt(minSize, 10));
       const passesArea = selectedAreas.length === 0 || (listing.area && selectedAreas.includes(listing.area));
 
-      return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesArea;
+      return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesMinSize && passesArea;
     });
 
     setFilteredListings(result);
-  }, [listings, sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, selectedAreas, updateURLParams]);
+    // Reset to first page when filters change
+    setCurrentPage(1);
+  }, [listings, sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, updateURLParams]);
 
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
@@ -160,100 +192,286 @@ const Listings = () => {
     }
   };
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredListings.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentListings = filteredListings.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const renderPaginationItems = () => {
+    const items = [];
+    const maxVisiblePages = 5;
+    
+    // Calculate the range of pages to show
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    // Adjust start page if we're near the end
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    // Add first page and ellipsis if needed
+    if (startPage > 1) {
+      items.push(
+        <Pagination.Item key={1} active={currentPage === 1} onClick={() => handlePageChange(1)}>
+          1
+        </Pagination.Item>
+      );
+      if (startPage > 2) {
+        items.push(<Pagination.Ellipsis key="start-ellipsis" />);
+      }
+    }
+
+    // Add visible pages
+    for (let page = startPage; page <= endPage; page++) {
+      items.push(
+        <Pagination.Item 
+          key={page} 
+          active={currentPage === page} 
+          onClick={() => handlePageChange(page)}
+        >
+          {page}
+        </Pagination.Item>
+      );
+    }
+
+    // Add ellipsis and last page if needed
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        items.push(<Pagination.Ellipsis key="end-ellipsis" />);
+      }
+      items.push(
+        <Pagination.Item 
+          key={totalPages} 
+          active={currentPage === totalPages} 
+          onClick={() => handlePageChange(totalPages)}
+        >
+          {totalPages}
+        </Pagination.Item>
+      );
+    }
+
+    return items;
+  };
+
   return (
     <Container>
-      <Row className="mb-3">
-        <Col>
-          <Form>
-            <Row>
-              <Col md={2}>
-                <FormGroup>
-                  <Form.Label>Sort by</Form.Label>
-                  <Form.Control as="select" value={sortOrder} onChange={e => setSortOrder(e.target.value)}>
-                    <option value="date-new-old">Date & Price</option>
-                    <option value="date-old-new">Date (Old to New)</option>
-                    <option value="price-low-high">Price (Low to High)</option>
-                  </Form.Control>
-                </FormGroup>
-              </Col>
-              <Col md={2}>
-                <FormGroup>
-                  <Form.Label>Price Range</Form.Label>
-                  <div style={{ padding: '0 10px' }}>
-                    <Slider
-                      range
-                      min={200000}
-                      max={1200000}
-                      step={25000}
-                      value={[priceRange.min, priceRange.max]}
-                      onChange={(values: number | number[]) => {
-                        if (Array.isArray(values) && values.length === 2) {
-                          setPriceRange({ min: values[0], max: values[1] });
-                        }
-                      }}
-                      allowCross={false}
-                    />
-                  </div>
-                  <div className="d-flex justify-content-between mt-2">
-                    <small>€{priceRange.min.toLocaleString()}</small>
-                    <small>€{priceRange.max.toLocaleString()}</small>
-                  </div>
-                </FormGroup>
-              </Col>
-              <Col md={1}>
-                <FormGroup>
-                  <Form.Label>Min beds</Form.Label>
-                  <Form.Control as="select" value={bedrooms} onChange={e => setBedrooms(e.target.value)}>
-                    <option value="any">Any</option>
-                    <option value="1">1+</option>
-                    <option value="2">2+</option>
-                    <option value="3">3+</option>
-                    <option value="4">4+</option>
-                  </Form.Control>
-                </FormGroup>
-              </Col>
-              <Col md={2}>
-                <FormGroup>
-                  <Form.Label>Outdoor Space</Form.Label>
-                  <Form.Control as="select" value={outdoorSpace} onChange={e => setOutdoorSpace(e.target.value)}>
-                    <option value="any">Any</option>
-                    <option value="garden">Garden</option>
-                    <option value="rooftop">Rooftop</option>
-                    <option value="balcony">Balcony</option>
-                  </Form.Control>
-                </FormGroup>
-              </Col>              
-              <Col md={2}>
-                <FormGroup>
-                  <Form.Label>Floor Level</Form.Label>
-                  <Form.Control as="select" value={floorLevel} onChange={e => setFloorLevel(e.target.value)}>
-                    <option value="any">Any</option>
-                    <option value="top">Upper / Top Floor</option>
-                    <option value="ground">Ground Floor</option>
-                  </Form.Control>
-                </FormGroup>
-              </Col>
-              <Col md={3}>
-                <FormGroup>
-                  <Form.Label>Area</Form.Label>
-                  <Select
-                      isMulti
-                      options={uniqueAreas.map(area => ({ value: area, label: area }))}
-                      value={selectedAreas.map(area => ({ value: area, label: area }))}
-                      onChange={(selectedOptions: MultiValue<{ value: string; label: string; }>) => setSelectedAreas(selectedOptions.map(option => option.value))}
-                      closeMenuOnSelect={false}
-                      hideSelectedOptions={false}
-                      components={{ Option, ValueContainer }}
-                      styles={areaSelectStyles}
+      {/* Modern Filter Section */}
+      <div className="mb-4 p-4" style={{ 
+        backgroundColor: '#f8f9fa', 
+        borderRadius: '12px',
+        border: '1px solid #e9ecef',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+      }}>
+        <h6 className="mb-3 text-muted fw-semibold" style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          Filter Properties
+        </h6>
+        <Form>
+          <Row className="g-3">
+            {/* Price Range */}
+            <Col lg={3} md={6}>
+              <FormGroup>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Price Range</Form.Label>
+                <div style={{ padding: '0 8px' }}>
+                  <Slider
+                    range
+                    min={200000}
+                    max={1200000}
+                    step={25000}
+                    value={[priceRange.min, priceRange.max]}
+                    onChange={(values: number | number[]) => {
+                      if (Array.isArray(values) && values.length === 2) {
+                        setPriceRange({ min: values[0], max: values[1] });
+                      }
+                    }}
+                    allowCross={false}
                   />
-                </FormGroup>
-              </Col>
-            </Row>
-          </Form>
-        </Col>
-      </Row>
+                </div>
+                <div className="d-flex justify-content-between mt-2">
+                  <small className="text-muted">€{priceRange.min.toLocaleString()}</small>
+                  <small className="text-muted">€{priceRange.max.toLocaleString()}</small>
+                </div>
+              </FormGroup>
+            </Col>
+
+            {/* Min Size */}
+            <Col lg={2} md={6}>
+              <FormGroup>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Min Size (m²)</Form.Label>
+                <Form.Control 
+                  type="number"
+                  placeholder="Any"
+                  value={minSize}
+                  onChange={e => setMinSize(e.target.value)}
+                  style={{ 
+                    borderRadius: '8px',
+                    border: '1px solid #dee2e6',
+                    fontSize: '0.9rem',
+                    padding: '0.5rem 0.75rem'
+                  }}
+                />
+              </FormGroup>
+            </Col>
+
+            {/* Bedrooms */}
+            <Col lg={2} md={6}>
+              <FormGroup>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Min Bedrooms</Form.Label>
+                <Form.Control 
+                  as="select" 
+                  value={bedrooms} 
+                  onChange={e => setBedrooms(e.target.value)}
+                  style={{ 
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 0.75rem center',
+                    backgroundSize: '16px 12px',
+                    paddingRight: '2.25rem',
+                    borderRadius: '8px',
+                    border: '1px solid #dee2e6',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  <option value="any">Any</option>
+                  <option value="1">1+</option>
+                  <option value="2">2+</option>
+                  <option value="3">3+</option>
+                  <option value="4">4+</option>
+                </Form.Control>
+              </FormGroup>
+            </Col>
+
+            {/* Outdoor Space */}
+            <Col lg={2} md={6}>
+              <FormGroup>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Outdoor Space</Form.Label>
+                <Form.Control 
+                  as="select" 
+                  value={outdoorSpace} 
+                  onChange={e => setOutdoorSpace(e.target.value)}
+                  style={{ 
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 0.75rem center',
+                    backgroundSize: '16px 12px',
+                    paddingRight: '2.25rem',
+                    borderRadius: '8px',
+                    border: '1px solid #dee2e6',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  <option value="any">Any</option>
+                  <option value="garden">Garden</option>
+                  <option value="rooftop">Rooftop</option>
+                  <option value="balcony">Balcony</option>
+                </Form.Control>
+              </FormGroup>
+            </Col>
+
+            {/* Floor Level */}
+            <Col lg={2} md={6}>
+              <FormGroup>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Floor Level</Form.Label>
+                <Form.Control 
+                  as="select" 
+                  value={floorLevel} 
+                  onChange={e => setFloorLevel(e.target.value)}
+                  style={{ 
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 0.75rem center',
+                    backgroundSize: '16px 12px',
+                    paddingRight: '2.25rem',
+                    borderRadius: '8px',
+                    border: '1px solid #dee2e6',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  <option value="any">Any</option>
+                  <option value="top">Upper / Top Floor</option>
+                  <option value="ground">Ground Floor</option>
+                </Form.Control>
+              </FormGroup>
+            </Col>
+
+            {/* Area */}
+            <Col lg={3} md={12}>
+              <FormGroup>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Neighborhood</Form.Label>
+                <Select
+                    isMulti
+                    options={uniqueAreas.map(area => ({ value: area, label: area }))}
+                    value={selectedAreas.map(area => ({ value: area, label: area }))}
+                    onChange={(selectedOptions: MultiValue<{ value: string; label: string; }>) => setSelectedAreas(selectedOptions.map(option => option.value))}
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    components={{ Option, ValueContainer }}
+                    styles={{
+                      ...areaSelectStyles,
+                      control: (provided: any) => ({
+                        ...provided,
+                        borderRadius: '8px',
+                        border: '1px solid #dee2e6',
+                        fontSize: '0.9rem',
+                        minHeight: '38px'
+                      })
+                    }}
+                />
+              </FormGroup>
+            </Col>
+          </Row>
+        </Form>
+      </div>
+      {/* Sort and Pagination info */}
+      {filteredListings.length > 0 && (
+        <Row className="mb-3">
+          <Col>
+            <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
+              <div className="d-flex align-items-center gap-3">
+                <div>
+                  <strong>Showing {startIndex + 1}-{Math.min(endIndex, filteredListings.length)} of {filteredListings.length} listings</strong>
+                </div>
+                {totalPages > 1 && (
+                  <div className="text-muted">
+                    Page {currentPage} of {totalPages}
+                  </div>
+                )}
+              </div>
+              <div className="d-flex align-items-center gap-2">
+                <Form.Label className="mb-0 me-2"><strong>Sort by:</strong></Form.Label>
+                <Form.Control 
+                  as="select" 
+                  value={sortOrder} 
+                  onChange={e => setSortOrder(e.target.value)}
+                  style={{ 
+                    width: 'auto', 
+                    minWidth: '180px',
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 0.75rem center',
+                    backgroundSize: '16px 12px',
+                    paddingRight: '2.25rem'
+                  }}
+                >
+                  <option value="date-new-old">Date & Price</option>
+                  <option value="date-old-new">Date (Old to New)</option>
+                  <option value="price-low-high">Price (Low to High)</option>
+                </Form.Control>
+              </div>
+            </div>
+          </Col>
+        </Row>
+      )}
+
+      {/* Listings */}
       <Row>
-        {filteredListings.map(listing => (
+        {currentListings.map(listing => (
           <Col key={listing.id} sm={12} md={6} lg={6} xl={4}>
             <ListingCard 
               listing={listing} 
@@ -264,6 +482,39 @@ const Listings = () => {
           </Col>
         ))}
       </Row>
+
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <Row className="mt-4">
+          <Col>
+            <div className="d-flex justify-content-center">
+              <Pagination>
+                <Pagination.Prev 
+                  disabled={currentPage === 1} 
+                  onClick={() => currentPage > 1 && handlePageChange(currentPage - 1)}
+                />
+                {renderPaginationItems()}
+                <Pagination.Next 
+                  disabled={currentPage === totalPages} 
+                  onClick={() => currentPage < totalPages && handlePageChange(currentPage + 1)}
+                />
+              </Pagination>
+            </div>
+          </Col>
+        </Row>
+      )}
+
+      {/* No results message */}
+      {filteredListings.length === 0 && (
+        <Row>
+          <Col>
+            <div className="text-center py-5">
+              <h4>No listings found</h4>
+              <p>Try adjusting your filters to see more results.</p>
+            </div>
+          </Col>
+        </Row>
+      )}
     </Container>
   );
 };
