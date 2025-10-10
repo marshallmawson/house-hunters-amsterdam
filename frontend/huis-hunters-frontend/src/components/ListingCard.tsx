@@ -41,6 +41,14 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   const navigate = useNavigate();
   const publishedDate = listing.publishedDate ? listing.publishedDate.toDate() : null;
   const outdoorSpaceString = getOutdoorSpaceString(listing);
+  
+  // Check if address or outdoor space is long to adjust summary text length
+  const hasLongAddress = listing.address && listing.address.length > 28;
+  const hasLongOutdoorSpace = outdoorSpaceString && outdoorSpaceString.length > 20;
+  const shouldReduceSummaryText = hasLongAddress || hasLongOutdoorSpace;
+  
+  // Adjust summary text length based on content
+  const summaryTextLength = shouldReduceSummaryText ? 180 : 220;
 
   const mapUrl = listing.coordinates?.lat && listing.coordinates?.lon
     ? `https://maps.google.com/maps?q=${listing.coordinates.lat},${listing.coordinates.lon}&z=15&output=embed`
@@ -118,10 +126,10 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
           {listing.numberOfStories && listing.numberOfStories >= 2 && (
             <span style={{ marginRight: '1rem' }}><LayersIcon /> {listing.numberOfStories} stories</span>
           )}
-          {outdoorSpaceString && <span style={{ marginRight: '1rem' }}><LeafIcon /> {outdoorSpaceString}</span>}
+          {outdoorSpaceString && <span style={{ marginRight: '0.5rem' }}><LeafIcon /> {outdoorSpaceString}</span>}
         </div>
         <Card.Text style={{ fontSize: '0.85rem' }}>
-          {isExpanded ? listing.embeddingText : `${listing.embeddingText.substring(0, 220)}...`}
+          {isExpanded ? listing.embeddingText : `${listing.embeddingText.substring(0, summaryTextLength)}...`}
           <Button variant="link" onClick={() => setIsExpanded(!isExpanded)} style={{ fontSize: '0.8rem', verticalAlign: 'baseline', padding: '0 0.2rem' }}>
             {isExpanded ? 'Show Less' : 'Show More'}
           </Button>
@@ -200,7 +208,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
                 </div>
                 {outdoorSpaceString && (
                   <div className="mb-2" style={{ fontSize: '0.9rem', color: 'black' }}>
-                    <span style={{ marginRight: '1rem' }}><LeafIcon /> {outdoorSpaceString}</span>
+                    <span style={{ marginRight: '0.5rem' }}><LeafIcon /> {outdoorSpaceString}</span>
                   </div>
                 )}
               </div>
@@ -249,7 +257,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
               {listing.floorPlans && listing.floorPlans.length > 0 && (
                 <>
                   <h5 className="mt-4">Floor Plans</h5>
-                  <Carousel>
+                  <Carousel indicators={listing.floorPlans.length > 1} controls={listing.floorPlans.length > 1}>
                     {listing.floorPlans.map((url, index) => (
                       <Carousel.Item key={index}>
                         <img
