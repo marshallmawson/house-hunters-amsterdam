@@ -262,12 +262,15 @@ const Listings = () => {
 
   return (
     <Container>
-      {/* Modern Filter Section */}
+      {/* Modern Filter Section - Overlapping Header */}
       <div className="mb-4 p-4" style={{ 
         backgroundColor: '#f8f9fa', 
         borderRadius: '12px',
         border: '1px solid #e9ecef',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+        marginTop: '-100px',
+        position: 'relative',
+        zIndex: 10
       }}>
         <h6 className="mb-3 text-muted fw-semibold" style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           Filter Properties

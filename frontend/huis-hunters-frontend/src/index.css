@@ -11,3 +11,32 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0;
   padding: 0;
 }
+
+/* Modern header animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-title {
+  animation: fadeInUp 0.8s ease-out;
+}
+
+.hero-subtitle {
+  animation: fadeInUp 0.8s ease-out 0.2s both;
+}
+
+.hero-cta {
+  animation: fadeInUp 0.8s ease-out 0.4s both;
+}
+
+/* Smooth scroll behavior */
+html {
+  scroll-behavior: smooth;
+}
