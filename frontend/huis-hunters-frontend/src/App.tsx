@@ -10,6 +10,7 @@ function App() {
     <div>
       {/* Modern Hero Header */}
       <div 
+        className="hero-header"
         style={{
           minHeight: '400px',
           position: 'relative',
@@ -34,17 +35,9 @@ function App() {
         
 
         {/* Content */}
-        <Container style={{ position: 'relative', zIndex: 3, paddingTop: '120px', paddingBottom: '120px' }}>
+        <Container className="hero-content" style={{ position: 'relative', zIndex: 3, paddingTop: '120px', paddingBottom: '120px' }}>
           <div className="text-center text-white">
-            <div 
-              style={{
-                backgroundColor: 'rgba(0, 0, 0, 0.25)',
-                borderRadius: '15px',
-                padding: '1.5rem 2rem',
-                display: 'inline-block',
-                border: '1px solid rgba(255, 255, 255, 0.1)'
-              }}
-            >
+            <div className="hero-text-container">
               <h1 
                 className="hero-title"
                 style={{

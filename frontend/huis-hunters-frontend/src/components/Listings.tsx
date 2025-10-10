@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import ListingCard from './ListingCard';
-import { Container, Row, Col, Form, FormGroup, Pagination } from 'react-bootstrap';
+import { Container, Row, Col, Form, FormGroup, Pagination, Button } from 'react-bootstrap';
 import { Listing } from '../types';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
@@ -63,6 +63,7 @@ const Listings = () => {
   const [minSize, setMinSize] = useState(searchParams.get('minSize') || '');
   const [selectedAreas, setSelectedAreas] = useState<string[]>(searchParams.get('areas')?.split(',').filter(Boolean) || []);
   const [isModalOpen, setIsModalOpen] = useState(!!modalListingId);
+  const [showFilters, setShowFilters] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -263,7 +264,7 @@ const Listings = () => {
   return (
     <Container>
       {/* Modern Filter Section - Overlapping Header */}
-      <div className="mb-4 p-4" style={{ 
+      <div className="mb-4 p-4 filters-section" style={{ 
         backgroundColor: '#f8f9fa', 
         borderRadius: '12px',
         border: '1px solid #e9ecef',
@@ -272,11 +273,23 @@ const Listings = () => {
         position: 'relative',
         zIndex: 10
       }}>
-        <h6 className="mb-3 text-muted fw-semibold" style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          Filter Properties
-        </h6>
-        <Form>
-          <Row className="g-3">
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h6 className="text-muted fw-semibold mb-0" style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Filter Properties
+          </h6>
+          <Button 
+            variant="outline-secondary" 
+            size="sm" 
+            className="d-md-none filters-toggle-btn"
+            onClick={() => setShowFilters(!showFilters)}
+            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+          >
+            🔍 {showFilters ? 'Hide' : 'Show'} Filters
+          </Button>
+        </div>
+        <div className={`filters-content ${showFilters ? 'show' : ''}`}>
+          <Form>
+            <Row className="g-2">
             {/* Price Range */}
             <Col lg={3} md={6}>
               <FormGroup>
@@ -428,8 +441,9 @@ const Listings = () => {
                 />
               </FormGroup>
             </Col>
-          </Row>
-        </Form>
+            </Row>
+          </Form>
+        </div>
       </div>
       {/* Sort and Pagination info */}
       {filteredListings.length > 0 && (

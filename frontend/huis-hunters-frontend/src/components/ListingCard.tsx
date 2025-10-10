@@ -71,7 +71,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   };
   return (
     <>
-    <Card style={{ width: '24rem', margin: '1rem' }}>
+    <Card className="listing-card" style={{ width: '24rem', margin: '1rem' }}>
       <Carousel interval={isAnyModalOpen ? null : 5000}>
         {listing.imageGallery && listing.imageGallery.slice(0, 10).map((url: string, index: number) => (
           <Carousel.Item key={index}>

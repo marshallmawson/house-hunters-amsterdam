@@ -40,3 +40,181 @@ h1, h2, h3, h4, h5, h6 {
 html {
   scroll-behavior: smooth;
 }
+
+/* Desktop filter styles */
+@media (min-width: 768px) {
+  .filters-content {
+    display: block !important;
+  }
+  
+  .filters-toggle-btn {
+    display: none !important;
+  }
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  /* Header adjustments for mobile */
+  .hero-header {
+    min-height: 250px !important;
+  }
+  
+  .hero-content {
+    padding-top: 60px !important;
+    padding-bottom: 60px !important;
+  }
+  
+  .hero-title {
+    font-size: 3rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .hero-subtitle {
+    font-size: 1.1rem !important;
+  }
+  
+  .hero-text-container {
+    margin: 0 1rem;
+  }
+  
+  /* Filters section adjustments for mobile */
+  .filters-section {
+    margin-top: -50px !important;
+    padding: 1rem !important;
+    margin-left: 0.5rem !important;
+    margin-right: 0.5rem !important;
+  }
+  
+  .filters-section h6 {
+    font-size: 0.8rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  
+  .filters-section .form-label {
+    font-size: 0.75rem !important;
+    margin-bottom: 0.25rem !important;
+  }
+  
+  .filters-section .form-control,
+  .filters-section .css-1s2u09g-control {
+    font-size: 0.8rem !important;
+    padding: 0.375rem 0.5rem !important;
+    min-height: 32px !important;
+  }
+  
+  /* Mobile filter toggle */
+  .filters-content {
+    display: none;
+  }
+  
+  .filters-content.show {
+    display: block;
+  }
+  
+  /* Listing cards adjustments for mobile */
+  .listing-card {
+    width: 100% !important;
+    margin: 0.5rem 0 !important;
+    max-width: none !important;
+  }
+  
+  /* Center listing cards on mobile */
+  .row .col-sm-12 {
+    display: flex;
+    justify-content: center;
+  }
+  
+  /* Adjust card content for mobile */
+  .listing-card .card-title {
+    font-size: 1rem !important;
+    margin-right: 0.5rem !important;
+  }
+  
+  .listing-card .card-body {
+    padding: 0.75rem !important;
+  }
+  
+  /* Adjust carousel height for mobile */
+  .listing-card .carousel-item img {
+    height: 200px !important;
+  }
+  
+  /* Adjust modal for mobile */
+  .modal-dialog {
+    margin: 0.5rem !important;
+  }
+  
+  .modal-body {
+    padding: 1rem !important;
+  }
+  
+  .modal-body .carousel-item img {
+    height: 250px !important;
+  }
+  
+  /* Adjust pagination for mobile */
+  .pagination {
+    font-size: 0.875rem;
+  }
+  
+  .pagination .page-link {
+    padding: 0.375rem 0.5rem;
+  }
+}
+
+@media (max-width: 576px) {
+  /* Extra small mobile adjustments */
+  .hero-header {
+    min-height: 200px !important;
+  }
+  
+  .hero-content {
+    padding-top: 40px !important;
+    padding-bottom: 40px !important;
+  }
+  
+  .hero-title {
+    font-size: 2.5rem !important;
+  }
+  
+  .hero-subtitle {
+    font-size: 1rem !important;
+  }
+  
+  .hero-text-container {
+    margin: 0 0.5rem;
+  }
+  
+  .filters-section {
+    margin-top: -30px !important;
+    padding: 0.75rem !important;
+  }
+  
+  /* Make filter rows stack better on very small screens */
+  .filters-section .row .col-lg-3,
+  .filters-section .row .col-lg-2 {
+    margin-bottom: 0.5rem;
+  }
+  
+  /* Adjust sort section for mobile */
+  .d-flex.justify-content-between.align-items-center.flex-wrap {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+  }
+  
+  .d-flex.justify-content-between.align-items-center.flex-wrap > div {
+    width: 100% !important;
+  }
+  
+  .d-flex.align-items-center.gap-2 {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.25rem !important;
+  }
+  
+  .d-flex.align-items-center.gap-2 .form-control {
+    width: 100% !important;
+    min-width: auto !important;
+  }
+}
