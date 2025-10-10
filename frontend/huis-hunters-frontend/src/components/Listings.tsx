@@ -2,48 +2,12 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import ListingCard from './ListingCard';
+import NeighborhoodMap from './NeighborhoodMap';
 import { Container, Row, Col, Form, FormGroup, Pagination, Button } from 'react-bootstrap';
 import { Listing } from '../types';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
-import Select, { components, OptionProps, MultiValue, ValueContainerProps, StylesConfig } from 'react-select';
-
-const Option = (props: OptionProps<{ value: string; label: string; }, true>) => {
-  return (
-    <div>
-      <components.Option {...props}>
-        <input
-          type="checkbox"
-          checked={props.isSelected}
-          onChange={() => null}
-        />{' '}
-        <label>{props.label}</label>
-      </components.Option>
-    </div>
-  );
-};
-
-const ValueContainer = (props: ValueContainerProps<{ value: string; label: string; }, true>) => {
-  const { children } = props;
-  const { length } = props.getValue();
-  if (length > 1) {
-    return (
-      <components.ValueContainer {...props}>
-        <>Multiple</>
-      </components.ValueContainer>
-    );
-  }
-  return (
-    <components.ValueContainer {...props}>
-      {children}
-    </components.ValueContainer>
-  );
-};
-
-const areaSelectStyles: StylesConfig<{ value: string; label: string; }, true> = {
-  menu: (provided) => ({ ...provided, zIndex: 9999 }),
-};
 
 const Listings = () => {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -64,6 +28,7 @@ const Listings = () => {
   const [selectedAreas, setSelectedAreas] = useState<string[]>(searchParams.get('areas')?.split(',').filter(Boolean) || []);
   const [isModalOpen, setIsModalOpen] = useState(!!modalListingId);
   const [showFilters, setShowFilters] = useState(false);
+  const [showNeighborhoodMap, setShowNeighborhoodMap] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -420,25 +385,46 @@ const Listings = () => {
             <Col lg={3} md={12}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Neighborhood</Form.Label>
-                <Select
-                    isMulti
-                    options={uniqueAreas.map(area => ({ value: area, label: area }))}
-                    value={selectedAreas.map(area => ({ value: area, label: area }))}
-                    onChange={(selectedOptions: MultiValue<{ value: string; label: string; }>) => setSelectedAreas(selectedOptions.map(option => option.value))}
-                    closeMenuOnSelect={false}
-                    hideSelectedOptions={false}
-                    components={{ Option, ValueContainer }}
-                    styles={{
-                      ...areaSelectStyles,
-                      control: (provided: any) => ({
-                        ...provided,
-                        borderRadius: '8px',
-                        border: '1px solid #dee2e6',
-                        fontSize: '0.9rem',
-                        minHeight: '38px'
-                      })
+                <div className="d-flex flex-column gap-2">
+                  <Button
+                    variant={selectedAreas.length > 0 ? "primary" : "outline-secondary"}
+                    size="sm"
+                    onClick={() => setShowNeighborhoodMap(true)}
+                    style={{ 
+                      borderRadius: '8px',
+                      border: '1px solid #dee2e6',
+                      fontSize: '0.9rem',
+                      minHeight: '38px'
                     }}
-                />
+                  >
+                    {selectedAreas.length > 0 
+                      ? `Selected: ${selectedAreas.length}` 
+                      : 'Select on Map'
+                    }
+                  </Button>
+                  {selectedAreas.length > 0 && (
+                    <div className="d-flex flex-wrap gap-1">
+                      {selectedAreas.map(area => (
+                        <span 
+                          key={area}
+                          className="badge bg-primary"
+                          style={{ fontSize: '0.7rem' }}
+                        >
+                          {area}
+                        </span>
+                      ))}
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0 text-danger"
+                        style={{ fontSize: '0.7rem', textDecoration: 'none' }}
+                        onClick={() => setSelectedAreas([])}
+                      >
+                        Clear all
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </FormGroup>
             </Col>
             </Row>
@@ -532,6 +518,15 @@ const Listings = () => {
           </Col>
         </Row>
       )}
+
+      {/* Neighborhood Map Modal */}
+      <NeighborhoodMap
+        show={showNeighborhoodMap}
+        onHide={() => setShowNeighborhoodMap(false)}
+        selectedNeighborhoods={selectedAreas}
+        onNeighborhoodSelect={setSelectedAreas}
+        availableNeighborhoods={uniqueAreas}
+      />
     </Container>
   );
 };

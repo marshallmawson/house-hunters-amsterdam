@@ -9,7 +9,6 @@ import BoltIcon from './icons/BoltIcon';
 import CalendarIcon from './icons/CalendarIcon';
 import LayersIcon from './icons/LayersIcon';
 import { BuildingIcon } from './icons/BuildingIcon';
-import { Feature } from './Feature';
 import { GlobeIcon } from './icons/GlobeIcon';
 import { useNavigate } from 'react-router-dom';
 
