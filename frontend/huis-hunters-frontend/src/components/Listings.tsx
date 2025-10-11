@@ -197,7 +197,7 @@ const Listings = () => {
     } finally {
       setIsSearching(false);
     }
-  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, daysSincePosted, selectedAreas, updateURLWithSearch]);
+  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, daysSincePosted, selectedAreas]);
 
   // Note: Removed automatic search triggering - search only happens when user clicks Search or presses Enter
 
@@ -332,7 +332,7 @@ const Listings = () => {
     if (useAISearch && searchQuery.trim()) {
       performAISearch(searchQuery);
     }
-  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, daysSincePosted, selectedAreas, useAISearch, performAISearch]);
+  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, daysSincePosted, selectedAreas, useAISearch, searchQuery]);
 
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
