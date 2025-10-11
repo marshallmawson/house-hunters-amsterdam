@@ -322,6 +322,30 @@ def passes_filters(listing_data: Dict[str, Any], filters: Dict[str, Any]) -> boo
             if listing_data.get('area') not in filters['areas']:
                 return False
         
+        # Days since posted
+        if 'daysSincePosted' in filters and filters['daysSincePosted'] != 'any':
+            published_date = listing_data.get('publishedDate')
+            if published_date:
+                try:
+                    # Handle Firestore timestamp format
+                    if hasattr(published_date, 'seconds'):
+                        published_date_obj = datetime.datetime.fromtimestamp(published_date.seconds)
+                    else:
+                        published_date_obj = published_date
+                    
+                    now = datetime.datetime.now()
+                    days_diff = (now - published_date_obj).days
+                    
+                    max_days = int(filters['daysSincePosted'])
+                    # days_diff = 0 means today, days_diff = 1 means yesterday, etc.
+                    # So days_diff <= 1 includes today and yesterday
+                    if days_diff > max_days:
+                        return False
+                except Exception as e:
+                    log_timestamp(f"❗️ Error parsing published date: {e}")
+                    # If date parsing fails, include the listing (don't filter it out)
+                    pass
+        
         return True
         
     except Exception as e:
@@ -443,6 +467,12 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
             
             # Apply all filters in memory to avoid Firestore index requirements
             if filters:
+                # Apply price range filter
+                if 'minPrice' in filters and listing_data.get('price', 0) < filters['minPrice']:
+                    continue
+                if 'maxPrice' in filters and listing_data.get('price', 0) > filters['maxPrice']:
+                    continue
+                
                 # Apply bedroom filter
                 if 'bedrooms' in filters and filters['bedrooms'] != 'any':
                     listing_bedrooms = listing_data.get('bedrooms', 0)
@@ -482,6 +512,29 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
                 if 'areas' in filters and filters['areas']:
                     listing_area = listing_data.get('area', '')
                     if not any(area in listing_area for area in filters['areas']):
+                        continue
+                
+                # Apply days since posted filter
+                if 'daysSincePosted' in filters and filters['daysSincePosted'] != 'any':
+                    published_date = listing_data.get('publishedDate')
+                    if published_date:
+                        try:
+                            if isinstance(published_date, str):
+                                published_date_obj = datetime.datetime.fromisoformat(published_date.replace('Z', '+00:00'))
+                            else:
+                                published_date_obj = published_date
+                            
+                            now = datetime.datetime.now()
+                            days_diff = (now - published_date_obj).days
+                            
+                            max_days = int(filters['daysSincePosted'])
+                            if days_diff > max_days:
+                                continue
+                        except Exception:
+                            # If we can't parse the date, skip this listing
+                            continue
+                    else:
+                        # If no published date, skip this listing
                         continue
             
             filtered_listings.append({
