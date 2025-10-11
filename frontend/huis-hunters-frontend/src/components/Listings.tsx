@@ -140,7 +140,7 @@ const Listings = () => {
             daysSincePosted: daysSincePosted,
             areas: selectedAreas
           },
-          search_type: 'hybrid'
+          search_type: 'filtered'
         }),
       });
 
