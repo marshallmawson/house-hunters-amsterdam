@@ -38,6 +38,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   const [showFloorPlanModal, setShowFloorPlanModal] = useState(false);
   const [selectedFloorPlanIndex, setSelectedFloorPlanIndex] = useState(0);
   const [isModalDescriptionExpanded, setIsModalDescriptionExpanded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [floorPlanZoom, setFloorPlanZoom] = useState(1);
   const [isManualNavigation, setIsManualNavigation] = useState(false);
   const hasHandledForceOpen = useRef(false);
@@ -65,6 +66,18 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
       hasHandledForceOpen.current = true;
     }
   }, [forceOpen]);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    checkIsMobile();
+    window.addEventListener('resize', checkIsMobile);
+    
+    return () => window.removeEventListener('resize', checkIsMobile);
+  }, []);
 
   const handleShowModal = (imageIndex: number = 0) => {
     clickedImageIndex.current = imageIndex;
@@ -319,16 +332,28 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
               <p style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
                 {listing.cleanedDescription && (
                   <>
-                    {isModalDescriptionExpanded ? listing.cleanedDescription : `${listing.cleanedDescription.substring(0, 1000)}...`}
-                    {listing.cleanedDescription && listing.cleanedDescription.length > 1000 && (
-                      <Button 
-                        variant="link" 
-                        onClick={() => setIsModalDescriptionExpanded(!isModalDescriptionExpanded)} 
-                        style={{ fontSize: '0.85rem', verticalAlign: 'baseline', padding: '0 0.2rem' }}
-                      >
-                        {isModalDescriptionExpanded ? 'Show Less' : 'Show More'}
-                      </Button>
-                    )}
+                    {(() => {
+                      const characterLimit = isMobile ? 500 : 1000;
+                      const shouldShowButton = listing.cleanedDescription.length > characterLimit;
+                      
+                      return (
+                        <>
+                          {isModalDescriptionExpanded 
+                            ? listing.cleanedDescription 
+                            : `${listing.cleanedDescription.substring(0, characterLimit)}...`
+                          }
+                          {shouldShowButton && (
+                            <Button 
+                              variant="link" 
+                              onClick={() => setIsModalDescriptionExpanded(!isModalDescriptionExpanded)} 
+                              style={{ fontSize: '0.85rem', verticalAlign: 'baseline', padding: '0 0.2rem' }}
+                            >
+                              {isModalDescriptionExpanded ? 'Show Less' : 'Show More'}
+                            </Button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </>
                 )}
               </p>

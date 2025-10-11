@@ -12,7 +12,11 @@ function App() {
       <Navbar className="premium-navbar" expand="lg" fixed="top">
         <Container>
           <Navbar.Brand className="premium-logo" href="#home">
-            <span className="logo-icon">🏠</span>
+            <img 
+              src="/logo192.png" 
+              alt="Huis Hunters Logo" 
+              style={{ width: '32px', height: '32px', marginRight: '2px' }}
+            />
             <span className="logo-text">Huis Hunters</span>
             <span className="beta-badge">BETA</span>
           </Navbar.Brand>
@@ -77,20 +81,27 @@ function App() {
         <Container className="hero-content" style={{ position: 'relative', zIndex: 3, paddingTop: '140px', paddingBottom: '140px' }}>
           <div className="text-center text-white">
             <div className="hero-text-container">
-              <h1 
-                className="hero-title premium-title"
-                style={{
-                  fontSize: '5.8rem',
-                  fontWeight: '700',
-                  marginBottom: '1.5rem',
-                  color: 'white',
-                  textShadow: '4px 4px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5)',
-                  letterSpacing: '-0.03em',
-                  lineHeight: '1.1'
-                }}
-              >
-                Huis Hunters
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}>
+                <img 
+                  src="/house-white.png" 
+                  alt="Huis Hunters Logo" 
+                  style={{ width: '80px', height: '80px', transform: 'translateY(-8px)' }}
+                />
+                <h1 
+                  className="hero-title premium-title"
+                  style={{
+                    fontSize: '5.8rem',
+                    fontWeight: '700',
+                    marginBottom: '1.5rem',
+                    color: 'white',
+                    textShadow: '4px 4px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5)',
+                    letterSpacing: '-0.03em',
+                    lineHeight: '1.1'
+                  }}
+                >
+                  Huis Hunters
+                </h1>
+              </div>
               <p 
                 className="hero-subtitle premium-subtitle"
                 style={{
