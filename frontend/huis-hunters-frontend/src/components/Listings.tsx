@@ -31,6 +31,7 @@ const Listings = () => {
   const [floorLevel, setFloorLevel] = useState(searchParams.get('floor') || 'any');
   const [outdoorSpace, setOutdoorSpace] = useState(searchParams.get('outdoor') || 'any');
   const [minSize, setMinSize] = useState(searchParams.get('minSize') || '');
+  const [daysSincePosted, setDaysSincePosted] = useState(searchParams.get('daysSincePosted') || 'any');
   const [selectedAreas, setSelectedAreas] = useState<string[]>(searchParams.get('areas')?.split(',').filter(Boolean) || []);
   const [isModalOpen, setIsModalOpen] = useState(!!modalListingId);
   const [showFilters, setShowFilters] = useState(false);
@@ -87,12 +88,13 @@ const Listings = () => {
     if (floorLevel !== 'any') params.set('floor', floorLevel);
     if (outdoorSpace !== 'any') params.set('outdoor', outdoorSpace);
     if (minSize) params.set('minSize', minSize);
+    if (daysSincePosted !== 'any') params.set('daysSincePosted', daysSincePosted);
     if (selectedAreas.length > 0) params.set('areas', selectedAreas.join(','));
     // Keep existing search query if present
     const currentSearch = searchParams.get('search');
     if (currentSearch) params.set('search', currentSearch);
     setSearchParams(params, { replace: true });
-  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, setSearchParams, searchParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, daysSincePosted, selectedAreas, setSearchParams, searchParams]);
 
   // Separate function for updating URL with search query
   const updateURLWithSearch = useCallback((query: string) => {
@@ -104,10 +106,11 @@ const Listings = () => {
     if (floorLevel !== 'any') params.set('floor', floorLevel);
     if (outdoorSpace !== 'any') params.set('outdoor', outdoorSpace);
     if (minSize) params.set('minSize', minSize);
+    if (daysSincePosted !== 'any') params.set('daysSincePosted', daysSincePosted);
     if (selectedAreas.length > 0) params.set('areas', selectedAreas.join(','));
     if (query) params.set('search', query);
     setSearchParams(params, { replace: true });
-  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, setSearchParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, daysSincePosted, selectedAreas, setSearchParams]);
 
   // AI Search function
   const performAISearch = useCallback(async (query: string) => {
@@ -134,6 +137,7 @@ const Listings = () => {
             floor: floorLevel,
             outdoor: outdoorSpace,
             minSize: minSize,
+            daysSincePosted: daysSincePosted,
             areas: selectedAreas
           },
           search_type: 'hybrid'
@@ -193,7 +197,7 @@ const Listings = () => {
     } finally {
       setIsSearching(false);
     }
-  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, updateURLWithSearch]);
+  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, daysSincePosted, selectedAreas, updateURLWithSearch]);
 
   // Note: Removed automatic search triggering - search only happens when user clicks Search or presses Enter
 
@@ -257,27 +261,78 @@ const Listings = () => {
         (outdoorSpace === 'balcony' && listing.hasBalcony);
       const passesMinSize = !minSize || (listing.livingArea && listing.livingArea >= parseInt(minSize, 10));
       const passesArea = selectedAreas.length === 0 || (listing.area && selectedAreas.includes(listing.area));
+      
+      // Days since posted filter
+      let passesDaysSincePosted = true;
+      if (daysSincePosted !== 'any' && listing.publishedDate) {
+        try {
+          let publishedDate: Date;
+          if (listing.publishedDate.seconds) {
+            // Firestore timestamp format
+            publishedDate = new Date(listing.publishedDate.seconds * 1000);
+          } else if (typeof listing.publishedDate === 'string') {
+            // String date format
+            publishedDate = new Date(listing.publishedDate);
+          } else if (listing.publishedDate instanceof Date) {
+            // Already a Date object
+            publishedDate = listing.publishedDate;
+          } else {
+            // Fallback - try to use toDate() method if available
+            if (listing.publishedDate && typeof listing.publishedDate.toDate === 'function') {
+              publishedDate = listing.publishedDate.toDate();
+            } else {
+              // Last resort - convert to string and parse
+              publishedDate = new Date(String(listing.publishedDate));
+            }
+          }
+          
+          const now = new Date();
+          const daysDiff = Math.floor((now.getTime() - publishedDate.getTime()) / (1000 * 60 * 60 * 24));
+          
+          switch (daysSincePosted) {
+            case '1':
+              // Include listings posted yesterday and today (within last ~24-48 hours)
+              passesDaysSincePosted = daysDiff <= 1;
+              break;
+            case '3':
+              passesDaysSincePosted = daysDiff <= 3;
+              break;
+            case '5':
+              passesDaysSincePosted = daysDiff <= 5;
+              break;
+            case '10':
+              passesDaysSincePosted = daysDiff <= 10;
+              break;
+            default:
+              passesDaysSincePosted = true;
+          }
+        } catch (error) {
+          // If date parsing fails, include the listing (don't filter it out)
+          console.warn('Error parsing published date:', error);
+          passesDaysSincePosted = true;
+        }
+      }
 
-      return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesMinSize && passesArea;
+      return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesMinSize && passesArea && passesDaysSincePosted;
     });
     }
 
     setFilteredListings(result);
     // Reset to first page when filters change
     setCurrentPage(1);
-  }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas]);
+  }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, daysSincePosted, selectedAreas]);
 
   // Separate useEffect to update URL parameters only when filter values change
   useEffect(() => {
     updateURLParams();
-  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, updateURLParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, daysSincePosted, selectedAreas, updateURLParams]);
 
   // Trigger new AI search when filters change and we're in AI search mode
   useEffect(() => {
     if (useAISearch && searchQuery.trim()) {
       performAISearch(searchQuery);
     }
-  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, useAISearch, searchQuery, performAISearch]);
+  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, daysSincePosted, selectedAreas, useAISearch, performAISearch]);
 
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
@@ -522,6 +577,34 @@ const Listings = () => {
               </FormGroup>
             </Col>
 
+            {/* Days Since Posted */}
+            <Col lg={1} md={6}>
+              <FormGroup>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Posted</Form.Label>
+                <Form.Control 
+                  as="select" 
+                  value={daysSincePosted} 
+                  onChange={e => setDaysSincePosted(e.target.value)}
+                  style={{ 
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundSize: '12px 8px',
+                    paddingRight: '1.5rem',
+                    borderRadius: '8px',
+                    border: '1px solid #dee2e6',
+                    fontSize: '0.8rem'
+                  }}
+                >
+                  <option value="any">Any</option>
+                  <option value="1">1 day</option>
+                  <option value="3">3 days</option>
+                  <option value="5">5 days</option>
+                  <option value="10">10 days</option>
+                </Form.Control>
+              </FormGroup>
+            </Col>
+
             {/* Area */}
             <Col lg={2} md={12}>
               <FormGroup>
@@ -611,6 +694,7 @@ const Listings = () => {
                     setFloorLevel('any');
                     setOutdoorSpace('any');
                     setMinSize('');
+                    setDaysSincePosted('any');
                     setSelectedAreas([]);
                     setSearchQuery('');
                     setUseAISearch(false);
