@@ -105,6 +105,11 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
           </span>
         </div>
         {listing.area && <span className="badge bg-secondary mb-2">{listing.area}</span>}
+        {listing.searchScore && (
+          <span className="badge bg-info mb-2" style={{ fontSize: '0.75rem' }}>
+            AI Score: {(listing.searchScore * 100).toFixed(1)}%
+          </span>
+        )}
         <div className="mb-2" style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'black' }}>
           {listing.livingArea && <span style={{ marginRight: '1rem' }}><RulerIcon /> {listing.livingArea} m²</span>}
           {listing.bedrooms && <span style={{ marginRight: '1rem' }}><BedIcon /> {listing.bedrooms}</span>}

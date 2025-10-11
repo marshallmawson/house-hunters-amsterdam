@@ -40,4 +40,5 @@ export interface Listing {
   yearBuilt?: string | number;
   neighborhood?: string;
   area?: string;
+  searchScore?: number;
 }

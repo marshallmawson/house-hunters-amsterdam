@@ -8,3 +8,6 @@ get_listing.py
 test_google_services.py
 node_modules/
 test_area_assignment.py
+test_api_import.py
+test_search.py
+debug_api.py

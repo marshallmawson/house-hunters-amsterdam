@@ -16,6 +16,12 @@ const Listings = () => {
   const { id: modalListingId } = useParams();
   const navigate = useNavigate();
 
+  // AI Search state
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<Listing[]>([]);
+  const [useAISearch, setUseAISearch] = useState(!!searchQuery);
+
   const [sortOrder, setSortOrder] = useState(searchParams.get('sort') || 'date-new-old');
   const [priceRange, setPriceRange] = useState({ 
     min: parseInt(searchParams.get('minPrice') || '300000', 10),
@@ -71,7 +77,7 @@ const Listings = () => {
     fetchListings();
   }, []);
 
-
+  // URL params update function (for filter changes, not search queries)
   const updateURLParams = useCallback(() => {
     const params = new URLSearchParams();
     if (sortOrder !== 'date-new-old') params.set('sort', sortOrder);
@@ -82,15 +88,122 @@ const Listings = () => {
     if (outdoorSpace !== 'any') params.set('outdoor', outdoorSpace);
     if (minSize) params.set('minSize', minSize);
     if (selectedAreas.length > 0) params.set('areas', selectedAreas.join(','));
+    // Keep existing search query if present
+    const currentSearch = searchParams.get('search');
+    if (currentSearch) params.set('search', currentSearch);
+    setSearchParams(params, { replace: true });
+  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, setSearchParams, searchParams]);
+
+  // Separate function for updating URL with search query
+  const updateURLWithSearch = useCallback((query: string) => {
+    const params = new URLSearchParams();
+    if (sortOrder !== 'date-new-old') params.set('sort', sortOrder);
+    if (priceRange.min !== 300000) params.set('minPrice', priceRange.min.toString());
+    if (priceRange.max !== 1000000) params.set('maxPrice', priceRange.max.toString());
+    if (bedrooms !== 'any') params.set('bedrooms', bedrooms);
+    if (floorLevel !== 'any') params.set('floor', floorLevel);
+    if (outdoorSpace !== 'any') params.set('outdoor', outdoorSpace);
+    if (minSize) params.set('minSize', minSize);
+    if (selectedAreas.length > 0) params.set('areas', selectedAreas.join(','));
+    if (query) params.set('search', query);
     setSearchParams(params, { replace: true });
   }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, setSearchParams]);
 
-  useEffect(() => {
-    updateURLParams();
-    let result = [...listings];
+  // AI Search function
+  const performAISearch = useCallback(async (query: string) => {
+    if (!query.trim() || query.trim().length < 3) {
+      setSearchResults([]);
+      setUseAISearch(false);
+      return;
+    }
 
-    // Sorting
-    result.sort((a, b) => {
+    setIsSearching(true);
+    try {
+      const response = await fetch('http://localhost:5001/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: query.trim(),
+          limit: 100,
+          filters: {
+            minPrice: priceRange.min,
+            maxPrice: priceRange.max,
+            bedrooms: bedrooms,
+            floor: floorLevel,
+            outdoor: outdoorSpace,
+            minSize: minSize,
+            areas: selectedAreas
+          },
+          search_type: 'filtered'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Search request failed');
+      }
+
+      const data = await response.json();
+      
+      // Convert search results to Listing format
+      const formattedResults: Listing[] = data.results.map((result: any) => ({
+        id: result.id,
+        address: result.address,
+        price: result.price,
+        bedrooms: result.bedrooms,
+        bathrooms: result.bathrooms,
+        livingArea: result.livingArea,
+        energyLabel: result.energyLabel,
+        scrapedAt: result.scrapedAt,
+        publishedDate: result.publishedDate,
+        url: result.url,
+        imageGallery: result.imageGallery,
+        embeddingText: result.embeddingText,
+        floor: result.apartmentFloor,
+        hasGarden: result.hasGarden,
+        hasRooftopTerrace: result.hasRooftopTerrace,
+        hasBalcony: result.hasBalcony,
+        outdoorSpaceArea: result.outdoorSpaceArea,
+        apartmentFloor: result.apartmentFloor,
+        status: result.status,
+        numberOfStories: result.numberOfStories,
+        coordinates: result.coordinates,
+        agentName: result.agentName,
+        agentUrl: result.agentUrl,
+        vveContribution: result.vveContribution,
+        cleanedDescription: result.cleanedDescription,
+        floorPlans: result.floorPlans,
+        googleMapsUrl: result.googleMapsUrl,
+        yearBuilt: result.yearBuilt,
+        neighborhood: result.neighborhood,
+        area: result.area,
+        searchScore: result.searchScore
+      }));
+
+      setSearchResults(formattedResults);
+      setUseAISearch(true);
+      
+      // Update URL with search query after successful search
+      updateURLWithSearch(query.trim());
+    } catch (error) {
+      console.error('AI Search error:', error);
+      setSearchResults([]);
+      setUseAISearch(false);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, updateURLWithSearch]);
+
+  // Note: Removed automatic search triggering - search only happens when user clicks Search or presses Enter
+
+  useEffect(() => {
+    // Use AI search results if available, otherwise use regular listings
+    let result = useAISearch ? [...searchResults] : [...listings];
+
+    // Sorting (skip for AI search results as they're already ranked by relevance)
+    if (!useAISearch) {
+      result.sort((a, b) => {
       switch (sortOrder) {
         case 'price-low-high':
           return (a.price || 0) - (b.price || 0);
@@ -126,9 +239,11 @@ const Listings = () => {
           if (defaultDayDiff !== 0) return defaultDayDiff;
           return (a.price || 0) - (b.price || 0);
       }
-    });
+      });
+    }
 
-    // Filtering
+    // Filtering (skip for AI search results as filters are applied server-side)
+    if (!useAISearch) {
     result = result.filter(listing => {
       const price = listing.price || 0;
       const passesPrice = price >= priceRange.min && price <= priceRange.max;
@@ -145,11 +260,17 @@ const Listings = () => {
 
       return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesMinSize && passesArea;
     });
+    }
 
     setFilteredListings(result);
     // Reset to first page when filters change
     setCurrentPage(1);
-  }, [listings, sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, updateURLParams]);
+  }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas]);
+
+  // Separate useEffect to update URL parameters only when filter values change
+  useEffect(() => {
+    updateURLParams();
+  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, updateURLParams]);
 
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
@@ -228,6 +349,7 @@ const Listings = () => {
 
   return (
     <Container>
+
       {/* Modern Filter Section - Overlapping Header */}
       <div className="mb-4 p-4 filters-section" style={{ 
         backgroundColor: '#f8f9fa', 
@@ -428,6 +550,59 @@ const Listings = () => {
               </FormGroup>
             </Col>
             </Row>
+            
+            {/* AI-Powered Search */}
+            <Row className="mt-3">
+              <Col md={12}>
+                <FormGroup>
+                  <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>
+                    🔍 AI-Powered Search
+                  </Form.Label>
+                  <div className="d-flex gap-2">
+                    <Form.Control
+                      type="text"
+                      placeholder="Try: 'modern apartment with garden' or 'quiet place with balcony'... (min 3 characters)"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          performAISearch(searchQuery);
+                        }
+                      }}
+                      style={{
+                        borderRadius: '8px',
+                        border: '2px solid #2196f3',
+                        fontSize: '0.9rem',
+                        padding: '8px 12px'
+                      }}
+                    />
+                    <Button
+                      variant="primary"
+                      onClick={() => performAISearch(searchQuery)}
+                      disabled={isSearching || searchQuery.trim().length < 3}
+                      style={{ borderRadius: '8px', padding: '8px 16px' }}
+                    >
+                      {isSearching ? 'Searching...' : 'Search'}
+                    </Button>
+                    <Button
+                      variant="outline-secondary"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setUseAISearch(false);
+                        setSearchResults([]);
+                        updateURLWithSearch('');
+                      }}
+                      style={{ borderRadius: '8px', padding: '8px 12px' }}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  <Form.Text className="text-muted">
+                    Describe what you're looking for in natural language. AI will find the most relevant matches from the filtered results above!
+                  </Form.Text>
+                </FormGroup>
+              </Col>
+            </Row>
           </Form>
         </div>
       </div>
@@ -462,7 +637,7 @@ const Listings = () => {
                     paddingRight: '2.25rem'
                   }}
                 >
-                  <option value="date-new-old">Date & Price</option>
+                  <option value="date-new-old">{useAISearch ? 'Best match' : 'Date & Price'}</option>
                   <option value="date-old-new">Date (Old to New)</option>
                   <option value="price-low-high">Price (Low to High)</option>
                 </Form.Control>
