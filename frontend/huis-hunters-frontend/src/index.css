@@ -58,6 +58,16 @@ h1, h2, h3, h4, h5, h6 {
   background-clip: text;
 }
 
+.beta-badge {
+  display: inline-block;
+  color: #666;
+  font-size: 0.5rem;
+  font-weight: 400;
+  margin-left: 0.25rem;
+  vertical-align: super;
+  font-family: 'Inter', sans-serif;
+}
+
 .nav-link-premium {
   font-weight: 500;
   color: #4a5568 !important;
@@ -506,3 +516,60 @@ html {
     min-width: auto !important;
   }
 }
+
+/* Carousel transition control - only disable transitions for manual navigation */
+.carousel-no-transition .carousel-inner {
+  transition: none !important;
+}
+
+.carousel-no-transition .carousel-inner .carousel-item {
+  transition: none !important;
+}
+
+.carousel-no-transition .carousel-inner .carousel-item.active {
+  transition: none !important;
+}
+
+/* Ensure automatic transitions still work when not manually navigating */
+.carousel .carousel-inner {
+  transition: transform 0.6s ease-in-out;
+}
+
+/* Modal carousel arrow styling */
+.modal .carousel-control-prev,
+.modal .carousel-control-next {
+  background: rgba(0, 0, 0, 0.6);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.8;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.modal .carousel-control-prev:hover,
+.modal .carousel-control-next:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.modal .carousel-control-prev {
+  left: 15px;
+}
+
+.modal .carousel-control-next {
+  right: 15px;
+}
+
+.modal .carousel-control-prev-icon,
+.modal .carousel-control-next-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* Hide Bootstrap's default dropdown arrow for custom dropdown */
+.custom-dropdown-toggle::after {
+  display: none !important;
+}
+

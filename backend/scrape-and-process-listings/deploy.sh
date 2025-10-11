@@ -10,6 +10,9 @@
 #To deploy the processor:   
 #                         ./deploy.sh processor
 
+#To deploy the search service:   
+#                         ./deploy.sh search
+
 # --- Configuration ---
 # Your Google Cloud Project ID
 PROJECT_ID="house-hunters-amsterdam"
@@ -42,11 +45,28 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Deploy the job to Cloud Run with an increased timeout
-echo "Deploying job: ${SERVICE_NAME}-job"
-gcloud run jobs deploy "${SERVICE_NAME}-job" \
-  --image "${IMAGE_NAME}" \
-  --region "${REGION}" \
-  --task-timeout 1800 # Set timeout to 30 minutes (1800 seconds)
-
-echo "Deployment of ${SERVICE_NAME}-job complete."
+# Deploy based on service type
+if [ "$SERVICE_NAME" = "search" ]; then
+    # Deploy as a Cloud Run Service (same pattern as frontend)
+    echo "Deploying Cloud Run service: ${SERVICE_NAME}-service"
+    gcloud run deploy "${SERVICE_NAME}-service" \
+      --image "${IMAGE_NAME}" \
+      --region "${REGION}" \
+      --platform managed \
+      --allow-unauthenticated \
+      --port 8080 \
+      --memory 2Gi \
+      --cpu 2 \
+      --timeout 300 \
+      --max-instances 10
+    echo "Deployment of ${SERVICE_NAME}-service complete."
+    echo "You can view your service at the URL provided above."
+else
+    # Deploy as a Cloud Run Job for scraper and processor
+    echo "Deploying job: ${SERVICE_NAME}-job"
+    gcloud run jobs deploy "${SERVICE_NAME}-job" \
+      --image "${IMAGE_NAME}" \
+      --region "${REGION}" \
+      --task-timeout 1800 # Set timeout to 30 minutes (1800 seconds)
+    echo "Deployment of ${SERVICE_NAME}-job complete."
+fi

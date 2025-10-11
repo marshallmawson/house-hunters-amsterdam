@@ -84,8 +84,8 @@ def fetch_and_store_listings():
     print(f"Checking for {len(listings_to_process)} listings in Firestore...")
     existing_listings = {}
     listing_ids = list(listings_to_process.keys())
-    for i in range(0, len(listing_ids), 30):
-        chunk = listing_ids[i:i+30]
+    for i in range(0, len(listing_ids), 50):
+        chunk = listing_ids[i:i+50]
         docs = db.collection('listings').where(FieldPath.document_id(), 'in', chunk).stream()
         for doc in docs:
             existing_listings[doc.id] = doc.to_dict()

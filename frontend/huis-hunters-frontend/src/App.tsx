@@ -1,7 +1,7 @@
 
 import React from 'react';
 import Listings from './components/Listings';
-import { Container, Navbar, Nav } from 'react-bootstrap';
+import { Container, Navbar } from 'react-bootstrap';
 import './index.css';
 import { Route, Routes } from 'react-router-dom';
 
@@ -14,15 +14,21 @@ function App() {
           <Navbar.Brand className="premium-logo" href="#home">
             <span className="logo-icon">🏠</span>
             <span className="logo-text">Huis Hunters</span>
+            <span className="beta-badge">BETA</span>
           </Navbar.Brand>
-          <Navbar.Toggle aria-controls="basic-navbar-nav" />
-          <Navbar.Collapse id="basic-navbar-nav">
-            <Nav className="me-auto">
-              <Nav.Link href="#search" className="nav-link-premium">Search</Nav.Link>
-              <Nav.Link href="#neighborhoods" className="nav-link-premium">Neighborhoods</Nav.Link>
-              <Nav.Link href="#about" className="nav-link-premium">About</Nav.Link>
-            </Nav>
-          </Navbar.Collapse>
+          <div className="ms-auto">
+            <a 
+              href="mailto:contact@huishunters.com"
+              style={{
+                fontSize: '0.75rem',
+                color: '#6c757d',
+                textDecoration: 'none',
+                fontWeight: '400'
+              }}
+            >
+              contact@huishunters.com
+            </a>
+          </div>
         </Container>
       </Navbar>
 

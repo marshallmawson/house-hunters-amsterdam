@@ -3,7 +3,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import ListingCard from './ListingCard';
 import NeighborhoodMap from './NeighborhoodMap';
-import { Container, Row, Col, Form, FormGroup, Pagination, Button } from 'react-bootstrap';
+import { Container, Row, Col, Form, FormGroup, Pagination, Button, Dropdown } from 'react-bootstrap';
 import { Listing } from '../types';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
@@ -24,10 +24,10 @@ const Listings = () => {
 
   const [sortOrder, setSortOrder] = useState(searchParams.get('sort') || 'date-new-old');
   const [priceRange, setPriceRange] = useState({ 
-    min: parseInt(searchParams.get('minPrice') || '300000', 10),
-    max: parseInt(searchParams.get('maxPrice') || '1000000', 10)
+    min: parseInt(searchParams.get('minPrice') || '450000', 10),
+    max: parseInt(searchParams.get('maxPrice') || '750000', 10)
   });
-  const [bedrooms, setBedrooms] = useState(searchParams.get('bedrooms') || 'any');
+  const [bedrooms, setBedrooms] = useState(searchParams.get('bedrooms') || '2+');
   const [floorLevel, setFloorLevel] = useState(searchParams.get('floor') || 'any');
   const [outdoorSpace, setOutdoorSpace] = useState(searchParams.get('outdoor') || 'any');
   const [minSize, setMinSize] = useState(searchParams.get('minSize') || '');
@@ -81,9 +81,9 @@ const Listings = () => {
   const updateURLParams = useCallback(() => {
     const params = new URLSearchParams();
     if (sortOrder !== 'date-new-old') params.set('sort', sortOrder);
-    if (priceRange.min !== 300000) params.set('minPrice', priceRange.min.toString());
-    if (priceRange.max !== 1000000) params.set('maxPrice', priceRange.max.toString());
-    if (bedrooms !== 'any') params.set('bedrooms', bedrooms);
+    if (priceRange.min !== 450000) params.set('minPrice', priceRange.min.toString());
+    if (priceRange.max !== 750000) params.set('maxPrice', priceRange.max.toString());
+    if (bedrooms !== '2+') params.set('bedrooms', bedrooms);
     if (floorLevel !== 'any') params.set('floor', floorLevel);
     if (outdoorSpace !== 'any') params.set('outdoor', outdoorSpace);
     if (minSize) params.set('minSize', minSize);
@@ -98,9 +98,9 @@ const Listings = () => {
   const updateURLWithSearch = useCallback((query: string) => {
     const params = new URLSearchParams();
     if (sortOrder !== 'date-new-old') params.set('sort', sortOrder);
-    if (priceRange.min !== 300000) params.set('minPrice', priceRange.min.toString());
-    if (priceRange.max !== 1000000) params.set('maxPrice', priceRange.max.toString());
-    if (bedrooms !== 'any') params.set('bedrooms', bedrooms);
+    if (priceRange.min !== 450000) params.set('minPrice', priceRange.min.toString());
+    if (priceRange.max !== 750000) params.set('maxPrice', priceRange.max.toString());
+    if (bedrooms !== '2+') params.set('bedrooms', bedrooms);
     if (floorLevel !== 'any') params.set('floor', floorLevel);
     if (outdoorSpace !== 'any') params.set('outdoor', outdoorSpace);
     if (minSize) params.set('minSize', minSize);
@@ -119,7 +119,7 @@ const Listings = () => {
 
     setIsSearching(true);
     try {
-      const response = await fetch('http://localhost:5001/search', {
+      const response = await fetch('https://search-service-315949479081.europe-west4.run.app/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -136,7 +136,7 @@ const Listings = () => {
             minSize: minSize,
             areas: selectedAreas
           },
-          search_type: 'filtered'
+          search_type: 'hybrid'
         }),
       });
 
@@ -272,6 +272,13 @@ const Listings = () => {
     updateURLParams();
   }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, updateURLParams]);
 
+  // Trigger new AI search when filters change and we're in AI search mode
+  useEffect(() => {
+    if (useAISearch && searchQuery.trim()) {
+      performAISearch(searchQuery);
+    }
+  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, useAISearch, searchQuery, performAISearch]);
+
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
     if (!isOpen) {
@@ -362,26 +369,28 @@ const Listings = () => {
       }}>
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h6 className="text-muted fw-semibold mb-0" style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Filter Properties
+            Filter houses
           </h6>
-          <Button 
-            variant="outline-secondary" 
-            size="sm" 
-            className="d-md-none filters-toggle-btn"
-            onClick={() => setShowFilters(!showFilters)}
-            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-          >
-            🔍 {showFilters ? 'Hide' : 'Show'} Filters
-          </Button>
+          <div className="d-flex gap-2">
+            <Button 
+              variant="outline-secondary" 
+              size="sm" 
+              className="d-md-none filters-toggle-btn"
+              onClick={() => setShowFilters(!showFilters)}
+              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+            >
+              🔍 {showFilters ? 'Hide' : 'Show'} Filters
+            </Button>
+          </div>
         </div>
         <div className={`filters-content ${showFilters ? 'show' : ''}`}>
           <Form>
             <Row className="g-2">
             {/* Price Range */}
-            <Col lg={3} md={6}>
+            <Col lg={2} md={6}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Price Range</Form.Label>
-                <div style={{ padding: '0 8px' }}>
+                <div style={{ padding: '0 4px' }}>
                   <Slider
                     range
                     min={200000}
@@ -396,17 +405,55 @@ const Listings = () => {
                     allowCross={false}
                   />
                 </div>
-                <div className="d-flex justify-content-between mt-2">
-                  <small className="text-muted">€{priceRange.min.toLocaleString()}</small>
-                  <small className="text-muted">€{priceRange.max.toLocaleString()}</small>
+                <div className="d-flex justify-content-between mt-1">
+                  <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                    {priceRange.min >= 1000000 
+                      ? `€${(priceRange.min/1000000).toFixed(3)}M` 
+                      : `€${(priceRange.min/1000).toFixed(0)}k`
+                    }
+                  </small>
+                  <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                    {priceRange.max >= 1000000 
+                      ? `€${(priceRange.max/1000000).toFixed(3)}M` 
+                      : `€${(priceRange.max/1000).toFixed(0)}k`
+                    }
+                  </small>
                 </div>
               </FormGroup>
             </Col>
 
-            {/* Min Size */}
-            <Col lg={2} md={6}>
+            {/* Bedrooms */}
+            <Col lg={1} md={6}>
               <FormGroup>
-                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Min Size (m²)</Form.Label>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Beds</Form.Label>
+                <Form.Control 
+                  as="select" 
+                  value={bedrooms} 
+                  onChange={e => setBedrooms(e.target.value)}
+                  style={{ 
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundSize: '12px 8px',
+                    paddingRight: '1.5rem',
+                    borderRadius: '8px',
+                    border: '1px solid #dee2e6',
+                    fontSize: '0.8rem'
+                  }}
+                >
+                  <option value="any">Any</option>
+                  <option value="1+">1+</option>
+                  <option value="2+">2+</option>
+                  <option value="3+">3+</option>
+                  <option value="4+">4+</option>
+                </Form.Control>
+              </FormGroup>
+            </Col>
+
+            {/* Min Size */}
+            <Col lg={1} md={6}>
+              <FormGroup>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Size (m²)</Form.Label>
                 <Form.Control 
                   type="number"
                   placeholder="Any"
@@ -415,45 +462,17 @@ const Listings = () => {
                   style={{ 
                     borderRadius: '8px',
                     border: '1px solid #dee2e6',
-                    fontSize: '0.9rem',
-                    padding: '0.5rem 0.75rem'
+                    fontSize: '0.8rem',
+                    padding: '0.4rem 0.5rem'
                   }}
                 />
               </FormGroup>
             </Col>
 
-            {/* Bedrooms */}
-            <Col lg={2} md={6}>
-              <FormGroup>
-                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Min Bedrooms</Form.Label>
-                <Form.Control 
-                  as="select" 
-                  value={bedrooms} 
-                  onChange={e => setBedrooms(e.target.value)}
-                  style={{ 
-                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 0.75rem center',
-                    backgroundSize: '16px 12px',
-                    paddingRight: '2.25rem',
-                    borderRadius: '8px',
-                    border: '1px solid #dee2e6',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  <option value="any">Any</option>
-                  <option value="1">1+</option>
-                  <option value="2">2+</option>
-                  <option value="3">3+</option>
-                  <option value="4">4+</option>
-                </Form.Control>
-              </FormGroup>
-            </Col>
-
             {/* Outdoor Space */}
-            <Col lg={2} md={6}>
+            <Col lg={1} md={6}>
               <FormGroup>
-                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Outdoor Space</Form.Label>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Outdoor</Form.Label>
                 <Form.Control 
                   as="select" 
                   value={outdoorSpace} 
@@ -461,12 +480,12 @@ const Listings = () => {
                   style={{ 
                     backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
                     backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 0.75rem center',
-                    backgroundSize: '16px 12px',
-                    paddingRight: '2.25rem',
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundSize: '12px 8px',
+                    paddingRight: '1.5rem',
                     borderRadius: '8px',
                     border: '1px solid #dee2e6',
-                    fontSize: '0.9rem'
+                    fontSize: '0.8rem'
                   }}
                 >
                   <option value="any">Any</option>
@@ -478,9 +497,9 @@ const Listings = () => {
             </Col>
 
             {/* Floor Level */}
-            <Col lg={2} md={6}>
+            <Col lg={1} md={6}>
               <FormGroup>
-                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Floor Level</Form.Label>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Floor</Form.Label>
                 <Form.Control 
                   as="select" 
                   value={floorLevel} 
@@ -488,80 +507,134 @@ const Listings = () => {
                   style={{ 
                     backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
                     backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 0.75rem center',
-                    backgroundSize: '16px 12px',
-                    paddingRight: '2.25rem',
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundSize: '12px 8px',
+                    paddingRight: '1.5rem',
                     borderRadius: '8px',
                     border: '1px solid #dee2e6',
-                    fontSize: '0.9rem'
+                    fontSize: '0.8rem'
                   }}
                 >
                   <option value="any">Any</option>
-                  <option value="top">Upper / Top Floor</option>
-                  <option value="ground">Ground Floor</option>
+                  <option value="top">Upper</option>
+                  <option value="ground">Ground</option>
                 </Form.Control>
               </FormGroup>
             </Col>
 
             {/* Area */}
-            <Col lg={3} md={12}>
+            <Col lg={2} md={12}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Neighborhood</Form.Label>
-                <div className="d-flex flex-column gap-2">
-                  <Button
-                    variant={selectedAreas.length > 0 ? "primary" : "outline-secondary"}
-                    size="sm"
-                    onClick={() => setShowNeighborhoodMap(true)}
+                <Dropdown>
+                  <Dropdown.Toggle 
+                    variant="outline-secondary" 
+                    className="custom-dropdown-toggle"
                     style={{ 
+                      width: '100%',
                       borderRadius: '8px',
                       border: '1px solid #dee2e6',
-                      fontSize: '0.9rem',
-                      minHeight: '38px'
+                      fontSize: '0.8rem',
+                      textAlign: 'left',
+                      backgroundColor: 'white',
+                      color: '#495057',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'right 0.5rem center',
+                      backgroundSize: '12px 8px',
+                      paddingRight: '1.5rem'
                     }}
                   >
-                    {selectedAreas.length > 0 
-                      ? `Selected: ${selectedAreas.length}` 
-                      : 'Select on Map'
-                    }
-                  </Button>
-                  {selectedAreas.length > 0 && (
-                    <div className="d-flex flex-wrap gap-1">
-                      {selectedAreas.map(area => (
-                        <span 
-                          key={area}
-                          className="badge bg-primary"
-                          style={{ fontSize: '0.7rem' }}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedAreas.length === 0 
+                        ? 'Any' 
+                        : selectedAreas.length === 1 
+                          ? (selectedAreas[0].length > 20 ? selectedAreas[0].substring(0, 17) + '...' : selectedAreas[0])
+                          : `Multiple (${selectedAreas.length})`
+                      }
+                    </span>
+                  </Dropdown.Toggle>
+
+                  <Dropdown.Menu style={{ width: '100%', maxHeight: '300px', overflowY: 'auto' }}>
+                    <Dropdown.Item 
+                      onClick={() => setShowNeighborhoodMap(true)}
+                    >
+                      🗺️ Select on Map
+                    </Dropdown.Item>
+                    <Dropdown.Divider />
+                    {uniqueAreas.map(area => (
+                      <Dropdown.ItemText key={area}>
+                        <Form.Check
+                          type="checkbox"
+                          id={`neighborhood-${area}`}
+                          label={area}
+                          checked={selectedAreas.includes(area)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedAreas([...selectedAreas, area]);
+                            } else {
+                              setSelectedAreas(selectedAreas.filter(a => a !== area));
+                            }
+                          }}
+                        />
+                      </Dropdown.ItemText>
+                    ))}
+                    {selectedAreas.length > 0 && (
+                      <>
+                        <Dropdown.Divider />
+                        <Dropdown.Item 
+                          onClick={() => setSelectedAreas([])}
+                          className="text-danger"
                         >
-                          {area}
-                        </span>
-                      ))}
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="p-0 text-danger"
-                        style={{ fontSize: '0.7rem', textDecoration: 'none' }}
-                        onClick={() => setSelectedAreas([])}
-                      >
-                        Clear all
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                          Clear All
+                        </Dropdown.Item>
+                      </>
+                    )}
+                  </Dropdown.Menu>
+                </Dropdown>
+              </FormGroup>
+            </Col>
+
+            {/* Clear Filters Button */}
+            <Col lg={1} md={12}>
+              <FormGroup>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>&nbsp;</Form.Label>
+                <Button 
+                  variant="outline-secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    setPriceRange({ min: 450000, max: 750000 });
+                    setBedrooms('2+');
+                    setFloorLevel('any');
+                    setOutdoorSpace('any');
+                    setMinSize('');
+                    setSelectedAreas([]);
+                    setSearchQuery('');
+                    setUseAISearch(false);
+                    setSearchResults([]);
+                  }}
+                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', width: '100%' }}
+                >
+                  Clear Filters
+                </Button>
               </FormGroup>
             </Col>
             </Row>
             
             {/* AI-Powered Search */}
             <Row className="mt-3">
-              <Col md={12}>
+              <Col lg={9} md={12}>
                 <FormGroup>
                   <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>
-                    🔍 AI-Powered Search
+                    🔍 AI-Powered Search (optional)
                   </Form.Label>
                   <div className="d-flex gap-2">
                     <Form.Control
                       type="text"
-                      placeholder="Try: 'modern apartment with garden' or 'quiet place with balcony'... (min 3 characters)"
+                      placeholder="Try: 'newly renovated apartment with garden' or 'quiet street with canal views'..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyPress={(e) => {
@@ -571,7 +644,7 @@ const Listings = () => {
                       }}
                       style={{
                         borderRadius: '8px',
-                        border: '2px solid #2196f3',
+                        border: '1px solid #dee2e6',
                         fontSize: '0.9rem',
                         padding: '8px 12px'
                       }}
@@ -586,20 +659,18 @@ const Listings = () => {
                     </Button>
                     <Button
                       variant="outline-secondary"
+                      size="sm"
                       onClick={() => {
                         setSearchQuery('');
                         setUseAISearch(false);
                         setSearchResults([]);
                         updateURLWithSearch('');
                       }}
-                      style={{ borderRadius: '8px', padding: '8px 12px' }}
+                      style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                     >
-                      Clear
+                      Clear Search
                     </Button>
                   </div>
-                  <Form.Text className="text-muted">
-                    Describe what you're looking for in natural language. AI will find the most relevant matches from the filtered results above!
-                  </Form.Text>
                 </FormGroup>
               </Col>
             </Row>

@@ -6,8 +6,12 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Ensure Firebase credentials are set
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/Users/marshallmawson/house-hunters-amsterdam/firebase-credentials.json'
+# Ensure Firebase credentials are set for Cloud Run
+# In Cloud Run, the credentials are automatically available via the service account
+# For local development, you may need to set this manually
+if not os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
+    # This will use the default service account in Cloud Run
+    pass
 
 import logging
 
@@ -28,6 +32,47 @@ def get_search_functions():
 def health_check():
     """Health check endpoint."""
     return jsonify({"status": "healthy", "service": "search-api"})
+
+@app.route('/debug/count', methods=['GET'])
+def debug_count():
+    """Debug endpoint to check listing count"""
+    try:
+        # Use the exact same imports as search_service.py
+        import firebase_admin
+        from firebase_admin import credentials, firestore
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app()
+        db = firestore.client()
+        
+        # Get project info
+        project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "unknown"
+        
+        listings_ref = db.collection('listings')
+        count = len(list(listings_ref.limit(1000).stream()))
+        
+        # Check status distribution
+        status_counts = {}
+        all_docs = list(listings_ref.limit(1000).stream())
+        for doc in all_docs:
+            status = doc.to_dict().get('status', 'no_status')
+            status_counts[status] = status_counts.get(status, 0) + 1
+        
+        # Also try to get a sample document to see the structure
+        sample_docs = list(listings_ref.limit(1).stream())
+        sample_structure = {}
+        if sample_docs:
+            sample_doc = sample_docs[0].to_dict()
+            sample_structure = {key: type(value).__name__ for key, value in sample_doc.items()}
+        
+        return jsonify({
+            "total_listings": count,
+            "project_id": project_id,
+            "status_distribution": status_counts,
+            "sample_document_structure": sample_structure
+        })
+    except Exception as e:
+        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
+
 
 @app.route('/search', methods=['POST'])
 def search_listings():
@@ -161,5 +206,5 @@ def get_search_suggestions():
     return jsonify({"suggestions": suggestions})
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port, debug=False)

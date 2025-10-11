@@ -1,0 +1,11 @@
+flask==2.3.3
+flask-cors==4.0.0
+firebase-admin==6.4.0
+google-cloud-firestore==2.13.1
+google-cloud-translate==3.11.1
+google-generativeai==0.3.2
+vertexai==1.71.1
+numpy==1.24.3
+python-dotenv==1.0.0
+langdetect==1.0.9
+gunicorn==21.2.0

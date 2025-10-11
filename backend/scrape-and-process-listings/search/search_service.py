@@ -25,17 +25,19 @@ except Exception as e:
     # Don't exit, just log the error and continue
 
 # Initialize Vertex AI
+embedding_model = None
 try:
     log_timestamp("Initializing Vertex AI for search service...")
-    project_id = os.getenv("GCP_PROJECT_ID")
+    project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "house-hunters-amsterdam"
     if not project_id:
-        raise ValueError("GCP_PROJECT_ID not found in .env file")
+        raise ValueError("GCP_PROJECT_ID not found in environment")
     vertexai.init(project=project_id)
     embedding_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
     log_timestamp("✅ Vertex AI initialized successfully for search service.")
 except Exception as e:
     log_timestamp(f"❗️ Error initializing Vertex AI: {e}")
-    exit()
+    embedding_model = None
+    # Don't exit, just log the error and continue
 
 def generate_query_embedding(query: str) -> Optional[List[float]]:
     """Generate embedding for a search query."""

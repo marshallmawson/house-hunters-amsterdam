@@ -116,7 +116,6 @@ def clean_description(description):
     separators = [
         "**english**",
         "english version",
-        "english text below",
         "--- english ---",
         "--- en ---",
     ]

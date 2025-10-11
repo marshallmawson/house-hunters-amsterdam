@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Carousel, Modal, Button, Row, Col } from 'react-bootstrap';
 import { Listing } from '../types';
 import BedIcon from './icons/BedIcon';
@@ -37,6 +37,12 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [showFloorPlanModal, setShowFloorPlanModal] = useState(false);
   const [selectedFloorPlanIndex, setSelectedFloorPlanIndex] = useState(0);
+  const [isModalDescriptionExpanded, setIsModalDescriptionExpanded] = useState(false);
+  const [floorPlanZoom, setFloorPlanZoom] = useState(1);
+  const [isManualNavigation, setIsManualNavigation] = useState(false);
+  const hasHandledForceOpen = useRef(false);
+  const clickedImageIndex = useRef(0);
+  
   const navigate = useNavigate();
   const publishedDate = listing.publishedDate ? listing.publishedDate.toDate() : null;
   const outdoorSpaceString = getOutdoorSpaceString(listing);
@@ -54,27 +60,53 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     : listing.googleMapsUrl;
 
   useEffect(() => {
-    if (forceOpen) {
-      handleShowModal();
+    if (forceOpen && !hasHandledForceOpen.current) {
+      handleShowModal(clickedImageIndex.current);
+      hasHandledForceOpen.current = true;
     }
   }, [forceOpen]);
 
   const handleShowModal = (imageIndex: number = 0) => {
+    clickedImageIndex.current = imageIndex;
     setSelectedImageIndex(imageIndex);
     setShowModal(true);
     onModalToggle(true);
+    setIsManualNavigation(false);
     navigate(`/listings/${listing.id}`);
   };
 
   const handleHideModal = () => {
     setShowModal(false);
     onModalToggle(false);
+    setIsModalDescriptionExpanded(false);
+    setIsManualNavigation(false);
+    hasHandledForceOpen.current = false;
     navigate(`/`);
   };
 
   const handleFloorPlanClick = (index: number) => {
     setSelectedFloorPlanIndex(index);
+    setFloorPlanZoom(1); // Reset zoom when opening floor plan
     setShowFloorPlanModal(true);
+  };
+
+  const handleZoomIn = () => {
+    setFloorPlanZoom(prev => Math.min(prev + 0.5, 3)); // Max zoom 3x
+  };
+
+  const handleZoomOut = () => {
+    setFloorPlanZoom(prev => Math.max(prev - 0.5, 0.5)); // Min zoom 0.5x
+  };
+
+  const handleZoomReset = () => {
+    setFloorPlanZoom(1);
+  };
+
+  const handleCarouselSelect = (selectedIndex: number | null) => {
+    setSelectedImageIndex(selectedIndex || 0);
+    setIsManualNavigation(true);
+    // Reset manual navigation flag after a short delay to allow instant transition
+    setTimeout(() => setIsManualNavigation(false), 300);
   };
   return (
     <>
@@ -83,11 +115,22 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
         {listing.imageGallery && listing.imageGallery.slice(0, 10).map((url: string, index: number) => (
           <Carousel.Item key={index}>
             <img
-              className="d-block w-100"
+              className="d-block w-100 listing-image"
               src={url}
               alt={`Slide ${index}`}
-              style={{ height: '250px', objectFit: 'cover', cursor: 'pointer' }}
+              style={{ 
+                height: '280px', 
+                objectFit: 'cover',
+                cursor: 'pointer' 
+              }}
               onClick={() => handleShowModal(index)}
+              onLoad={(e) => {
+                const img = e.target as HTMLImageElement;
+                if (img.naturalHeight > img.naturalWidth) {
+                  img.style.objectFit = 'contain';
+                  img.style.backgroundColor = 'white';
+                }
+              }}
             />
           </Carousel.Item>
         ))}
@@ -170,18 +213,53 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
           </div>
         </Modal.Header>
         <Modal.Body>
-          <Carousel className="mb-4" activeIndex={selectedImageIndex} onSelect={(selectedIndex) => setSelectedImageIndex(selectedIndex || 0)}>
-            {listing.imageGallery && listing.imageGallery.map((url: string, index: number) => (
-              <Carousel.Item key={index}>
+          <div style={{ position: 'relative' }}>
+            <Carousel 
+              className={`mb-4 ${isManualNavigation ? 'carousel-no-transition' : ''}`}
+              activeIndex={selectedImageIndex} 
+              onSelect={handleCarouselSelect}
+            >
+              {listing.imageGallery && listing.imageGallery.map((url: string, index: number) => (
+                <Carousel.Item key={index}>
                 <img
-                  className="d-block w-100"
+                  className="d-block w-100 modal-image"
                   src={url}
                   alt={`Slide ${index}`}
-                  style={{ height: '400px', objectFit: 'cover', borderRadius: '8px' }}
+                  style={{ 
+                    height: '450px',
+                    objectFit: 'cover'
+                  }}
+                  onLoad={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    if (img.naturalHeight > img.naturalWidth) {
+                      img.style.objectFit = 'contain';
+                      img.style.backgroundColor = 'white';
+                    }
+                  }}
                 />
-              </Carousel.Item>
-            ))}
-          </Carousel>
+                </Carousel.Item>
+              ))}
+            </Carousel>
+            {/* Image counter */}
+            {listing.imageGallery && listing.imageGallery.length > 1 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '10px',
+                  right: '10px',
+                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                  color: 'white',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  fontWeight: '500',
+                  zIndex: 10
+                }}
+              >
+                {selectedImageIndex + 1} / {listing.imageGallery.length}
+              </div>
+            )}
+          </div>
           <Row>
             <Col md={6}>
               <h5>Details</h5>
@@ -239,7 +317,20 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
               
               <h5>Full Description</h5>
               <p style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
-                {listing.cleanedDescription}
+                {listing.cleanedDescription && (
+                  <>
+                    {isModalDescriptionExpanded ? listing.cleanedDescription : `${listing.cleanedDescription.substring(0, 1000)}...`}
+                    {listing.cleanedDescription && listing.cleanedDescription.length > 1000 && (
+                      <Button 
+                        variant="link" 
+                        onClick={() => setIsModalDescriptionExpanded(!isModalDescriptionExpanded)} 
+                        style={{ fontSize: '0.85rem', verticalAlign: 'baseline', padding: '0 0.2rem' }}
+                      >
+                        {isModalDescriptionExpanded ? 'Show Less' : 'Show More'}
+                      </Button>
+                    )}
+                  </>
+                )}
               </p>
             </Col>
             <Col md={6}>
@@ -282,17 +373,38 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
       </Modal>
 
       {/* Floor Plan Modal */}
-      <Modal show={showFloorPlanModal} onHide={() => setShowFloorPlanModal(false)} size="lg" centered>
+      <Modal show={showFloorPlanModal} onHide={() => setShowFloorPlanModal(false)} size="xl" centered>
         <Modal.Header closeButton>
-          <Modal.Title>Floor Plan {selectedFloorPlanIndex + 1}</Modal.Title>
+          <div className="d-flex justify-content-between align-items-center w-100">
+            <Modal.Title>Floor Plan {selectedFloorPlanIndex + 1}</Modal.Title>
+            <div className="d-flex gap-2">
+              <Button variant="outline-secondary" size="sm" onClick={handleZoomOut} disabled={floorPlanZoom <= 0.5}>
+                🔍-
+              </Button>
+              <Button variant="outline-secondary" size="sm" onClick={handleZoomReset}>
+                Reset ({Math.round(floorPlanZoom * 100)}%)
+              </Button>
+              <Button variant="outline-secondary" size="sm" onClick={handleZoomIn} disabled={floorPlanZoom >= 3}>
+                🔍+
+              </Button>
+            </div>
+          </div>
         </Modal.Header>
-        <Modal.Body className="text-center">
+        <Modal.Body className="text-center" style={{ overflow: 'auto', maxHeight: '80vh' }}>
           {listing.floorPlans && listing.floorPlans[selectedFloorPlanIndex] && (
-            <img
-              src={listing.floorPlans[selectedFloorPlanIndex]}
-              alt={`Floor Plan ${selectedFloorPlanIndex + 1}`}
-              style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }}
-            />
+            <div style={{ transform: `scale(${floorPlanZoom})`, transformOrigin: 'center', transition: 'transform 0.2s ease' }}>
+              <img
+                src={listing.floorPlans[selectedFloorPlanIndex]}
+                alt={`Floor Plan ${selectedFloorPlanIndex + 1}`}
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '80vh', 
+                  objectFit: 'contain',
+                  cursor: 'move'
+                }}
+                draggable={false}
+              />
+            </div>
           )}
         </Modal.Body>
       </Modal>
