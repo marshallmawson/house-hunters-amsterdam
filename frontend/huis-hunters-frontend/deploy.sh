@@ -22,8 +22,11 @@ IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE_NAME}
 
 # Build and push the image from the current directory
 echo "Building and pushing image: ${IMAGE_NAME}"
+echo "Current directory: $(pwd)"
+echo "Files in current directory:"
+ls -la
 # The '.' tells gcloud to build from the current directory where this script and the Dockerfile are located.
-gcloud builds submit . --tag "${IMAGE_NAME}" --async
+gcloud builds submit . --tag "${IMAGE_NAME}"
 
 # Check if the build was successful
 if [ $? -ne 0 ]; then
@@ -38,7 +41,7 @@ gcloud run deploy "${SERVICE_NAME}-service" \
   --region "${REGION}" \
   --platform "managed" \
   --port "80" \
-  --allow-unauthenticated # Allow public access to the service
+  --allow-unauthenticated
 
 echo "Deployment of ${SERVICE_NAME}-service complete."
 echo "You can view your service at the URL provided above."
