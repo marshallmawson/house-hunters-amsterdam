@@ -84,8 +84,8 @@ def fetch_and_store_listings():
     print(f"Checking for {len(listings_to_process)} listings in Firestore...")
     existing_listings = {}
     listing_ids = list(listings_to_process.keys())
-    for i in range(0, len(listing_ids), 50):
-        chunk = listing_ids[i:i+50]
+    for i in range(0, len(listing_ids), 30):
+        chunk = listing_ids[i:i+30]
         docs = db.collection('listings').where(FieldPath.document_id(), 'in', chunk).stream()
         for doc in docs:
             existing_listings[doc.id] = doc.to_dict()
@@ -190,7 +190,7 @@ def transform_listing_data(raw_item):
     photos_info = raw_item.get("Media", {}).get("Photos", {})
     photo_items = photos_info.get("Items", [])
     photo_base_url = photos_info.get("MediaBaseUrl", "")
-    gallery = [photo_base_url.replace("{id}", p.get("Id")) for p in photo_items[:30]]
+    gallery = [photo_base_url.replace("{id}", p.get("Id")) for p in photo_items[:50]]
     main_image = gallery[0] if gallery else None
 
     floor_plans_raw = raw_item.get("Media", {}).get("LegacyFloorPlan", {}).get("Items", [])
