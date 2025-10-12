@@ -174,39 +174,54 @@ const Listings = () => {
       console.log('Full response structure:', JSON.stringify(data, null, 2));
       
       // Convert search results to Listing format
-      const formattedResults: Listing[] = data.results.map((result: any) => ({
-        id: result.id,
-        address: result.address,
-        price: result.price,
-        bedrooms: result.bedrooms,
-        bathrooms: result.bathrooms,
-        livingArea: result.livingArea,
-        energyLabel: result.energyLabel,
-        scrapedAt: result.scrapedAt,
-        publishedDate: result.publishedDate,
-        url: result.url,
-        imageGallery: result.imageGallery,
-        embeddingText: result.embeddingText,
-        floor: result.apartmentFloor,
-        hasGarden: result.hasGarden,
-        hasRooftopTerrace: result.hasRooftopTerrace,
-        hasBalcony: result.hasBalcony,
-        outdoorSpaceArea: result.outdoorSpaceArea,
-        apartmentFloor: result.apartmentFloor,
-        status: result.status,
-        numberOfStories: result.numberOfStories,
-        coordinates: result.coordinates,
-        agentName: result.agentName,
-        agentUrl: result.agentUrl,
-        vveContribution: result.vveContribution,
-        cleanedDescription: result.cleanedDescription,
-        floorPlans: result.floorPlans,
-        googleMapsUrl: result.googleMapsUrl,
-        yearBuilt: result.yearBuilt,
-        neighborhood: result.neighborhood,
-        area: result.area,
-        searchScore: result.searchScore
-      }));
+      const formattedResults: Listing[] = data.results.map((result: any) => {
+        // Transform publishedDate to match the format expected by ListingCard
+        let finalPublishedDate;
+        if (typeof result.publishedDate === 'string') {
+          const date = new Date(result.publishedDate);
+          finalPublishedDate = {
+            toDate: () => date,
+            seconds: Math.floor(date.getTime() / 1000),
+            nanoseconds: (date.getTime() % 1000) * 1000000
+          };
+        } else {
+          finalPublishedDate = result.publishedDate;
+        }
+
+        return {
+          id: result.id,
+          address: result.address,
+          price: result.price,
+          bedrooms: result.bedrooms,
+          bathrooms: result.bathrooms,
+          livingArea: result.livingArea,
+          energyLabel: result.energyLabel,
+          scrapedAt: result.scrapedAt,
+          publishedDate: finalPublishedDate,
+          url: result.url,
+          imageGallery: result.imageGallery,
+          embeddingText: result.embeddingText,
+          floor: result.apartmentFloor,
+          hasGarden: result.hasGarden,
+          hasRooftopTerrace: result.hasRooftopTerrace,
+          hasBalcony: result.hasBalcony,
+          outdoorSpaceArea: result.outdoorSpaceArea,
+          apartmentFloor: result.apartmentFloor,
+          status: result.status,
+          numberOfStories: result.numberOfStories,
+          coordinates: result.coordinates,
+          agentName: result.agentName,
+          agentUrl: result.agentUrl,
+          vveContribution: result.vveContribution,
+          cleanedDescription: result.cleanedDescription,
+          floorPlans: result.floorPlans,
+          googleMapsUrl: result.googleMapsUrl,
+          yearBuilt: result.yearBuilt,
+          neighborhood: result.neighborhood,
+          area: result.area,
+          searchScore: result.searchScore
+        };
+      });
 
       console.log('Setting search results:', formattedResults.length, 'results');
       setSearchResults(formattedResults);

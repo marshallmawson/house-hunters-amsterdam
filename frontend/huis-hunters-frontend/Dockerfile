@@ -19,6 +19,9 @@ RUN npm run build
 # Stage 2: Serve the static files with a lightweight web server
 FROM nginx:stable-alpine
 
+# Copy the custom nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # Copy the built assets from the 'build' stage to the Nginx public directory
 COPY --from=build /app/build /usr/share/nginx/html
 

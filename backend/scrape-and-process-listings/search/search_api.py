@@ -166,7 +166,16 @@ def search_listings():
                 'coordinates': result.get('coordinates', {}),
                 'publishedDate': result.get('publishDate') or result.get('publishedDate'),
                 'scrapedAt': result.get('scrapedAt'),
-                'searchScore': result.get('hybrid_score', result.get('similarity_score', result.get('text_score', 0)))
+                'searchScore': result.get('hybrid_score', result.get('similarity_score', result.get('text_score', 0))),
+                # Additional fields needed for modal display
+                'yearBuilt': result.get('yearBuilt', ''),
+                'vveContribution': result.get('vveContribution', 0),
+                'agentName': result.get('agentName', ''),
+                'agentUrl': result.get('agentUrl', ''),
+                'floorPlans': result.get('floorPlans', []),
+                'numberOfStories': result.get('numberOfStories', 0),
+                'googleMapsUrl': result.get('googleMapsUrl', ''),
+                'outdoorSpaceArea': result.get('outdoorSpaceArea', 0)
             }
             formatted_results.append(formatted_result)
         
