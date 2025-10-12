@@ -322,29 +322,6 @@ def passes_filters(listing_data: Dict[str, Any], filters: Dict[str, Any]) -> boo
             if listing_data.get('area') not in filters['areas']:
                 return False
         
-        # Days since posted
-        if 'daysSincePosted' in filters and filters['daysSincePosted'] != 'any':
-            published_date = listing_data.get('publishedDate')
-            if published_date:
-                try:
-                    # Handle Firestore timestamp format
-                    if hasattr(published_date, 'seconds'):
-                        published_date_obj = datetime.datetime.fromtimestamp(published_date.seconds)
-                    else:
-                        published_date_obj = published_date
-                    
-                    now = datetime.datetime.now()
-                    days_diff = (now - published_date_obj).days
-                    
-                    max_days = int(filters['daysSincePosted'])
-                    # days_diff = 0 means today, days_diff = 1 means yesterday, etc.
-                    # So days_diff <= 1 includes today and yesterday
-                    if days_diff > max_days:
-                        return False
-                except Exception as e:
-                    log_timestamp(f"❗️ Error parsing published date: {e}")
-                    # If date parsing fails, include the listing (don't filter it out)
-                    pass
         
         return True
         
@@ -460,10 +437,25 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
         log_timestamp(f"Fetching listings with structured filters")
         docs = listings_ref.stream()
         
+        # Count outdoor spaces for debugging
+        garden_count = 0
+        balcony_count = 0
+        rooftop_count = 0
+        total_count = 0
+        
         # Apply additional filters that can't be done at database level
         for doc in docs:
             listing_data = doc.to_dict()
             listing_id = doc.id
+            
+            # Count outdoor spaces for debugging
+            total_count += 1
+            if listing_data.get('hasGarden', False):
+                garden_count += 1
+            if listing_data.get('hasBalcony', False):
+                balcony_count += 1
+            if listing_data.get('hasRooftopTerrace', False):
+                rooftop_count += 1
             
             # Apply all filters in memory to avoid Firestore index requirements
             if filters:
@@ -492,14 +484,17 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
                 
                 # Apply outdoor space filter
                 if 'outdoor' in filters and filters['outdoor'] != 'any':
+                    has_garden = listing_data.get('hasGarden', False)
+                    has_rooftop = listing_data.get('hasRooftopTerrace', False)
+                    has_balcony = listing_data.get('hasBalcony', False)
                     if filters['outdoor'] == 'garden':
-                        if not listing_data.get('hasGarden', False):
+                        if not has_garden:
                             continue
                     elif filters['outdoor'] == 'rooftop':
-                        if not listing_data.get('hasRooftopTerrace', False):
+                        if not has_rooftop:
                             continue
                     elif filters['outdoor'] == 'balcony':
-                        if not listing_data.get('hasBalcony', False):
+                        if not has_balcony:
                             continue
                 
                 # Apply minimum size filter
@@ -514,28 +509,6 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
                     if not any(area in listing_area for area in filters['areas']):
                         continue
                 
-                # Apply days since posted filter
-                if 'daysSincePosted' in filters and filters['daysSincePosted'] != 'any':
-                    published_date = listing_data.get('publishedDate')
-                    if published_date:
-                        try:
-                            if isinstance(published_date, str):
-                                published_date_obj = datetime.datetime.fromisoformat(published_date.replace('Z', '+00:00'))
-                            else:
-                                published_date_obj = published_date
-                            
-                            now = datetime.datetime.now()
-                            days_diff = (now - published_date_obj).days
-                            
-                            max_days = int(filters['daysSincePosted'])
-                            if days_diff > max_days:
-                                continue
-                        except Exception:
-                            # If we can't parse the date, skip this listing
-                            continue
-                    else:
-                        # If no published date, skip this listing
-                        continue
             
             filtered_listings.append({
                 'id': listing_id,
@@ -546,17 +519,23 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
         
         # Now run AI search only on these filtered listings
         if not filtered_listings:
+            log_timestamp(f"❌ No listings passed structured filters, returning empty results")
             return []
         
         # Generate query embedding
         query_embedding = generate_query_embedding(query)
+        if not query_embedding:
+            log_timestamp(f"❗️ Could not generate query embedding for filtered search, returning empty results")
+            return []
         
         # Calculate similarities for filtered listings only
         results = []
+        listings_with_embeddings = 0
         for listing in filtered_listings:
             listing_embedding = listing.get('listingEmbedding')
             if not listing_embedding:
                 continue
+            listings_with_embeddings += 1
             
             similarity_score = cosine_similarity(query_embedding, listing_embedding)
             
@@ -649,22 +628,3 @@ def hybrid_search(
     # Return limited results
     return semantic_results[:limit]
 
-# Example usage and testing
-if __name__ == "__main__":
-    # Test the search functionality
-    test_queries = [
-        "modern apartment with garden",
-        "quiet place with balcony",
-        "family-friendly 3-bedroom",
-        "luxury apartment near city center",
-        "affordable studio apartment"
-    ]
-    
-    for query in test_queries:
-        print(f"\n--- Testing query: '{query}' ---")
-        results = hybrid_search(query, limit=5)
-        
-        for i, result in enumerate(results, 1):
-            print(f"{i}. {result.get('address', 'No address')} - "
-                  f"Score: {result.get('hybrid_score', 0):.3f} - "
-                  f"Price: €{result.get('price', 0):,}")
