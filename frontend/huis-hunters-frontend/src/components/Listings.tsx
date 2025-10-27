@@ -53,7 +53,11 @@ const Listings = () => {
 
   useEffect(() => {
     const fetchListings = async () => {
-      const q = query(collection(db, "listings"), where("status", "==", "processed"));
+      const q = query(
+        collection(db, "listings"), 
+        where("status", "==", "processed"),
+        where("available", "==", true)
+      );
       const querySnapshot = await getDocs(q);
       const listingsData = querySnapshot.docs.map(doc => {
         const { publishDate, ...rest } = doc.data();

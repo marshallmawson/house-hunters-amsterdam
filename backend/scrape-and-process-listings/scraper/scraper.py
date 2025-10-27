@@ -103,6 +103,7 @@ def fetch_and_store_listings():
 
         clean_data['scrapedAt'] = firestore.SERVER_TIMESTAMP
         clean_data['status'] = 'needs_processing'
+        clean_data['available'] = True
 
         if listing_id in existing_listings:
             batch.set(doc_ref, clean_data, merge=True)
@@ -247,8 +248,85 @@ def transform_listing_data(raw_item):
     
     return clean_listing
 
+def check_unavailable_listings():
+    """Scrapes unavailable/sold listings and marks them as unavailable in Firestore."""
+    
+    # 1. Prepare the input for the Apify Actor (unavailable listings)
+    run_input = {
+        "startUrls": [{ "url": "https://www.funda.nl/zoeken/koop?price=%22400000-750000%22&publication_date=%2230%22&availability=[%22unavailable%22,%22negotiations%22]&bedrooms=%222-%22&sort=%22date_down%22&custom_area=_uy%255Cigs~HkDkb%2540od%2540aa%2540%257C%255BiSa%2540uc%2540pd%2540~%2540rVrRpuEfByJ~%257DAePtuCsiJte%2540wdA%257DWmjCwgA%257CdBagAwf%2540c%255DhmAqXja%2540eDloArc%2540ja%2540hSvg%2540i%2540rHyF" }],
+        "maxItems": 1000,
+        "maxConcurrency": 100,
+        "minConcurrency": 1,
+        "maxRequestRetries": 100,
+        "proxy": { "useApifyProxy": True, "apifyProxyGroups": ["RESIDENTIAL"] },
+    }
+    
+    print("🤖 Starting Apify Actor for unavailable listings...")
+    
+    # 2. Run the Actor and wait for it to finish
+    try:
+        run = apify_client.actor("isEqQn5XKtr3D3fRW").call(run_input=run_input)
+        print("✅ Unavailable listings actor run finished.")
+    except Exception as e:
+        print(f"❗️ Unavailable listings actor run failed: {e}")
+        return
+    
+    # 3. Fetch results and extract IDs
+    print("🏘️ Fetching unavailable listings...")
+    
+    all_items = list(apify_client.dataset(run["defaultDatasetId"]).iterate_items())
+    
+    unavailable_ids = []
+    for item in all_items:
+        funda_id = item.get("_id")
+        if funda_id:
+            unavailable_ids.append(str(funda_id))
+    
+    if not unavailable_ids:
+        print("No unavailable listings found.")
+        print("--- ✨ Unavailable Check Complete. Marked 0 listings. ---")
+        return
+    
+    print(f"Found {len(unavailable_ids)} unavailable listings. Marking in Firestore...")
+    
+    # 4. Update Firestore in batches of 30 (query limit for 'in')
+    batch = db.batch()
+    marked_count = 0
+    
+    for i in range(0, len(unavailable_ids), 30):
+        chunk = unavailable_ids[i:i+30]
+        
+        # Find matching documents
+        docs = db.collection('listings').where(FieldPath.document_id(), 'in', chunk).stream()
+        
+        for doc in docs:
+            doc_ref = db.collection('listings').document(doc.id)
+            batch.update(doc_ref, {'available': False})
+            marked_count += 1
+            
+            # Commit every 500 updates
+            if marked_count % 500 == 0:
+                try:
+                    batch.commit()
+                    print(f"✅ Marked {marked_count} listings as unavailable so far...")
+                    batch = db.batch()
+                except Exception as e:
+                    print(f"❗️ Error during batch commit: {e}")
+                    return
+    
+    # Commit remaining updates
+    if marked_count % 500 != 0:
+        try:
+            batch.commit()
+            print(f"✅ Final batch committed.")
+        except Exception as e:
+            print(f"❗️ Error during final batch commit: {e}")
+            return
+    
+    print(f"--- ✨ Unavailable Check Complete. Marked {marked_count} listings as unavailable. ---")
 
 
 # This line makes the script run when you execute it from the terminal
 if __name__ == "__main__":
     fetch_and_store_listings()
+    check_unavailable_listings()
