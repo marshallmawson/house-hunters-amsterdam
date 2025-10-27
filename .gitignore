@@ -11,3 +11,5 @@ test_area_assignment.py
 test_api_import.py
 test_search.py
 debug_api.py
+check_availability_stats.py
+migrate_availability.py
