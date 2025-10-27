@@ -3,8 +3,7 @@ import re
 import firebase_admin
 from dotenv import load_dotenv
 from firebase_admin import credentials, firestore
-from google.cloud import translate_v2 as translate
-import google.generativeai as genai
+from transformers import MarianMTModel, MarianTokenizer, AutoTokenizer, AutoModelForSeq2SeqLM
 import vertexai
 from vertexai.language_models import TextEmbeddingModel
 import datetime
@@ -68,27 +67,28 @@ except Exception as e:
     log_timestamp("Ensure the GOOGLE_APPLICATION_CREDENTIALS environment variable is set to the path of your Firebase service account key file.")
     exit()
 
-# Initialize Google Translate Client
+# Initialize Hugging Face Translation Model
 try:
-    log_timestamp("Initializing Google Translate client...")
-    translate_client = translate.Client()
-    log_timestamp("✅ Google Translate client initialized successfully.")
+    log_timestamp("Initializing Hugging Face translation model (Dutch to English)...")
+    model_name = "Helsinki-NLP/opus-mt-nl-en"
+    translate_tokenizer = MarianTokenizer.from_pretrained(model_name)
+    translate_model = MarianMTModel.from_pretrained(model_name)
+    log_timestamp("✅ Hugging Face translation model initialized successfully.")
 except Exception as e:
-    log_timestamp(f"❗️ Error initializing Google Translate: {e}")
+    log_timestamp(f"❗️ Error initializing translation model: {e}")
     exit()
 
-# Initialize the Generative Model
+# Initialize Hugging Face Summarization Model
 try:
-    log_timestamp("Initializing Generative Model...")
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_api_key:
-        raise ValueError("GEMINI_API_KEY not found in .env file")
-    genai.configure(api_key=gemini_api_key)
-    model = genai.GenerativeModel('gemini-pro-latest')
-    log_timestamp("✅ Generative model initialized successfully.")
+    log_timestamp("Initializing Hugging Face summarization model...")
+    summarizer_model_name = "sshleifer/distilbart-cnn-12-6"
+    summarizer_tokenizer = AutoTokenizer.from_pretrained(summarizer_model_name)
+    summarizer_model = AutoModelForSeq2SeqLM.from_pretrained(summarizer_model_name)
+    log_timestamp("✅ Hugging Face summarization model initialized successfully.")
 except Exception as e:
-    log_timestamp(f"❗️ Error initializing generative model: {e}")
-    exit()
+    log_timestamp(f"❗️ Error initializing summarization model: {e}")
+    summarizer_model = None
+    summarizer_tokenizer = None
 
 # Initialize Vertex AI
 try:
@@ -154,7 +154,7 @@ def clean_description(description):
 
 from langdetect import detect, LangDetectException
 
-def translate_text(text, translate_client):
+def translate_text(text):
     if not text:
         return ""
     try:
@@ -164,9 +164,11 @@ def translate_text(text, translate_client):
         if lang == 'en':
             return text
         
-        # If the language is not English, translate the text
-        result = translate_client.translate(text, target_language='en')
-        return result['translatedText']
+        # Translate using Hugging Face model
+        # truncation=True handles texts longer than model's max length gracefully
+        translated = translate_model.generate(**translate_tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512))
+        translated_text = translate_tokenizer.decode(translated[0], skip_special_tokens=True)
+        return translated_text
     except LangDetectException:
         # If language detection fails, fallback to the original text
         return text
@@ -192,26 +194,22 @@ def generate_embedding_text(clean_listing):
     summary = "No description available."
     cleaned_description = clean_listing.get("cleanedDescription", "")
 
-    if model and cleaned_description: # Check if model was initialized
+    if summarizer_model and summarizer_tokenizer and cleaned_description:
         try:
-            prompt = f'''
-            Based on the following apartment description, write a concise, one-paragraph summary.
-            Focus on the apartment's overall vibe and its key selling points. 
-            Write it as it would be useful to a buyer, not trying to sell the place with fluffy selling points.
-            Do not include any HTML or markdown.
-
-            Description:
-            ---
-            {cleaned_description}
-            ---
-            Summary:
-            '''
-            response = model.generate_content(prompt)
-            summary = response.text
+            # BART works best with 1024 tokens or less
+            inputs = summarizer_tokenizer(cleaned_description, max_length=1024, truncation=True, return_tensors="pt")
+            summary_ids = summarizer_model.generate(
+                inputs["input_ids"], 
+                max_length=150, 
+                min_length=40, 
+                length_penalty=2.0, 
+                num_beams=4
+            )
+            summary = summarizer_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
         except Exception as e:
             print(f"❗️ Could not generate summary: {e}")
             summary = "Summary generation failed."
-    elif not model:
+    elif not summarizer_model:
         summary = "Summary generation skipped: model not initialized."
 
     # Combine with structured data
@@ -306,7 +304,7 @@ def process_listings(limit=100):
         cleaned_description = clean_description(raw_description)
         
         # 2. Translate the description
-        translated_description = translate_text(cleaned_description, translate_client)
+        translated_description = translate_text(cleaned_description)
         
         listing_data['cleanedDescription'] = translated_description
 
