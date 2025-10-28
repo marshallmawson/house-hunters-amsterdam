@@ -13,3 +13,5 @@ test_search.py
 debug_api.py
 check_availability_stats.py
 migrate_availability.py
+mark_old_listings_unavailable.py
+test_mark_removed_listings.py

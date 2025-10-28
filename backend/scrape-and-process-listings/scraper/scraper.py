@@ -1,6 +1,7 @@
 import re 
 import os
 import firebase_admin
+import requests
 from dotenv import load_dotenv
 from apify_client import ApifyClient
 from firebase_admin import credentials, firestore
@@ -325,8 +326,110 @@ def check_unavailable_listings():
     
     print(f"--- ✨ Unavailable Check Complete. Marked {marked_count} listings as unavailable. ---")
 
+def check_image_url(url):
+    """Check if an image URL returns 404."""
+    if not url:
+        return False
+    
+    try:
+        response = requests.head(url, timeout=10, allow_redirects=True)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+def check_listing_url(url):
+    """Check if a Funda listing URL exists and is still available."""
+    if not url:
+        return False
+    
+    try:
+        response = requests.get(url, timeout=10, allow_redirects=True)
+        if response.status_code != 200:
+            return False
+        
+        text = response.text
+        
+        # Check for various "removed" indicators
+        if "We cannot find this page" in text:
+            return False
+        if "The page you requested is no longer available" in text:
+            return False
+        if "This property is no longer available" in text:
+            return False
+        if "Verkocht onder voorbehoud" in text or "Verkopen onder voorbehoud" in text:
+            return False
+        if 'status":"sold"' in text or '"availability":"unavailable"' in text:
+            return False
+        
+        # If we got here, listing appears to be available
+        return True
+    except Exception:
+        return False
+
+def check_removed_listings():
+    """Checks if any available listings have been removed from Funda by checking their mainImage URLs."""
+    
+    print("🔍 Checking for removed listings...")
+    
+    # Get all available listings
+    available_listings = {}
+    for doc in db.collection('listings').where('available', '==', True).stream():
+        data = doc.to_dict()
+        available_listings[doc.id] = data
+    
+    if not available_listings:
+        print("No available listings to check.")
+        return
+    
+    print(f"Checking {len(available_listings)} available listings...")
+    
+    # Check each listing's mainImage URL for 404
+    batch = db.batch()
+    removed_count = 0
+    checked_count = 0
+    
+    for listing_id, data in available_listings.items():
+        main_image = data.get('mainImage')
+        if not main_image:
+            continue
+        
+        checked_count += 1
+        is_valid = check_image_url(main_image)
+        
+        if not is_valid:
+            # Mark as unavailable
+            doc_ref = db.collection('listings').document(listing_id)
+            batch.update(doc_ref, {'available': False})
+            removed_count += 1
+            
+            # Commit every 500 updates
+            if removed_count % 500 == 0:
+                try:
+                    batch.commit()
+                    print(f"✅ Marked {removed_count} removed listings so far...")
+                    batch = db.batch()
+                except Exception as e:
+                    print(f"❗️ Error during batch commit: {e}")
+                    return
+        
+        # Print progress every 20 listings
+        if checked_count % 20 == 0:
+            print(f"   Checked {checked_count}/{len(available_listings)}... Found {removed_count} with 404 images so far")
+    
+    # Commit remaining updates
+    if removed_count > 0:
+        try:
+            batch.commit()
+            print(f"✅ Final batch committed.")
+        except Exception as e:
+            print(f"❗️ Error during final batch commit: {e}")
+            return
+    
+    print(f"--- ✨ Removed Check Complete. Marked {removed_count} listings as unavailable. ---")
+
 
 # This line makes the script run when you execute it from the terminal
 if __name__ == "__main__":
     fetch_and_store_listings()
     check_unavailable_listings()
+    check_removed_listings()

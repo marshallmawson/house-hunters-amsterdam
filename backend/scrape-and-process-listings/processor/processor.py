@@ -206,6 +206,8 @@ def generate_embedding_text(clean_listing):
                 num_beams=4
             )
             summary = summarizer_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+            # Fix spacing issues (remove space before punctuation)
+            summary = summary.replace(' .', '.').replace(' ,', ',').replace(' !', '!').replace(' ?', '?')
         except Exception as e:
             print(f"❗️ Could not generate summary: {e}")
             summary = "Summary generation failed."
