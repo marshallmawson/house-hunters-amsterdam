@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user owns the resource
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Users collection - users can only read/write their own document
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      // User preferences subcollection
+      match /searchPreferences/{prefId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
+    // Saved properties collection - users can only read/write their own saved properties
+    match /savedProperties/{propertyId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.userId && 
+                      request.auth.uid == request.resource.data.userId;
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+    
+    // Listings collection - public read access for all authenticated and unauthenticated users
+    match /listings/{listingId} {
+      allow read: if true; // Anyone can read listings
+      allow write: if false; // Only backend services can write (handled by service account)
+    }
+  }
+}
+

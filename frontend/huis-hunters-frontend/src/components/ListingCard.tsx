@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Carousel, Modal, Button, Row, Col } from 'react-bootstrap';
+import { Card, Carousel, Modal, Button, Row, Col, Form } from 'react-bootstrap';
 import { Listing } from '../types';
 import BedIcon from './icons/BedIcon';
 import BathIcon from './icons/BathIcon';
@@ -10,13 +10,28 @@ import CalendarIcon from './icons/CalendarIcon';
 import LayersIcon from './icons/LayersIcon';
 import { BuildingIcon } from './icons/BuildingIcon';
 import { GlobeIcon } from './icons/GlobeIcon';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { collection, query, where, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase';
 
 interface ListingCardProps {
   listing: Listing;
   isAnyModalOpen: boolean;
   onModalToggle: (isOpen: boolean) => void;
   forceOpen?: boolean;
+  onUnsave?: (propertyId: string) => void;
+  viewingScheduledAt?: {
+    seconds: number;
+    nanoseconds: number;
+    toDate: () => Date;
+  };
+  onAddToGoogleCalendar?: () => void;
+  note?: string;
+  onNoteChange?: (note: string) => void;
+  isNoteEditing?: boolean;
+  onNoteEditStart?: () => void;
+  onNoteEditCancel?: () => void;
 }
 
 const getOutdoorSpaceString = (listing: Listing) => {
@@ -31,7 +46,7 @@ const getOutdoorSpaceString = (listing: Listing) => {
   return `${outdoorSpaces.join(' + ')}${area}`;
 };
 
-const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onModalToggle, forceOpen }) => {
+const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onModalToggle, forceOpen, onUnsave, viewingScheduledAt, onAddToGoogleCalendar, note, onNoteChange, isNoteEditing, onNoteEditStart, onNoteEditCancel }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -41,10 +56,16 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   const [isMobile, setIsMobile] = useState(false);
   const [floorPlanZoom, setFloorPlanZoom] = useState(1);
   const [isManualNavigation, setIsManualNavigation] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [savedPropertyId, setSavedPropertyId] = useState<string | null>(null);
+  const [showUnsaveConfirm, setShowUnsaveConfirm] = useState(false);
+  const [noteText, setNoteText] = useState('');
   const hasHandledForceOpen = useRef(false);
   const clickedImageIndex = useRef(0);
   
   const navigate = useNavigate();
+  const location = useLocation();
+  const { currentUser } = useAuth();
   const publishedDate = listing.publishedDate ? listing.publishedDate.toDate() : null;
   const outdoorSpaceString = getOutdoorSpaceString(listing);
   
@@ -60,11 +81,19 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     ? `https://maps.google.com/maps?q=${listing.coordinates.lat},${listing.coordinates.lon}&z=15&output=embed`
     : listing.googleMapsUrl;
 
+  // Sync noteText with note prop when editing starts
+  useEffect(() => {
+    if (isNoteEditing && note !== undefined) {
+      setNoteText(note || '');
+    }
+  }, [isNoteEditing, note]);
+
   useEffect(() => {
     if (forceOpen && !hasHandledForceOpen.current) {
       handleShowModal(clickedImageIndex.current);
       hasHandledForceOpen.current = true;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceOpen]);
 
   // Detect mobile screen size
@@ -79,13 +108,97 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
 
+  // Check if property is saved
+  useEffect(() => {
+    const checkIfSaved = async () => {
+      if (!currentUser) {
+        setIsSaved(false);
+        return;
+      }
+
+      try {
+        const q = query(
+          collection(db, 'savedProperties'),
+          where('userId', '==', currentUser.uid),
+          where('listingId', '==', listing.id)
+        );
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          setIsSaved(true);
+          setSavedPropertyId(querySnapshot.docs[0].id);
+        } else {
+          setIsSaved(false);
+          setSavedPropertyId(null);
+        }
+      } catch (error) {
+        console.error('Error checking if saved:', error);
+      }
+    };
+
+    checkIfSaved();
+  }, [currentUser, listing.id]);
+
+  const handleSave = async () => {
+    if (!currentUser) {
+      alert('Please log in to save properties');
+      navigate('/login');
+      return;
+    }
+
+    try {
+      if (isSaved && savedPropertyId) {
+        // Unsave - show confirmation if onUnsave callback is provided (saved properties page)
+        if (onUnsave) {
+          setShowUnsaveConfirm(true);
+        } else {
+          // Direct unsave for main listings page
+          await deleteDoc(doc(db, 'savedProperties', savedPropertyId));
+          setIsSaved(false);
+          setSavedPropertyId(null);
+        }
+      } else {
+        // Save
+        const savedPropertyRef = doc(collection(db, 'savedProperties'));
+        await setDoc(savedPropertyRef, {
+          userId: currentUser.uid,
+          listingId: listing.id,
+          status: 'to contact',
+          addedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        setIsSaved(true);
+        setSavedPropertyId(savedPropertyRef.id);
+      }
+    } catch (error) {
+      console.error('Error saving/unsaving property:', error);
+      alert('Failed to save property');
+    }
+  };
+
+  const handleConfirmUnsave = async () => {
+    if (!savedPropertyId || !onUnsave) return;
+    
+    try {
+      onUnsave(savedPropertyId);
+      setIsSaved(false);
+      setSavedPropertyId(null);
+      setShowUnsaveConfirm(false);
+    } catch (error) {
+      console.error('Error unsaving property:', error);
+      alert('Failed to unsave property');
+    }
+  };
+
   const handleShowModal = (imageIndex: number = 0) => {
     clickedImageIndex.current = imageIndex;
     setSelectedImageIndex(imageIndex);
     setShowModal(true);
     onModalToggle(true);
     setIsManualNavigation(false);
-    navigate(`/listings/${listing.id}`);
+    // Only navigate if we're not on the saved properties page
+    if (location.pathname !== '/saved-properties') {
+      navigate(`/listings/${listing.id}`);
+    }
   };
 
   const handleHideModal = () => {
@@ -94,7 +207,10 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     setIsModalDescriptionExpanded(false);
     setIsManualNavigation(false);
     hasHandledForceOpen.current = false;
-    navigate(`/`);
+    // Only navigate back to home if we navigated from home
+    if (location.pathname !== '/saved-properties') {
+      navigate(`/`);
+    }
   };
 
   const handleFloorPlanClick = (index: number) => {
@@ -124,30 +240,82 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   return (
     <>
     <Card className="listing-card" style={{ width: '24rem', margin: '1rem' }}>
-      <Carousel interval={isAnyModalOpen ? null : 5000}>
-        {listing.imageGallery && listing.imageGallery.slice(0, 10).map((url: string, index: number) => (
-          <Carousel.Item key={index}>
-            <img
-              className="d-block w-100 listing-image"
-              src={url}
-              alt={`Slide ${index}`}
-              style={{ 
-                height: '280px', 
-                objectFit: 'cover',
-                cursor: 'pointer' 
-              }}
-              onClick={() => handleShowModal(index)}
-              onLoad={(e) => {
-                const img = e.target as HTMLImageElement;
-                if (img.naturalHeight > img.naturalWidth) {
-                  img.style.objectFit = 'contain';
-                  img.style.backgroundColor = 'white';
-                }
-              }}
-            />
-          </Carousel.Item>
-        ))}
-      </Carousel>
+      <div style={{ position: 'relative' }}>
+        <Carousel interval={isAnyModalOpen ? null : 5000}>
+          {listing.imageGallery && listing.imageGallery.slice(0, 10).map((url: string, index: number) => (
+            <Carousel.Item key={index}>
+              <img
+                className="d-block w-100 listing-image"
+                src={url}
+                alt={`Slide ${index}`}
+                style={{ 
+                  height: '280px', 
+                  objectFit: 'cover',
+                  cursor: 'pointer' 
+                }}
+                onClick={() => handleShowModal(index)}
+                onLoad={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  if (img.naturalHeight > img.naturalWidth) {
+                    img.style.objectFit = 'contain';
+                    img.style.backgroundColor = 'white';
+                  }
+                }}
+              />
+            </Carousel.Item>
+          ))}
+        </Carousel>
+        {/* Heart Save Button - Top Right Corner */}
+        {currentUser && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSave();
+            }}
+            style={{
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              backgroundColor: 'white',
+              border: 'none',
+              borderRadius: '50%',
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+              transition: 'all 0.2s ease',
+              zIndex: 5,
+              padding: 0
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.25)';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+            title={isSaved ? 'Remove from saved' : 'Save property'}
+          >
+            <svg
+              width="20"
+              height="18"
+              viewBox="0 0 24 21"
+              fill={isSaved ? '#dc3545' : 'none'}
+              stroke={isSaved ? '#dc3545' : '#212529'}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ transition: 'all 0.2s ease' }}
+            >
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+          </button>
+        )}
+      </div>
       <Card.Body>
         <div className="d-flex justify-content-between align-items-baseline">
           <Card.Title 
@@ -205,6 +373,142 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
             </Button>
             <small className="text-muted"><CalendarIcon /> {publishedDate?.toLocaleDateString()}</small>
         </div>
+        
+        {/* Viewing Scheduled Section - Inside Card */}
+        {viewingScheduledAt && onAddToGoogleCalendar && (
+          <div 
+            style={{ 
+              borderTop: '1px solid #dee2e6',
+              backgroundColor: '#f8f9fa',
+              padding: '1rem',
+              marginTop: '1rem'
+            }}
+          >
+            <div className="mb-2">
+              <small style={{ fontSize: '0.85rem', color: '#495057' }}>
+                <strong>Viewing scheduled:</strong>{' '}
+                {viewingScheduledAt.toDate().toLocaleString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false
+                }).replace(/,/g, '')}
+              </small>
+            </div>
+            <Button
+              variant="outline-primary"
+              size="sm"
+              onClick={onAddToGoogleCalendar}
+              style={{ fontSize: '0.85rem' }}
+            >
+              📅 Add to Google Calendar
+            </Button>
+          </div>
+        )}
+
+        {/* Personal Note Section - Inside Card */}
+        {onNoteChange && (
+          <div 
+            style={{ 
+              borderTop: '1px solid #dee2e6',
+              backgroundColor: '#f8f9fa',
+              padding: '1rem',
+              marginTop: viewingScheduledAt ? '0.5rem' : '1rem'
+            }}
+          >
+            {isNoteEditing ? (
+              <div>
+                <Form.Control
+                  as="textarea"
+                  rows={3}
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  placeholder="add a note"
+                  style={{
+                    fontSize: '0.85rem',
+                    marginBottom: '0.5rem',
+                    resize: 'vertical',
+                    fontFamily: 'system-ui, -apple-system, sans-serif'
+                  }}
+                />
+                <div className="d-flex gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      onNoteChange(noteText);
+                      if (onNoteEditCancel) onNoteEditCancel();
+                      setNoteText('');
+                    }}
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setNoteText(note || '');
+                      if (onNoteEditCancel) onNoteEditCancel();
+                    }}
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="d-flex justify-content-between align-items-start">
+                <div style={{ flex: 1 }}>
+                  {note ? (
+                    <p style={{ fontSize: '0.85rem', color: '#495057', margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+                      {note}
+                    </p>
+                  ) : (
+                    <p style={{ fontSize: '0.85rem', color: '#6c757d', margin: 0, fontStyle: 'italic', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+                      Add a note
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    if (onNoteEditStart) {
+                      setNoteText(note || '');
+                      onNoteEditStart();
+                    }
+                  }}
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '0.25rem',
+                    marginLeft: '0.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    color: '#6c757d'
+                  }}
+                  title={note ? 'Edit note' : 'Add note'}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </Card.Body>
     </Card>
 
@@ -248,6 +552,56 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
                 </Carousel.Item>
               ))}
             </Carousel>
+            {/* Heart Save Button - Top Right Corner in Modal */}
+            {currentUser && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSave();
+                }}
+                style={{
+                  position: 'absolute',
+                  top: '15px',
+                  right: '15px',
+                  backgroundColor: 'white',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '45px',
+                  height: '45px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                  transition: 'all 0.2s ease',
+                  zIndex: 10,
+                  padding: 0
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.25)';
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+                title={isSaved ? 'Remove from saved' : 'Save property'}
+              >
+                <svg
+                  width="22"
+                  height="20"
+                  viewBox="0 0 24 21"
+                  fill={isSaved ? '#dc3545' : 'none'}
+                  stroke={isSaved ? '#dc3545' : '#212529'}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ transition: 'all 0.2s ease' }}
+                >
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+              </button>
+            )}
             {/* Image counter */}
             {listing.imageGallery && listing.imageGallery.length > 1 && (
               <div
@@ -427,6 +781,24 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
             </div>
           )}
         </Modal.Body>
+      </Modal>
+
+      {/* Unsave Confirmation Modal */}
+      <Modal show={showUnsaveConfirm} onHide={() => setShowUnsaveConfirm(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Remove from Saved?</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Are you sure you want to remove this property from your saved properties?</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowUnsaveConfirm(false)}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleConfirmUnsave}>
+            Remove
+          </Button>
+        </Modal.Footer>
       </Modal>
     </>
   );

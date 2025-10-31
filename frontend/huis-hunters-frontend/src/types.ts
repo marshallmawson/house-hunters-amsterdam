@@ -41,4 +41,66 @@ export interface Listing {
   neighborhood?: string;
   area?: string;
   searchScore?: number;
+  available?: boolean;
+}
+
+export type PropertyStatus = 
+  | 'to contact' 
+  | 'viewing scheduled' 
+  | 'to make an offer' 
+  | 'offer entered' 
+  | 'offer rejected';
+
+export interface SavedProperty {
+  id: string;
+  userId: string;
+  listingId: string;
+  status: PropertyStatus;
+  addedAt: {
+    seconds: number;
+    nanoseconds: number;
+    toDate: () => Date;
+  };
+  updatedAt: {
+    seconds: number;
+    nanoseconds: number;
+    toDate: () => Date;
+  };
+  viewingScheduledAt?: {
+    seconds: number;
+    nanoseconds: number;
+    toDate: () => Date;
+  };
+  note?: string;
+  listing?: Listing; // Full listing data when loaded
+}
+
+export interface UserPreferences {
+  priceRange: {
+    min: number;
+    max: number;
+  };
+  bedrooms: string;
+  floorLevel: string;
+  outdoorSpace: string;
+  minSize: string;
+  selectedAreas: string[];
+  searchQuery: string;
+  sortOrder: string;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: {
+    seconds: number;
+    nanoseconds: number;
+    toDate: () => Date;
+  };
+  updatedAt: {
+    seconds: number;
+    nanoseconds: number;
+    toDate: () => Date;
+  };
 }

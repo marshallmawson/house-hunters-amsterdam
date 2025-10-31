@@ -8,6 +8,7 @@ import { Listing } from '../types';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
+import { useUserPreferences } from '../hooks/useUserPreferences';
 
 const Listings = () => {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -15,6 +16,8 @@ const Listings = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { id: modalListingId } = useParams();
   const navigate = useNavigate();
+  const { preferences: savedPreferences, loading: preferencesLoading, savePreferences } = useUserPreferences();
+  const preferencesLoadedRef = useRef(false);
 
   // AI Search state
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
@@ -23,6 +26,7 @@ const Listings = () => {
   const [useAISearch, setUseAISearch] = useState(!!searchQuery);
   const hasPerformedInitialSearch = useRef(false);
 
+  // Initialize from URL params, then override with saved preferences if logged in
   const [sortOrder, setSortOrder] = useState(searchParams.get('sort') || 'date-new-old');
   const [priceRange, setPriceRange] = useState({ 
     min: parseInt(searchParams.get('minPrice') || '450000', 10),
@@ -40,6 +44,49 @@ const Listings = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
+
+  // Load saved preferences on mount if logged in and no URL params
+  useEffect(() => {
+    if (preferencesLoading || preferencesLoadedRef.current) return;
+    
+    const hasURLParams = searchParams.get('minPrice') || searchParams.get('maxPrice') || 
+                         searchParams.get('bedrooms') || searchParams.get('floor') || 
+                         searchParams.get('outdoor') || searchParams.get('minSize') || 
+                         searchParams.get('areas') || searchParams.get('sort') || searchParams.get('search');
+    
+    // Only load saved preferences if no URL params (user hasn't shared a link with filters)
+    if (!hasURLParams && savedPreferences) {
+      preferencesLoadedRef.current = true;
+      
+      // Restore preferences
+      if (savedPreferences.priceRange) {
+        setPriceRange(savedPreferences.priceRange);
+      }
+      if (savedPreferences.bedrooms) {
+        setBedrooms(savedPreferences.bedrooms);
+      }
+      if (savedPreferences.floorLevel) {
+        setFloorLevel(savedPreferences.floorLevel);
+      }
+      if (savedPreferences.outdoorSpace) {
+        setOutdoorSpace(savedPreferences.outdoorSpace);
+      }
+      if (savedPreferences.minSize) {
+        setMinSize(savedPreferences.minSize);
+      }
+      if (savedPreferences.selectedAreas && savedPreferences.selectedAreas.length > 0) {
+        setSelectedAreas(savedPreferences.selectedAreas);
+      }
+      if (savedPreferences.sortOrder) {
+        setSortOrder(savedPreferences.sortOrder);
+      }
+      if (savedPreferences.searchQuery) {
+        setSearchQuery(savedPreferences.searchQuery);
+      }
+    } else {
+      preferencesLoadedRef.current = true;
+    }
+  }, [savedPreferences, preferencesLoading, searchParams]);
 
   const uniqueAreas = useMemo(() => {
     const areas = new Set<string>();
@@ -252,7 +299,7 @@ const Listings = () => {
       performAISearch(searchQuery);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on component mount
+  }, [searchQuery]); // Only run once on component mount
 
   // Trigger search when filters change (if there's an active search query)
   useEffect(() => {
@@ -345,7 +392,28 @@ const Listings = () => {
     if (useAISearch && searchQuery.trim()) {
       performAISearch(searchQuery);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, useAISearch, searchQuery]);
+
+  // Save preferences when they change (debounced)
+  useEffect(() => {
+    if (!preferencesLoadedRef.current) return; // Don't save on initial load
+    
+    const timeoutId = setTimeout(() => {
+      savePreferences({
+        priceRange,
+        bedrooms,
+        floorLevel,
+        outdoorSpace,
+        minSize,
+        selectedAreas,
+        searchQuery,
+        sortOrder
+      });
+    }, 2000); // Debounce 2 seconds
+
+    return () => clearTimeout(timeoutId);
+  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, searchQuery, sortOrder, savePreferences]);
 
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
@@ -521,7 +589,7 @@ const Listings = () => {
             {/* Min Size */}
             <Col lg={1} md={6}>
               <FormGroup>
-                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Size (m²)</Form.Label>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Min Size (m²)</Form.Label>
                 <Form.Control 
                   type="number"
                   placeholder="Any"

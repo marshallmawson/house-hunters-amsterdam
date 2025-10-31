@@ -1,17 +1,53 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import Listings from './components/Listings';
-import { Container, Navbar } from 'react-bootstrap';
+import LoginPage from './components/LoginPage';
+import SignUpPage from './components/SignUpPage';
+import ProfilePage from './components/ProfilePage';
+import SavedProperties from './components/SavedProperties';
+import { Container, Navbar, Dropdown, Nav, Offcanvas, Modal, Button } from 'react-bootstrap';
 import './index.css';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useNavigate, useLocation, Link } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-function App() {
+const AppContent = () => {
+  const { currentUser, userData, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+  const isHomePage = location.pathname === '/' || location.pathname.startsWith('/listings/');
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+    setShowMobileMenu(false);
+  };
+
+  const handleNavClick = (path: string) => {
+    navigate(path);
+    setShowMobileMenu(false);
+  };
+
+  const handleSavedPropertiesClick = (e: React.MouseEvent) => {
+    if (!currentUser) {
+      e.preventDefault();
+      setShowLoginPrompt(true);
+      setShowMobileMenu(false);
+    }
+  };
+
   return (
     <div>
       {/* Premium Navigation Bar */}
       <Navbar className="premium-navbar" expand="lg" fixed="top">
         <Container>
-          <Navbar.Brand className="premium-logo" href="#home">
+          <Navbar.Brand 
+            className="premium-logo" 
+            onClick={() => navigate('/')}
+            style={{ cursor: 'pointer' }}
+          >
             <img 
               src="/logo192.png" 
               alt="Huis Hunters Logo" 
@@ -20,144 +56,305 @@ function App() {
             <span className="logo-text">Huis Hunters</span>
             <span className="beta-badge">BETA</span>
           </Navbar.Brand>
-          <div className="ms-auto">
-            <a 
-              href="mailto:contact@huishunters.com"
-              style={{
-                fontSize: '0.75rem',
-                color: '#6c757d',
-                textDecoration: 'none',
-                fontWeight: '400'
-              }}
-            >
-              contact@huishunters.com
-            </a>
+          
+          {/* Desktop Navigation */}
+          <div className="ms-auto d-none d-lg-flex align-items-center gap-3">
+            {!isAuthPage && (
+              <>
+                <Link 
+                  to={currentUser ? "/saved-properties" : "#"} 
+                  onClick={handleSavedPropertiesClick}
+                  style={{ textDecoration: 'none', color: '#6c757d', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: currentUser ? 'pointer' : 'pointer' }}
+                >
+                  <svg
+                    width="16"
+                    height="14"
+                    viewBox="0 0 24 21"
+                    fill="#dc3545"
+                    stroke="#dc3545"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                  </svg>
+                  Saved Properties
+                </Link>
+                {currentUser ? (
+                  <Dropdown>
+                    <Dropdown.Toggle variant="link" id="profile-dropdown" style={{ textDecoration: 'none', color: '#6c757d', fontSize: '0.9rem', border: 'none', padding: '0' }}>
+                      👤 {userData?.name || 'Profile'}
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu>
+                      <Dropdown.Item onClick={() => navigate('/profile')}>Profile</Dropdown.Item>
+                      <Dropdown.Item onClick={handleLogout}>Logout</Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown>
+                ) : (
+                  <Link to="/login" style={{ textDecoration: 'none', color: '#6c757d', fontSize: '0.9rem' }}>
+                    Login / Sign Up
+                  </Link>
+                )}
+              </>
+            )}
           </div>
+
+          {/* Mobile Hamburger Button */}
+          {!isAuthPage && (
+            <Navbar.Toggle 
+              aria-controls="mobile-nav"
+              onClick={() => setShowMobileMenu(true)}
+              style={{ border: 'none', padding: '0.25rem 0.5rem' }}
+            >
+              <span style={{ fontSize: '1.5rem' }}>☰</span>
+            </Navbar.Toggle>
+          )}
         </Container>
       </Navbar>
 
-      {/* Modern Hero Header */}
-      <div 
-        className="hero-header"
-        style={{
-          minHeight: '500px',
-          position: 'relative',
-          overflow: 'hidden',
-          marginTop: '40px'
-        }}
+      {/* Mobile Menu Offcanvas */}
+      <Offcanvas 
+        show={showMobileMenu} 
+        onHide={() => setShowMobileMenu(false)} 
+        placement="end"
+        style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
       >
-        {/* Background Image with Enhanced Overlay */}
-        <div
-          className="hero-background"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundImage: `url('https://images.unsplash.com/photo-1576924542622-772281b13aa8?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=3540')`,
-            backgroundSize: '140%',
-            backgroundPosition: 'center 90%',
-            opacity: 1,
-            zIndex: 1
-          }}
-        />
-        
-        {/* Premium Gradient Overlay */}
-        <div
-          className="hero-overlay"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'linear-gradient(135deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.3) 100%)',
-            zIndex: 2
-          }}
-        />
-
-        {/* Content */}
-        <Container className="hero-content" style={{ position: 'relative', zIndex: 3, paddingTop: '140px', paddingBottom: '140px' }}>
-          <div className="text-center text-white">
-            <div className="hero-text-container">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}>
-                <img 
-                  src="/house-white.png" 
-                  alt="Huis Hunters Logo" 
-                  style={{ width: '80px', height: '80px', transform: 'translateY(-8px)' }}
-                />
-                <h1 
-                  className="hero-title premium-title"
-                  style={{
-                    fontSize: '5.8rem',
-                    fontWeight: '700',
-                    marginBottom: '1.5rem',
-                    color: 'white',
-                    textShadow: '4px 4px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5)',
-                    letterSpacing: '-0.03em',
-                    lineHeight: '1.1'
+        <Offcanvas.Header closeButton>
+          <Offcanvas.Title>Menu</Offcanvas.Title>
+        </Offcanvas.Header>
+        <Offcanvas.Body>
+          <Nav className="flex-column gap-3">
+            <Nav.Link 
+              onClick={currentUser ? () => handleNavClick('/saved-properties') : (e) => {
+                e.preventDefault();
+                setShowLoginPrompt(true);
+                setShowMobileMenu(false);
+              }}
+              style={{ 
+                color: '#212529', 
+                fontSize: '1rem',
+                fontWeight: '500',
+                padding: '0.5rem 0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <svg
+                width="18"
+                height="16"
+                viewBox="0 0 24 21"
+                fill="#dc3545"
+                stroke="#dc3545"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+              Saved Properties
+            </Nav.Link>
+            {currentUser ? (
+              <>
+                <Nav.Link 
+                  onClick={() => handleNavClick('/profile')}
+                  style={{ 
+                    color: '#212529', 
+                    fontSize: '1rem',
+                    fontWeight: '500',
+                    padding: '0.5rem 0'
                   }}
                 >
-                  Huis Hunters
-                </h1>
-              </div>
-              <p 
-                className="hero-subtitle premium-subtitle"
-                style={{
-                  fontSize: '1.8rem',
-                  fontWeight: '400',
-                  marginBottom: '2rem',
-                  opacity: 0.95,
-                  textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
-                  maxWidth: '650px',
-                  margin: '0 auto 2rem auto',
-                  lineHeight: '1.4'
+                  Profile
+                </Nav.Link>
+                <Nav.Link 
+                  onClick={handleLogout}
+                  style={{ 
+                    color: '#dc3545', 
+                    fontSize: '1rem',
+                    fontWeight: '500',
+                    padding: '0.5rem 0'
+                  }}
+                >
+                  Logout
+                </Nav.Link>
+              </>
+            ) : (
+              <Nav.Link 
+                onClick={() => handleNavClick('/login')}
+                style={{ 
+                  color: '#212529', 
+                  fontSize: '1rem',
+                  fontWeight: '500',
+                  padding: '0.5rem 0'
                 }}
               >
-                AI-powered home searching in Amsterdam
-              </p>
-            </div>
-          </div>
-        </Container>
+                Login / Sign Up
+              </Nav.Link>
+            )}
+          </Nav>
+        </Offcanvas.Body>
+      </Offcanvas>
 
-        {/* Premium Decorative Elements */}
-        <div
-          className="hero-bottom-gradient"
+      {/* Login Prompt Modal */}
+      <Modal show={showLoginPrompt} onHide={() => setShowLoginPrompt(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Login Required</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p style={{ fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '1rem', lineHeight: '1.6', color: '#212529' }}>
+            Please <strong>login or create an account</strong> to save properties and your search preferences.
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowLoginPrompt(false)}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={() => {
+            setShowLoginPrompt(false);
+            navigate('/login');
+          }}>
+            Login / Sign Up
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modern Hero Header - Only show on home page */}
+      {isHomePage && (
+        <div 
+          className="hero-header"
           style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: '80px',
-            background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.15))',
-            zIndex: 2
+            minHeight: '500px',
+            position: 'relative',
+            overflow: 'hidden',
+            marginTop: '40px'
           }}
-        />
-        
-        {/* Subtle Pattern Overlay */}
-        <div
-          className="hero-pattern"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundImage: 'radial-gradient(circle at 25% 25%, rgba(255,255,255,0.1) 0%, transparent 50%), radial-gradient(circle at 75% 75%, rgba(255,255,255,0.05) 0%, transparent 50%)',
-            opacity: 0.3,
-            zIndex: 2
-          }}
-        />
-      </div>
+        >
+          {/* Background Image with Enhanced Overlay */}
+          <div
+            className="hero-background"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundImage: `url('https://images.unsplash.com/photo-1576924542622-772281b13aa8?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=3540')`,
+              backgroundSize: '140%',
+              backgroundPosition: 'center 90%',
+              opacity: 1,
+              zIndex: 1
+            }}
+          />
+          
+          {/* Premium Gradient Overlay */}
+          <div
+            className="hero-overlay"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'linear-gradient(135deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.3) 100%)',
+              zIndex: 2
+            }}
+          />
+
+          {/* Content */}
+          <Container className="hero-content" style={{ position: 'relative', zIndex: 3, paddingTop: '140px', paddingBottom: '140px' }}>
+            <div className="text-center text-white">
+              <div className="hero-text-container">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}>
+                  <img 
+                    src="/house-white.png" 
+                    alt="Huis Hunters Logo" 
+                    style={{ width: '80px', height: '80px', transform: 'translateY(-8px)' }}
+                  />
+                  <h1 
+                    className="hero-title premium-title"
+                    style={{
+                      fontSize: '5.8rem',
+                      fontWeight: '700',
+                      marginBottom: '1.5rem',
+                      color: 'white',
+                      textShadow: '4px 4px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5)',
+                      letterSpacing: '-0.03em',
+                      lineHeight: '1.1'
+                    }}
+                  >
+                    Huis Hunters
+                  </h1>
+                </div>
+                <p 
+                  className="hero-subtitle premium-subtitle"
+                  style={{
+                    fontSize: '1.8rem',
+                    fontWeight: '400',
+                    marginBottom: '2rem',
+                    opacity: 0.95,
+                    textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+                    maxWidth: '650px',
+                    margin: '0 auto 2rem auto',
+                    lineHeight: '1.4'
+                  }}
+                >
+                  AI-powered home searching in Amsterdam
+                </p>
+              </div>
+            </div>
+          </Container>
+
+          {/* Premium Decorative Elements */}
+          <div
+            className="hero-bottom-gradient"
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '80px',
+              background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.15))',
+              zIndex: 2
+            }}
+          />
+          
+          {/* Subtle Pattern Overlay */}
+          <div
+            className="hero-pattern"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundImage: 'radial-gradient(circle at 25% 25%, rgba(255,255,255,0.1) 0%, transparent 50%), radial-gradient(circle at 75% 75%, rgba(255,255,255,0.05) 0%, transparent 50%)',
+              opacity: 0.3,
+              zIndex: 2
+            }}
+          />
+        </div>
+      )}
 
       <Container fluid>
         <Routes>
           <Route path="/" element={<Listings />} />
           <Route path="/listings/:id" element={<Listings />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/saved-properties" element={<SavedProperties />} />
         </Routes>
       </Container>
     </div>
+  );
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
