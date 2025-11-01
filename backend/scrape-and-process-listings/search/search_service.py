@@ -10,7 +10,136 @@ import statistics
 from typing import List, Dict, Any, Optional
 
 def log_timestamp(message):
-    print(f"[{datetime.datetime.now()}] {message}")
+    print(f"[{datetime.datetime.now()}] {message}", flush=True)
+
+def is_address_query(query: str) -> bool:
+    """
+    Detect if a query looks like an address.
+    An address query typically contains:
+    - A street name (one or more words)
+    - Optionally a street number (digits with optional suffix like "-K", "-A", etc.)
+    """
+    try:
+        if not query or not query.strip():
+            return False
+        
+        query_lower = query.strip().lower()
+        
+        # Pattern: street name (1-4 words) + optional number (digits with optional suffix)
+        # Examples: "Raamstraat 33-K", "Prinsengracht 123", "Jordaan 42"
+        import re
+        
+        # Match patterns like "word(s) number" or "word(s) number-suffix"
+        # e.g., "raamstraat 33-k", "prinsengracht 123", "jordaan 42"
+        # Updated pattern to better handle addresses: [street name] + space + [number with optional suffix]
+        address_pattern = r'^[a-z]+(?:\s+[a-z]+){0,3}\s+\d+[-a-z]*$'
+        
+        # Also match if it's just a street name (common street names in Amsterdam)
+        # Common street suffixes: straat, weg, plein, gracht, singel, dijk, etc.
+        street_suffixes = ['straat', 'weg', 'plein', 'gracht', 'singel', 'dijk', 'laan', 'kade', 'dreef', 'hof', 'park', 'tuin']
+        has_street_suffix = any(query_lower.endswith(f' {suffix}') or query_lower.endswith(suffix) for suffix in street_suffixes)
+        
+        # Check if it matches the address pattern
+        pattern_match = re.match(address_pattern, query_lower)
+        if pattern_match:
+            return True
+        
+        # Check if it looks like a street name with number but in different format
+        # e.g., "raamstraat33k", "33-k raamstraat", "rozenstraat 111-h"
+        # Look for: at least one digit, and either a street suffix or multiple words
+        has_digits = bool(re.search(r'\d+[-a-z]*', query_lower))
+        has_multiple_words = len(query_lower.split()) >= 2
+        if has_digits and (has_street_suffix or has_multiple_words):
+            return True
+        
+        return False
+    except Exception as e:
+        print(f"[DEBUG is_address_query] ERROR: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return False
+
+def normalize_address_number(number_str: str) -> str:
+    """
+    Normalize address numbers to handle different formats.
+    Examples: "111-H" -> "111h", "111 H" -> "111h", "111H" -> "111h"
+    """
+    if not number_str:
+        return ""
+    import re
+    # Remove spaces and hyphens, convert to lowercase
+    normalized = re.sub(r'[-\s]+', '', number_str.lower())
+    return normalized
+
+def address_matches(query: str, address: str) -> Dict[str, Any]:
+    """
+    Check if a listing's address matches the query.
+    Returns a dict with:
+    - match: bool (if there's any match)
+    - exact_match: bool (if there's an exact match)
+    - partial_match: bool (if there's a partial match)
+    - match_score: float (0.0 to 1.0, higher is better)
+    """
+    if not query or not address:
+        return {'match': False, 'exact_match': False, 'partial_match': False, 'match_score': 0.0}
+    
+    query_lower = query.strip().lower()
+    address_lower = address.strip().lower()
+    
+    # Exact match (case-insensitive)
+    if query_lower == address_lower:
+        return {'match': True, 'exact_match': True, 'partial_match': False, 'match_score': 1.0}
+    
+    # Normalize both query and address for comparison (handle spaces, hyphens, etc.)
+    # Remove punctuation and normalize spacing
+    import re
+    query_normalized = re.sub(r'[^\w\s]', '', query_lower).strip()
+    address_normalized = re.sub(r'[^\w\s]', '', address_lower).strip()
+    
+    # Check if normalized query matches normalized address
+    if query_normalized == address_normalized:
+        return {'match': True, 'exact_match': True, 'partial_match': False, 'match_score': 1.0}
+    
+    # Check if query is contained in address (normalized)
+    if query_normalized in address_normalized:
+        # Calculate score based on how much of the address matches
+        match_ratio = len(query_normalized) / len(address_normalized) if address_normalized else 0
+        return {'match': True, 'exact_match': False, 'partial_match': True, 'match_score': 0.8 + (match_ratio * 0.2)}
+    
+    # Extract words and numbers from query and address
+    query_words = re.findall(r'[a-z]+', query_lower)
+    query_numbers = re.findall(r'\d+[-\w]*', query_lower)
+    
+    address_words = re.findall(r'[a-z]+', address_lower)
+    address_numbers = re.findall(r'\d+[-\w]*', address_lower)
+    
+    # Normalize numbers for comparison (handle "111-H" vs "111 H" vs "111H")
+    query_numbers_normalized = [normalize_address_number(n) for n in query_numbers]
+    address_numbers_normalized = [normalize_address_number(n) for n in address_numbers]
+    
+    # Check word matches
+    matching_words = set(query_words) & set(address_words)
+    matching_numbers = set(query_numbers_normalized) & set(address_numbers_normalized)
+    
+    if matching_words or matching_numbers:
+        # Calculate match score
+        word_score = len(matching_words) / len(query_words) if query_words else 0
+        number_score = len(matching_numbers) / len(query_numbers_normalized) if query_numbers_normalized else 0
+        
+        # If we have both words and numbers, prefer matches with both
+        if matching_words and matching_numbers:
+            match_score = 0.9 * word_score + 0.1 * number_score
+            # If both street name AND number match, this is a strong match
+            if word_score >= 0.8 and number_score >= 0.8:
+                return {'match': True, 'exact_match': False, 'partial_match': True, 'match_score': 0.95}
+        elif matching_words:
+            match_score = 0.7 * word_score
+        else:
+            match_score = 0.5 * number_score
+        
+        return {'match': True, 'exact_match': False, 'partial_match': True, 'match_score': min(match_score, 0.95)}
+    
+    return {'match': False, 'exact_match': False, 'partial_match': False, 'match_score': 0.0}
 
 # Load environment variables
 load_dotenv()
@@ -275,6 +404,11 @@ def search_listings_by_similarity(
     log_timestamp(f"Starting semantic search for query: '{query}' (enhanced: '{enhanced_query}')")
     log_timestamp(f"Query analysis: {query_analysis['requirements']} (complexity: {query_analysis['complexity']})")
     
+    # Check if query is detected as address query (cache result since we call it multiple times)
+    is_address = is_address_query(query)
+    if is_address:
+        log_timestamp(f"✅ Query '{query}' detected as ADDRESS QUERY - will prioritize address matches")
+    
     # Generate embedding for the enhanced search query
     query_embedding = generate_query_embedding(enhanced_query)
     if not query_embedding:
@@ -297,10 +431,18 @@ def search_listings_by_similarity(
         # Calculate similarities and prepare results
         results = []
         doc_count = 0
+        address_match_count = 0
+        exact_address_match_count = 0
+        exact_match_ids = set()  # Track IDs of exact address matches
         for doc in docs:
             doc_count += 1
             listing_data = doc.to_dict()
             listing_id = doc.id
+            listing_address = listing_data.get('address', '')
+            
+            # Debug: log first few addresses when searching for addresses
+            if is_address and doc_count <= 5:
+                log_timestamp(f"  Checking listing {doc_count}: address='{listing_address}'")
             
             # Get the listing embedding
             listing_embedding = listing_data.get('listingEmbedding')
@@ -310,21 +452,45 @@ def search_listings_by_similarity(
             # Calculate similarity score
             similarity_score = cosine_similarity(query_embedding, listing_embedding)
             
-            # Apply dynamic similarity threshold based on query length
-            # Short queries (1-2 words) need lower threshold to return results
-            # Longer, more specific queries can use higher threshold for better relevance
-            query_word_count = len(query.split())
-            if query_word_count <= 1:
-                min_threshold = 0.30  # Single word queries: very low threshold
-            elif query_word_count <= 2:
-                min_threshold = 0.35  # Two word queries: low threshold
-            elif query_word_count <= 4:
-                min_threshold = 0.40  # Medium queries (3-4 words): standard threshold
-            else:
-                min_threshold = 0.45  # Longer, specific queries (5+ words): higher threshold for relevance
+            # Check for address matches and boost accordingly (before threshold checks)
+            address_boost = 0.0
+            is_address_match = False
+            if is_address:
+                listing_address = listing_data.get('address', '')
+                if listing_address:
+                    address_match_info = address_matches(query, listing_address)
+                    if address_match_info['match']:
+                        is_address_match = True
+                        if address_match_info['exact_match']:
+                            # Exact address match gets a huge boost to ensure it's at the top
+                            address_boost = 0.5
+                            exact_address_match_count += 1
+                            exact_match_ids.add(listing_id)
+                            log_timestamp(f"🎯 Exact address match: query='{query}' matches address='{listing_address}' (boost: +{address_boost})")
+                        elif address_match_info['partial_match']:
+                            # Partial match gets a significant boost based on match quality
+                            address_boost = 0.3 * address_match_info['match_score']
+                            log_timestamp(f"📍 Partial address match: query='{query}' matches address='{listing_address}' (score: {address_match_info['match_score']:.2f}, boost: +{address_boost:.2f})")
+                        similarity_score += address_boost
+                        address_match_count += 1
             
-            if similarity_score < min_threshold:
-                continue
+            # For address matches, bypass similarity threshold entirely - always include them
+            if not is_address_match:
+                # Apply dynamic similarity threshold based on query length
+                # Short queries (1-2 words) need lower threshold to return results
+                # Longer, more specific queries can use higher threshold for better relevance
+                query_word_count = len(query.split())
+                if query_word_count <= 1:
+                    min_threshold = 0.30  # Single word queries: very low threshold
+                elif query_word_count <= 2:
+                    min_threshold = 0.35  # Two word queries: low threshold
+                elif query_word_count <= 4:
+                    min_threshold = 0.40  # Medium queries (3-4 words): standard threshold
+                else:
+                    min_threshold = 0.45  # Longer, specific queries (5+ words): higher threshold for relevance
+                
+                if similarity_score < min_threshold:
+                    continue
             
             # For queries with specific requirements, check if listing meets them
             if query_analysis['requirements'] and not listing_meets_requirements(listing_data, query_analysis['requirements']):
@@ -358,6 +524,7 @@ def search_listings_by_similarity(
                 similarity_score += requirement_boost
             
             # Add listing data with boosted similarity score
+            # Address boost was already applied before threshold checks
             result = {
                 'id': listing_id,
                 'similarity_score': similarity_score,
@@ -366,9 +533,20 @@ def search_listings_by_similarity(
             results.append(result)
         
         log_timestamp(f"Processed {doc_count} documents from Firestore")
+        if is_address:
+            log_timestamp(f"📊 Address search stats: {exact_address_match_count} exact matches, {address_match_count} total address matches")
         
         # Sort by similarity score (highest first)
         results.sort(key=lambda x: x['similarity_score'], reverse=True)
+        
+        # For exact address matches, limit results to only matching listings (or top 5 if multiple exact matches)
+        # This provides a better UX when searching for a specific address
+        if is_address and exact_address_match_count > 0:
+            # Filter to only exact address matches
+            exact_matches = [r for r in results if r.get('id') in exact_match_ids]
+            if exact_matches:
+                log_timestamp(f"🎯 Limiting results to {len(exact_matches)} exact address match(es) (out of {len(results)} total)")
+                results = exact_matches[:5]  # Max 5 exact matches (in case of duplicate addresses)
         
         # For very short single-word queries, supplement with text-based matching if results are sparse
         query_word_count = len(query.split())
@@ -583,6 +761,11 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
         log_timestamp(f"Starting filtered AI search for query: '{query}' with filters: {filters}, limit: {limit}")
         log_timestamp(f"Filter details - floor: {filters.get('floor') if filters else None}, bedrooms: {filters.get('bedrooms') if filters else None}, price range: {filters.get('minPrice') if filters else None}-{filters.get('maxPrice') if filters else None}")
         
+        # Check if query is detected as address query (cache result since we call it multiple times)
+        is_address = is_address_query(query)
+        if is_address:
+            log_timestamp(f"✅ Query '{query}' detected as ADDRESS QUERY - will prioritize address matches")
+        
         # First, get all listings that match the structured filters
         filtered_listings = []
         
@@ -690,6 +873,12 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
             log_timestamp(f"❌ No listings passed structured filters, returning empty results")
             return []
         
+        # If query is empty or only whitespace, just return filtered listings without semantic search
+        if not query or not query.strip():
+            log_timestamp(f"Query is empty, returning {len(filtered_listings)} filtered listings without semantic search")
+            # Return filtered listings (sorted by date or whatever default sorting)
+            return filtered_listings[:limit]
+        
         # Generate query embedding
         query_embedding = generate_query_embedding(query)
         if not query_embedding:
@@ -777,28 +966,52 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
             listings_with_embeddings += 1
             
             similarity_score = cosine_similarity(query_embedding, listing_embedding)
+            
+            # Check for address matches and boost accordingly (before threshold checks)
+            address_boost = 0.0
+            is_address_match = False
+            if is_address:
+                listing_address = listing.get('address', '')
+                if listing_address:
+                    address_match_info = address_matches(query, listing_address)
+                    if address_match_info['match']:
+                        is_address_match = True
+                        if address_match_info['exact_match']:
+                            # Exact address match gets a huge boost to ensure it's at the top
+                            address_boost = 0.5
+                            log_timestamp(f"🎯 Exact address match: query='{query}' matches address='{listing_address}' (boost: +{address_boost})")
+                        elif address_match_info['partial_match']:
+                            # Partial match gets a significant boost based on match quality
+                            address_boost = 0.3 * address_match_info['match_score']
+                            log_timestamp(f"📍 Partial address match: query='{query}' matches address='{listing_address}' (score: {address_match_info['match_score']:.2f}, boost: +{address_boost:.2f})")
+                        similarity_score += address_boost
+            
             similarity_scores.append(similarity_score)
             
-            # For small filtered sets with relative ranking, be very lenient initially
-            # For simple queries, use a very low threshold to allow percentile filtering to work
-            # For specific queries, use a slightly higher threshold
-            if use_relative_ranking:
-                # With relative ranking, use very lenient initial threshold
-                # The percentile filtering later will do the actual filtering
-                absolute_min_threshold = 0.15 if query_word_count <= 2 else 0.20
-            else:
-                # Without relative ranking, use normal thresholds
-                absolute_min_threshold = 0.20 if query_word_count <= 2 else 0.25
-            if similarity_score < absolute_min_threshold:
-                continue
-            
-            # For non-relative ranking (larger sets), use the query-length-based threshold
-            if not use_relative_ranking and similarity_score < min_threshold:
-                continue
+            # For address matches, bypass similarity thresholds entirely - always include them
+            if not is_address_match:
+                # For small filtered sets with relative ranking, be very lenient initially
+                # For simple queries, use a very low threshold to allow percentile filtering to work
+                # For specific queries, use a slightly higher threshold
+                if use_relative_ranking:
+                    # With relative ranking, use very lenient initial threshold
+                    # The percentile filtering later will do the actual filtering
+                    absolute_min_threshold = 0.15 if query_word_count <= 2 else 0.20
+                else:
+                    # Without relative ranking, use normal thresholds
+                    absolute_min_threshold = 0.20 if query_word_count <= 2 else 0.25
+                if similarity_score < absolute_min_threshold:
+                    continue
+                
+                # For non-relative ranking (larger sets), use the query-length-based threshold
+                if not use_relative_ranking and similarity_score < min_threshold:
+                    continue
             
             # For simple queries (1-2 words), require keyword matching - the word must appear in the listing
             # This ensures we don't return irrelevant results even if similarity is high
-            if query_word_count <= 2:
+            # Skip common words that don't add value (like "apartment" which appears in almost all listings)
+            # BUT: Skip keyword matching for address matches (they're already matched by address)
+            if query_word_count <= 2 and not is_address_match:
                 query_lower = query.lower().strip()
                 listing_text = (
                     listing.get('description', '') + ' ' + 
@@ -806,19 +1019,29 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
                     listing.get('address', '')
                 ).lower()
                 
-                # Check if the query word(s) appear in the listing
-                query_words = [w.strip() for w in query_lower.split() if len(w.strip()) > 0]
-                matches = sum(1 for word in query_words if word in listing_text)
+                # Common words that don't add value as filters (skip these)
+                common_words = {'apartment', 'apartments', 'flat', 'flats', 'house', 'property', 'listing', 'home', 'place'}
                 
-                # For single word queries, require the word to appear
-                # For two word queries, require at least one word to appear
-                if query_word_count == 1 and matches == 0:
-                    continue  # Skip listings that don't contain the word
-                elif query_word_count == 2 and matches == 0:
-                    continue  # Skip listings that don't contain either word
+                # Check if the query word(s) appear in the listing
+                query_words = [w.strip() for w in query_lower.split() if len(w.strip()) > 0 and w.strip() not in common_words]
+                
+                # If all words were common words, don't apply keyword filtering
+                if len(query_words) == 0:
+                    # All words were common, don't filter by keywords
+                    pass
+                else:
+                    matches = sum(1 for word in query_words if word in listing_text)
+                    
+                    # For single word queries, require the word to appear (if it's not a common word)
+                    # For two word queries, require at least one meaningful word to appear
+                    if query_word_count == 1 and matches == 0:
+                        continue  # Skip listings that don't contain the meaningful word
+                    elif query_word_count == 2 and matches == 0:
+                        continue  # Skip listings that don't contain either meaningful word
             
             # For longer, specific queries, also require some keyword matching to ensure relevance
-            if query_word_count >= 5:
+            # BUT: Skip keyword matching for address matches (they're already matched by address)
+            if query_word_count >= 5 and not is_address_match:
                 # Check if listing mentions at least some key terms from the query
                 query_lower = query.lower()
                 listing_text = (

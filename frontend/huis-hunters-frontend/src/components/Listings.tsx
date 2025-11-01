@@ -10,6 +10,7 @@ import 'rc-slider/assets/index.css';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 import { parseKMLNeighborhoods } from '../utils/neighborhoodParser';
+import { extractFiltersFromQuery } from '../utils/queryFilterExtractor';
 
 const Listings = () => {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -172,19 +173,84 @@ const Listings = () => {
   }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, setSearchParams, searchParams]);
 
   // Separate function for updating URL with search query
-  const updateURLWithSearch = useCallback((query: string) => {
-    const params = new URLSearchParams();
-    if (sortOrder !== 'date-new-old') params.set('sort', sortOrder);
-    if (priceRange.min !== 400000) params.set('minPrice', priceRange.min.toString());
-    if (priceRange.max !== 1250000) params.set('maxPrice', priceRange.max.toString());
-    if (bedrooms !== '1+') params.set('bedrooms', bedrooms);
-    if (floorLevel !== 'any') params.set('floor', floorLevel);
-    if (selectedOutdoorSpaces.length > 0) params.set('outdoor', selectedOutdoorSpaces.join(','));
-    if (minSize) params.set('minSize', minSize);
-    if (selectedAreas.length > 0) params.set('areas', selectedAreas.join(','));
-    if (query) params.set('search', query);
+  const updateURLWithSearch = useCallback((query: string, overrideFilters?: {
+    priceRange?: { min: number; max: number };
+    bedrooms?: string;
+    floorLevel?: string;
+    outdoor?: string[];
+    minSize?: string;
+    areas?: string[];
+  }) => {
+    // Start with current URL params to preserve other params, then modify
+    const params = new URLSearchParams(searchParams);
+    const filtersToUse = overrideFilters || {
+      priceRange,
+      bedrooms,
+      floorLevel,
+      outdoor: selectedOutdoorSpaces,
+      minSize,
+      areas: selectedAreas
+    };
+    
+    // Update all params based on current values
+    if (sortOrder !== 'date-new-old') {
+      params.set('sort', sortOrder);
+    } else {
+      params.delete('sort');
+    }
+    
+    if (filtersToUse.priceRange) {
+      if (filtersToUse.priceRange.min !== 400000) {
+        params.set('minPrice', filtersToUse.priceRange.min.toString());
+      } else {
+        params.delete('minPrice');
+      }
+      if (filtersToUse.priceRange.max !== 1250000) {
+        params.set('maxPrice', filtersToUse.priceRange.max.toString());
+      } else {
+        params.delete('maxPrice');
+      }
+    }
+    
+    if (filtersToUse.bedrooms && filtersToUse.bedrooms !== '1+') {
+      params.set('bedrooms', filtersToUse.bedrooms);
+    } else {
+      params.delete('bedrooms');
+    }
+    
+    if (filtersToUse.floorLevel && filtersToUse.floorLevel !== 'any') {
+      params.set('floor', filtersToUse.floorLevel);
+    } else {
+      params.delete('floor');
+    }
+    
+    if (filtersToUse.outdoor && filtersToUse.outdoor.length > 0) {
+      params.set('outdoor', filtersToUse.outdoor.join(','));
+    } else {
+      params.delete('outdoor');
+    }
+    
+    if (filtersToUse.minSize) {
+      params.set('minSize', filtersToUse.minSize);
+    } else {
+      params.delete('minSize');
+    }
+    
+    if (filtersToUse.areas && filtersToUse.areas.length > 0) {
+      params.set('areas', filtersToUse.areas.join(','));
+    } else {
+      params.delete('areas');
+    }
+    
+    // Handle search parameter - explicitly add or remove
+    if (query && query.trim()) {
+      params.set('search', query.trim());
+    } else {
+      params.delete('search'); // Explicitly remove search parameter
+    }
+    
     setSearchParams(params, { replace: true });
-  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, setSearchParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, setSearchParams, searchParams]);
 
   // AI Search function
   const performAISearch = useCallback(async (query: string) => {
@@ -196,10 +262,94 @@ const Listings = () => {
       return;
     }
     
-    if (!query.trim() || query.trim().length < 3) {
-      console.log('Query too short, clearing results');
-      setSearchResults([]);
-      setUseAISearch(false);
+    // Extract filters from query FIRST
+    // Pass available neighborhoods for matching
+    const extractedFilters = extractFiltersFromQuery(query, allNeighborhoods);
+    console.log('Extracted filters from query:', extractedFilters);
+    
+    // Use cleaned query for search (without filter terms)
+    const cleanedQuery = extractedFilters.cleanedQuery.trim();
+    
+    console.log('Original query:', query);
+    console.log('Cleaned query:', cleanedQuery);
+    
+    // Check if we have a valid search query after filter extraction
+    // If no cleaned query and no filters extracted, check original query length
+    if (!cleanedQuery && !extractedFilters.bedrooms && !extractedFilters.floor && (!extractedFilters.outdoor || extractedFilters.outdoor.length === 0)) {
+      // No filters extracted, check original query length
+      if (!query.trim() || query.trim().length < 3) {
+        console.log('Query too short, clearing results');
+        setSearchResults([]);
+        setUseAISearch(false);
+        return;
+      }
+    }
+    
+    // Apply extracted filters to state
+    let filtersChanged = false;
+    
+    if (extractedFilters.bedrooms) {
+      // Map extracted bedroom value to our format
+      // Dropdown expects: "any", "1+", "2+", "3+", "4+"
+      const bedroomValue = extractedFilters.bedrooms;
+      let newBedrooms: string;
+      if (bedroomValue === '1') {
+        newBedrooms = '1+';
+      } else if (bedroomValue === '2') {
+        newBedrooms = '2+';
+      } else if (bedroomValue === '3') {
+        newBedrooms = '3+';
+      } else if (bedroomValue === '4') {
+        newBedrooms = '4+';
+      } else if (bedroomValue === '5') {
+        // No 5+ option, use 4+ as max
+        newBedrooms = '4+';
+      } else {
+        // Default to 1+ for other values
+        newBedrooms = '1+';
+      }
+      if (newBedrooms !== bedrooms) {
+        setBedrooms(newBedrooms);
+        filtersChanged = true;
+      }
+    }
+    
+    if (extractedFilters.floor) {
+      if (extractedFilters.floor !== floorLevel) {
+        setFloorLevel(extractedFilters.floor);
+        filtersChanged = true;
+      }
+    }
+    
+    if (extractedFilters.outdoor && extractedFilters.outdoor.length > 0) {
+      // Merge with existing outdoor spaces (don't override, just add)
+      const newOutdoor = Array.from(new Set([...selectedOutdoorSpaces, ...extractedFilters.outdoor]));
+      if (JSON.stringify(newOutdoor.sort()) !== JSON.stringify(selectedOutdoorSpaces.sort())) {
+        setSelectedOutdoorSpaces(newOutdoor);
+        filtersChanged = true;
+      }
+    }
+    
+    if (extractedFilters.areas && extractedFilters.areas.length > 0) {
+      // Merge with existing areas (don't override, just add)
+      const newAreas = Array.from(new Set([...selectedAreas, ...extractedFilters.areas]));
+      if (JSON.stringify(newAreas.sort()) !== JSON.stringify(selectedAreas.sort())) {
+        setSelectedAreas(newAreas);
+        filtersChanged = true;
+      }
+    }
+    
+    // Use cleaned query for search (without filter terms)
+    // If cleaned query is empty or only contains common words, use empty string
+    // This allows searching with just filters (no semantic search, just filter results)
+    const searchQueryToUse = cleanedQuery && cleanedQuery.trim() ? cleanedQuery.trim() : '';
+    
+    console.log('Filters changed:', filtersChanged);
+    console.log('Search query to use:', searchQueryToUse);
+    
+    // If no cleaned query and no filters changed, can't search
+    if (!searchQueryToUse && !filtersChanged) {
+      console.log('No search query after filter extraction and no filters changed');
       return;
     }
 
@@ -207,34 +357,62 @@ const Listings = () => {
     searchInProgressRef.current = true;
     setIsSearching(true);
     
+    // Use current filter state (which may have been updated above)
+    // But we need to use the updated values, so we'll re-read them after a brief delay
+    // Actually, React state updates are async, so we'll use the extracted filters directly
+    const effectiveBedrooms = extractedFilters.bedrooms 
+      ? (extractedFilters.bedrooms === '1' ? '1+' : 
+         extractedFilters.bedrooms === '2' ? '2+' : 
+         extractedFilters.bedrooms === '3' ? '3+' :
+         extractedFilters.bedrooms === '4' ? '4+' :
+         extractedFilters.bedrooms === '5' ? '4+' : // Max is 4+
+         '1+')
+      : bedrooms;
+    const effectiveFloor = extractedFilters.floor || floorLevel;
+    const effectiveOutdoor = extractedFilters.outdoor && extractedFilters.outdoor.length > 0
+      ? Array.from(new Set([...selectedOutdoorSpaces, ...extractedFilters.outdoor]))
+      : selectedOutdoorSpaces;
+    const effectiveAreas = extractedFilters.areas && extractedFilters.areas.length > 0
+      ? Array.from(new Set([...selectedAreas, ...extractedFilters.areas]))
+      : selectedAreas;
+    
     // Convert bedroom filter to numeric value for backend compatibility
-    const bedroomFilter = bedrooms === 'any' ? 'any' : 
-                         bedrooms === '1+' ? '1' :
-                         bedrooms === '2+' ? '2' : 
-                         bedrooms;
+    // Backend expects '1', '2', '3', '4', '5', or 'any', not '1+', '2+', etc.
+    const bedroomFilter = effectiveBedrooms === 'any' ? 'any' : 
+                         effectiveBedrooms === '1+' ? '1' :
+                         effectiveBedrooms === '2+' ? '2' : 
+                         effectiveBedrooms === '3+' ? '3' :
+                         effectiveBedrooms === '4+' ? '4' :
+                         effectiveBedrooms === '5+' ? '5' :
+                         // If it's already a number without '+', use it
+                         effectiveBedrooms;
     
     // Check if any filters are active (not default values)
-    const hasActiveFilters = bedrooms !== '1+' || 
+    const hasActiveFilters = effectiveBedrooms !== '1+' || 
                             priceRange.min !== 400000 || 
                             priceRange.max !== 1250000 || 
-                            floorLevel !== 'any' || 
-                            selectedOutdoorSpaces.length > 0 || 
+                            effectiveFloor !== 'any' || 
+                            effectiveOutdoor.length > 0 || 
                             minSize !== '' || 
-                            selectedAreas.length > 0;
+                            effectiveAreas.length > 0;
     
     const requestBody = {
-      query: query.trim(),
+      query: searchQueryToUse,
       limit: 100,
       filters: {
         minPrice: priceRange.min,
         maxPrice: priceRange.max,
         bedrooms: bedroomFilter,
-        floor: floorLevel,
-        outdoor: selectedOutdoorSpaces,
+        floor: effectiveFloor,
+        outdoor: effectiveOutdoor,
         minSize: minSize,
-        areas: selectedAreas
+        areas: effectiveAreas
       },
-      search_type: hasActiveFilters ? 'filtered' : 'semantic'
+      // If we have filters but no search query, use 'filtered' type (just filters, no search)
+      // If we have a search query, use appropriate search type based on filters
+      search_type: searchQueryToUse 
+        ? (hasActiveFilters ? 'filtered' : 'semantic')
+        : (hasActiveFilters ? 'filtered' : 'semantic') // If no query but filters exist, use filtered
     };
     
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
@@ -319,8 +497,48 @@ const Listings = () => {
       setSearchResults(formattedResults);
       setUseAISearch(true);
       
-      // Update URL with search query after successful search
-      updateURLWithSearch(query.trim());
+      // Keep the original query in the search input field for user visibility
+      // Only use cleaned query for actual search and URL
+      // Don't update searchQuery state - let user see what they typed
+      
+      // Update URL with cleaned search query and extracted filters after successful search
+      // Note: Filter state updates will trigger URL update via updateURLParams effect
+      // But we need to update search query in URL
+      const params = new URLSearchParams();
+      if (sortOrder !== 'date-new-old') params.set('sort', sortOrder);
+      if (priceRange.min !== 400000) params.set('minPrice', priceRange.min.toString());
+      if (priceRange.max !== 1250000) params.set('maxPrice', priceRange.max.toString());
+      
+      // Use effective values (extracted or existing)
+      const finalBedrooms = extractedFilters.bedrooms 
+        ? (extractedFilters.bedrooms === '1' ? '1+' : 
+           extractedFilters.bedrooms === '2' ? '2+' : 
+           extractedFilters.bedrooms === '3' ? '3+' :
+           extractedFilters.bedrooms === '4' ? '4+' :
+           extractedFilters.bedrooms === '5' ? '4+' : // Max is 4+
+           '1+')
+        : bedrooms;
+      const finalFloor = extractedFilters.floor || floorLevel;
+      const finalOutdoor = extractedFilters.outdoor && extractedFilters.outdoor.length > 0
+        ? Array.from(new Set([...selectedOutdoorSpaces, ...extractedFilters.outdoor]))
+        : selectedOutdoorSpaces;
+      const finalAreas = extractedFilters.areas && extractedFilters.areas.length > 0
+        ? Array.from(new Set([...selectedAreas, ...extractedFilters.areas]))
+        : selectedAreas;
+      
+      if (finalBedrooms !== '1+') params.set('bedrooms', finalBedrooms);
+      if (finalFloor !== 'any') params.set('floor', finalFloor);
+      if (finalOutdoor.length > 0) params.set('outdoor', finalOutdoor.join(','));
+      if (minSize) params.set('minSize', minSize);
+      if (finalAreas.length > 0) params.set('areas', finalAreas.join(','));
+      // Only add search query to URL if it's not empty after cleanup
+      // Keep the original query in the input field for user visibility
+      // Always add search query if it exists, even if short (backend will handle it)
+      if (searchQueryToUse && searchQueryToUse.trim()) {
+        params.set('search', searchQueryToUse.trim());
+      }
+      
+      setSearchParams(params, { replace: true });
     } catch (error) {
       console.error('AI Search error:', error);
       setSearchResults([]);
@@ -888,10 +1106,29 @@ const Listings = () => {
                       variant="outline-secondary"
                       size="sm"
                       onClick={() => {
+                        // Clear search
                         setSearchQuery('');
                         setUseAISearch(false);
                         setSearchResults([]);
-                        updateURLWithSearch('');
+                        
+                        // Also clear all filters (matching "Clear Filters" button behavior)
+                        const clearedFilters = {
+                          priceRange: { min: 400000, max: 1250000 },
+                          bedrooms: '1+',
+                          floorLevel: 'any',
+                          outdoor: [],
+                          minSize: '',
+                          areas: []
+                        };
+                        setPriceRange(clearedFilters.priceRange);
+                        setBedrooms(clearedFilters.bedrooms);
+                        setFloorLevel(clearedFilters.floorLevel);
+                        setSelectedOutdoorSpaces(clearedFilters.outdoor);
+                        setMinSize(clearedFilters.minSize);
+                        setSelectedAreas(clearedFilters.areas);
+                        
+                        // Update URL with cleared search and filters (pass explicit values to ensure they're used)
+                        updateURLWithSearch('', clearedFilters);
                       }}
                       style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                     >
