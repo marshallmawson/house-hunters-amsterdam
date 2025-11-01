@@ -10,7 +10,7 @@ import CalendarIcon from './icons/CalendarIcon';
 import LayersIcon from './icons/LayersIcon';
 import { BuildingIcon } from './icons/BuildingIcon';
 import { GlobeIcon } from './icons/GlobeIcon';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -62,9 +62,11 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   const [noteText, setNoteText] = useState('');
   const hasHandledForceOpen = useRef(false);
   const clickedImageIndex = useRef(0);
+  const originalSearchParamsRef = useRef<string>(''); // Store original search params when opening modal
   
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { currentUser } = useAuth();
   const publishedDate = listing.publishedDate ? listing.publishedDate.toDate() : null;
   const outdoorSpaceString = getOutdoorSpaceString(listing);
@@ -80,6 +82,17 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   const mapUrl = listing.coordinates?.lat && listing.coordinates?.lon
     ? `https://maps.google.com/maps?q=${listing.coordinates.lat},${listing.coordinates.lon}&z=15&output=embed`
     : listing.googleMapsUrl;
+
+  // Initialize original search params from URL if modal is opened via URL
+  useEffect(() => {
+    // If we're on a listing page and haven't stored original params yet, use current URL params
+    if (location.pathname.startsWith('/listings/') && !originalSearchParamsRef.current && location.search) {
+      // Extract params but remove the listing ID path - we want the base params
+      // When on listing page, we need to figure out what the original page params were
+      // For now, just store the current params minus any listing-specific ones
+      originalSearchParamsRef.current = location.search;
+    }
+  }, [location.pathname, location.search]);
 
   // Sync noteText with note prop when editing starts
   useEffect(() => {
@@ -197,7 +210,13 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     setIsManualNavigation(false);
     // Only navigate if we're not on the saved properties page
     if (location.pathname !== '/saved-properties') {
-      navigate(`/listings/${listing.id}`);
+      // Store original search params (including search query) before navigation
+      // Use location.search to get the actual URL query string, not searchParams which might be missing params
+      originalSearchParamsRef.current = location.search;
+      // Preserve all current search parameters when navigating to listing
+      // If location.search exists, use it; otherwise construct from searchParams
+      const paramsString = location.search ? location.search.substring(1) : searchParams.toString();
+      navigate(`/listings/${listing.id}${paramsString ? `?${paramsString}` : ''}`);
     }
   };
 
@@ -209,7 +228,9 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     hasHandledForceOpen.current = false;
     // Only navigate back to home if we navigated from home
     if (location.pathname !== '/saved-properties') {
-      navigate(`/`);
+      // Restore original search parameters (including search query) when navigating back
+      // Use the stored original params instead of current params (which might be missing search)
+      navigate(`/${originalSearchParamsRef.current}`);
     }
   };
 

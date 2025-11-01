@@ -6,6 +6,7 @@ from firebase_admin import credentials, firestore
 import vertexai
 from vertexai.language_models import TextEmbeddingModel
 import datetime
+import statistics
 from typing import List, Dict, Any, Optional
 
 def log_timestamp(message):
@@ -14,14 +15,47 @@ def log_timestamp(message):
 # Load environment variables
 load_dotenv()
 
+# Set GOOGLE_APPLICATION_CREDENTIALS if not already set
+if not os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
+    # Try to find firebase-credentials.json relative to this file
+    # From search/ directory, go up 3 levels to reach project root: search/ -> scrape-and-process-listings/ -> backend/ -> root
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # From search/ directory: go up 3 levels to reach project root
+    root_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+    creds_path = os.path.join(root_dir, "firebase-credentials.json")
+    
+    if os.path.exists(creds_path):
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = creds_path
+        log_timestamp(f"Set GOOGLE_APPLICATION_CREDENTIALS to: {creds_path}")
+    else:
+        log_timestamp(f"⚠️ Could not find firebase-credentials.json at: {creds_path}")
+        log_timestamp(f"Current directory: {current_dir}")
+        log_timestamp(f"Calculated root directory: {root_dir}")
+
 # Initialize Firebase (reuse existing app if already initialized)
+db = None
 try:
+    # Check if credentials path is set and valid
+    creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+    if creds_path and not os.path.exists(creds_path):
+        log_timestamp(f"⚠️ Warning: GOOGLE_APPLICATION_CREDENTIALS points to non-existent file: {creds_path}")
+        log_timestamp(f"   Trying to find credentials file automatically...")
+        # Try to find it at the calculated root
+        if not db:  # Only if db not already initialized
+            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            alt_creds_path = os.path.join(root_dir, "firebase-credentials.json")
+            if os.path.exists(alt_creds_path):
+                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = alt_creds_path
+                log_timestamp(f"   Found credentials at: {alt_creds_path}")
+    
     if not firebase_admin._apps:
         firebase_admin.initialize_app()
     db = firestore.client()
     log_timestamp("✅ Firebase initialized for search service.")
 except Exception as e:
     log_timestamp(f"❗️ Error initializing Firebase: {e}")
+    log_timestamp(f"   GOOGLE_APPLICATION_CREDENTIALS: {os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'NOT SET')}")
+    db = None
     # Don't exit, just log the error and continue
 
 # Initialize Vertex AI
@@ -29,9 +63,29 @@ embedding_model = None
 try:
     log_timestamp("Initializing Vertex AI for search service...")
     project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "house-hunters-amsterdam"
+    
+    # Get credentials file path - prefer explicit path, then environment variable, then default
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if not creds_path:
+        # Try to find firebase-credentials.json in common locations
+        if os.path.exists("../firebase-credentials.json"):
+            creds_path = "../firebase-credentials.json"
+        elif os.path.exists("firebase-credentials.json"):
+            creds_path = "firebase-credentials.json"
+        elif os.path.exists(os.path.join(os.path.dirname(__file__), "..", "..", "firebase-credentials.json")):
+            creds_path = os.path.join(os.path.dirname(__file__), "..", "..", "firebase-credentials.json")
+    
+    log_timestamp(f"Using GCP Project ID: {project_id}")
+    if creds_path:
+        log_timestamp(f"Using credentials from: {creds_path}")
+    else:
+        log_timestamp("Using application default credentials")
+    
     if not project_id:
         raise ValueError("GCP_PROJECT_ID not found in environment")
-    vertexai.init(project=project_id)
+    
+    # Initialize Vertex AI with explicit project
+    vertexai.init(project=project_id, location="europe-west4")
     embedding_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
     log_timestamp("✅ Vertex AI initialized successfully for search service.")
 except Exception as e:
@@ -163,6 +217,36 @@ def listing_meets_requirements(listing_data: dict, requirements: list) -> bool:
     
     return True
 
+def check_floor_match(listing_floor: Any, filter_floor: str) -> bool:
+    """
+    Check if a listing's floor matches the filter floor requirement.
+    Handles None/empty values, case variations, and string variations.
+    
+    Args:
+        listing_floor: The apartment floor value from listing (can be string, None, etc.)
+        filter_floor: The filter value ('ground' or 'top')
+    
+    Returns:
+        True if the listing matches the floor filter, False otherwise
+    """
+    if not listing_floor:
+        return False
+    
+    floor_str = str(listing_floor).lower()
+    
+    if filter_floor == 'ground':
+        # Check for ground floor variations
+        return ('ground' in floor_str or 
+                '0' in floor_str or 
+                'begane grond' in floor_str)
+    elif filter_floor == 'top':
+        # Check for top floor variations
+        return ('top' in floor_str or 
+                'upper' in floor_str or
+                floor_str in ['upper', 'top floor', 'upper floor'])
+    
+    return False
+
 def search_listings_by_similarity(
     query: str,
     limit: int = 50,
@@ -179,6 +263,10 @@ def search_listings_by_similarity(
     Returns:
         List of listings ranked by similarity score
     """
+    if not db:
+        log_timestamp("❗️ Firebase not initialized, falling back to text-based search")
+        return text_based_search(query, limit, filters)
+    
     # Analyze query complexity
     query_analysis = analyze_query_complexity(query)
     
@@ -190,16 +278,18 @@ def search_listings_by_similarity(
     # Generate embedding for the enhanced search query
     query_embedding = generate_query_embedding(enhanced_query)
     if not query_embedding:
-        log_timestamp("❗️ Could not generate query embedding")
-        return []
+        log_timestamp("❗️ Could not generate query embedding, falling back to text-based search")
+        # Fall back to text-based search when embeddings aren't available
+        return text_based_search(query, limit, filters)
     
     # Fetch all processed listings from Firestore
     try:
         listings_ref = db.collection('listings')
         
-        # Only apply status filter at database level to avoid composite index requirements
+        # Apply status and available filters at database level
         # All other filters will be applied in memory
         listings_ref = listings_ref.where('status', '==', 'processed')
+        listings_ref = listings_ref.where('available', '==', True)
         
         log_timestamp(f"Fetching listings with filters: {filters}")
         docs = listings_ref.stream()
@@ -220,8 +310,20 @@ def search_listings_by_similarity(
             # Calculate similarity score
             similarity_score = cosine_similarity(query_embedding, listing_embedding)
             
-            # Only include results above a minimum similarity threshold
-            if similarity_score < 0.40:  # Only include results with at least 40% similarity
+            # Apply dynamic similarity threshold based on query length
+            # Short queries (1-2 words) need lower threshold to return results
+            # Longer, more specific queries can use higher threshold for better relevance
+            query_word_count = len(query.split())
+            if query_word_count <= 1:
+                min_threshold = 0.30  # Single word queries: very low threshold
+            elif query_word_count <= 2:
+                min_threshold = 0.35  # Two word queries: low threshold
+            elif query_word_count <= 4:
+                min_threshold = 0.40  # Medium queries (3-4 words): standard threshold
+            else:
+                min_threshold = 0.45  # Longer, specific queries (5+ words): higher threshold for relevance
+            
+            if similarity_score < min_threshold:
                 continue
             
             # For queries with specific requirements, check if listing meets them
@@ -268,6 +370,30 @@ def search_listings_by_similarity(
         # Sort by similarity score (highest first)
         results.sort(key=lambda x: x['similarity_score'], reverse=True)
         
+        # For very short single-word queries, supplement with text-based matching if results are sparse
+        query_word_count = len(query.split())
+        if query_word_count == 1 and len(results) < 10:
+            log_timestamp(f"Single-word query with sparse results ({len(results)}), supplementing with text-based matches")
+            
+            # Get text-based matches for the same query
+            text_results = text_based_search(query, limit=limit, filters=filters)
+            
+            # Merge text results with semantic results
+            # Create a set of already-seen listing IDs
+            seen_ids = {result['id'] for result in results}
+            
+            # Add text results that aren't already in semantic results
+            for text_result in text_results:
+                if text_result['id'] not in seen_ids:
+                    # Convert text_score to similarity_score format for consistency
+                    text_result['similarity_score'] = text_result.get('text_score', 0) * 0.5  # Scale down text scores
+                    results.append(text_result)
+                    seen_ids.add(text_result['id'])
+            
+            # Re-sort by similarity score
+            results.sort(key=lambda x: x['similarity_score'], reverse=True)
+            log_timestamp(f"After text-based supplementation: {len(results)} total results")
+        
         # Limit results
         results = results[:limit]
         
@@ -297,20 +423,38 @@ def passes_filters(listing_data: Dict[str, Any], filters: Dict[str, Any]) -> boo
             apartment_floor = listing_data.get('apartmentFloor')
             floor_filter = filters['floor']
             
-            if floor_filter == 'ground' and apartment_floor != 'Ground':
-                return False
-            elif floor_filter == 'top' and apartment_floor not in ['Upper', 'Top floor', 'Upper floor']:
+            if not check_floor_match(apartment_floor, floor_filter):
                 return False
         
-        # Outdoor space
+        # Outdoor space - handle both array and single string formats
         if 'outdoor' in filters and filters['outdoor'] != 'any':
             outdoor_filter = filters['outdoor']
-            if outdoor_filter == 'garden' and not listing_data.get('hasGarden'):
-                return False
-            elif outdoor_filter == 'rooftop' and not listing_data.get('hasRooftopTerrace'):
-                return False
-            elif outdoor_filter == 'balcony' and not listing_data.get('hasBalcony'):
-                return False
+            
+            # Handle array format (OR logic: any selected outdoor space matches)
+            if isinstance(outdoor_filter, list) and len(outdoor_filter) > 0:
+                has_garden = listing_data.get('hasGarden', False)
+                has_rooftop = listing_data.get('hasRooftopTerrace', False)
+                has_balcony = listing_data.get('hasBalcony', False)
+                
+                # Check if ANY selected outdoor space matches (OR logic)
+                matches = False
+                if 'garden' in outdoor_filter and has_garden:
+                    matches = True
+                if 'rooftop' in outdoor_filter and has_rooftop:
+                    matches = True
+                if 'balcony' in outdoor_filter and has_balcony:
+                    matches = True
+                
+                if not matches:
+                    return False
+            # Handle single string format (backward compatibility)
+            else:
+                if outdoor_filter == 'garden' and not listing_data.get('hasGarden'):
+                    return False
+                elif outdoor_filter == 'rooftop' and not listing_data.get('hasRooftopTerrace'):
+                    return False
+                elif outdoor_filter == 'balcony' and not listing_data.get('hasBalcony'):
+                    return False
         
         # Minimum size
         if 'minSize' in filters and filters['minSize']:
@@ -331,15 +475,19 @@ def passes_filters(listing_data: Dict[str, Any], filters: Dict[str, Any]) -> boo
 
 def text_based_search(query: str, limit: int = 50, filters: Optional[Dict] = None) -> List[Dict]:
     """Fallback text-based search when embeddings aren't available"""
+    if not db:
+        log_timestamp("❗️ Firebase not initialized, cannot perform text-based search")
+        return []
+    
     try:
         log_timestamp(f"Starting text-based search for query: '{query}'")
         
         # Fetch listings from Firestore
         listings_ref = db.collection('listings')
         
-        # Only apply status filter at database level to avoid composite index requirements
-        # All other filters will be applied in memory
+        # Apply status and available filters at database level
         listings_ref = listings_ref.where('status', '==', 'processed')
+        listings_ref = listings_ref.where('available', '==', True)
         
         log_timestamp(f"Fetching listings with filters: {filters}")
         docs = listings_ref.stream()
@@ -392,11 +540,17 @@ def text_based_search(query: str, limit: int = 50, filters: Optional[Dict] = Non
             word_coverage = word_matches / len(query_words) if query_words else 0
             
             # More intuitive matching logic:
-            # - For 1-2 words: require 100% match (all words)
+            # - For 1 word: require 100% match (the 1 word)
+            # - For 2 words: require 100% match (both words)
             # - For 3-4 words: require 75% match (3 out of 4)
             # - For 5+ words: require 60% match (3 out of 5)
             min_word_coverage = 1.0 if len(query_words) <= 2 else (0.75 if len(query_words) <= 4 else 0.6)
-            min_word_matches = max(2, int(len(query_words) * min_word_coverage))  # At least 2 words must match
+            min_word_matches = int(len(query_words) * min_word_coverage)
+            # For single-word queries, allow 1 match; for multi-word, require at least the calculated minimum
+            
+            # Apply filters if provided (must pass both text matching AND filters)
+            if filters and not passes_filters(listing_data, filters):
+                continue
             
             if relevance_score > 0.1 and word_matches >= min_word_matches:
                 result = {
@@ -421,8 +575,13 @@ def text_based_search(query: str, limit: int = 50, filters: Optional[Dict] = Non
 
 def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters: Optional[Dict] = None) -> List[Dict]:
     """Apply structured filters first, then run AI search on filtered results"""
+    if not db:
+        log_timestamp("❗️ Firebase not initialized, cannot perform filtered search")
+        return []
+    
     try:
         log_timestamp(f"Starting filtered AI search for query: '{query}' with filters: {filters}, limit: {limit}")
+        log_timestamp(f"Filter details - floor: {filters.get('floor') if filters else None}, bedrooms: {filters.get('bedrooms') if filters else None}, price range: {filters.get('minPrice') if filters else None}-{filters.get('maxPrice') if filters else None}")
         
         # First, get all listings that match the structured filters
         filtered_listings = []
@@ -430,9 +589,10 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
         # Build Firestore query with structured filters
         listings_ref = db.collection('listings')
         
-        # Only apply status filter at database level to avoid composite index requirements
+        # Apply status and available filters at database level
         # All other filters will be applied in memory
         listings_ref = listings_ref.where('status', '==', 'processed')
+        listings_ref = listings_ref.where('available', '==', True)
         
         log_timestamp(f"Fetching listings with structured filters")
         docs = listings_ref.stream()
@@ -471,30 +631,38 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
                     if listing_bedrooms < int(filters['bedrooms']):
                         continue
                 
-                # Apply floor filter
+                # Apply floor filter using helper function for consistency
                 if 'floor' in filters and filters['floor'] != 'any':
-                    if filters['floor'] == 'ground':
-                        floor = str(listing_data.get('apartmentFloor', '')).lower()
-                        if 'ground' not in floor and '0' not in floor and 'begane grond' not in floor:
-                            continue
-                    elif filters['floor'] == 'top':
-                        floor = str(listing_data.get('apartmentFloor', '')).lower()
-                        if 'top' not in floor and 'upper' not in floor:
-                            continue
+                    apartment_floor = listing_data.get('apartmentFloor')
+                    if not check_floor_match(apartment_floor, filters['floor']):
+                        continue
                 
-                # Apply outdoor space filter
+                # Apply outdoor space filter - handle both array and single string formats
                 if 'outdoor' in filters and filters['outdoor'] != 'any':
+                    outdoor_filter = filters['outdoor']
                     has_garden = listing_data.get('hasGarden', False)
                     has_rooftop = listing_data.get('hasRooftopTerrace', False)
                     has_balcony = listing_data.get('hasBalcony', False)
-                    if filters['outdoor'] == 'garden':
-                        if not has_garden:
+                    
+                    # Handle array format (OR logic: any selected outdoor space matches)
+                    if isinstance(outdoor_filter, list) and len(outdoor_filter) > 0:
+                        matches = False
+                        if 'garden' in outdoor_filter and has_garden:
+                            matches = True
+                        if 'rooftop' in outdoor_filter and has_rooftop:
+                            matches = True
+                        if 'balcony' in outdoor_filter and has_balcony:
+                            matches = True
+                        
+                        if not matches:
                             continue
-                    elif filters['outdoor'] == 'rooftop':
-                        if not has_rooftop:
+                    # Handle single string format (backward compatibility)
+                    elif isinstance(outdoor_filter, str):
+                        if outdoor_filter == 'garden' and not has_garden:
                             continue
-                    elif filters['outdoor'] == 'balcony':
-                        if not has_balcony:
+                        elif outdoor_filter == 'rooftop' and not has_rooftop:
+                            continue
+                        elif outdoor_filter == 'balcony' and not has_balcony:
                             continue
                 
                 # Apply minimum size filter
@@ -525,12 +693,83 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
         # Generate query embedding
         query_embedding = generate_query_embedding(query)
         if not query_embedding:
-            log_timestamp(f"❗️ Could not generate query embedding for filtered search, returning empty results")
-            return []
+            log_timestamp(f"❗️ Could not generate query embedding for filtered search, falling back to text-based search")
+            # Fall back to text-based search on filtered listings
+            # We already have filtered_listings, so we'll do text matching on those
+            results = []
+            query_lower = query.lower()
+            query_words = query_lower.split()
+            query_word_count = len(query_words)
+            
+            # Extract meaningful words (skip common stop words)
+            stop_words = {'with', 'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'is', 'are'}
+            meaningful_words = [w for w in query_words if w not in stop_words and len(w) > 2]
+            
+            # For longer queries, require keyword matching
+            # For shorter queries, still require at least 1 meaningful word match
+            min_keyword_matches = 0
+            if query_word_count >= 5:
+                min_keyword_matches = max(1, int(len(meaningful_words) * 0.3))
+            elif query_word_count >= 1 and len(meaningful_words) > 0:
+                # For single-word queries with meaningful words, require at least 1 match
+                min_keyword_matches = 1
+            
+            log_timestamp(f"Text-based fallback: checking {len(filtered_listings)} filtered listings, requiring {min_keyword_matches} keyword matches")
+            
+            for listing in filtered_listings:
+                # Check if query matches any text fields
+                text_to_search = [
+                    listing.get('address', ''),
+                    listing.get('description', ''),
+                    listing.get('embeddingText', ''),
+                    listing.get('area', '')
+                ]
+                combined_text = ' '.join([str(text) for text in text_to_search if text]).lower()
+                
+                # Check keyword matches for meaningful words
+                keyword_matches = sum(1 for word in meaningful_words if word in combined_text)
+                
+                # If we require keyword matches and not enough match, skip
+                if min_keyword_matches > 0 and keyword_matches < min_keyword_matches:
+                    continue
+                
+                # Calculate relevance score
+                word_matches = sum(1 for word in query_words if word in combined_text)
+                if word_matches > 0:
+                    # Boost score for keyword matches
+                    base_score = word_matches / len(query_words) if query_words else 0
+                    keyword_boost = keyword_matches / len(meaningful_words) if meaningful_words else 0
+                    relevance_score = base_score * 0.6 + keyword_boost * 0.4
+                    listing['similarity_score'] = relevance_score
+                    results.append(listing)
+            
+            results.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
+            results = results[:limit]
+            log_timestamp(f"✅ Text-based search on filtered listings found {len(results)} results (required {min_keyword_matches} keyword matches)")
+            return results
         
         # Calculate similarities for filtered listings only
         results = []
         listings_with_embeddings = 0
+        similarity_scores = []  # Track scores for debugging
+        
+        # Apply dynamic similarity threshold based on query length
+        # For filtered searches on small sets, use relative ranking (take top N regardless of absolute threshold)
+        # For larger sets or longer queries, use absolute thresholds
+        query_word_count = len(query.split())
+        use_relative_ranking = len(filtered_listings) <= 50  # For small filtered sets, use relative ranking
+        
+        if query_word_count <= 1:
+            min_threshold = 0.25  # Single word queries: very low threshold (lowered from 0.30)
+        elif query_word_count <= 2:
+            min_threshold = 0.30  # Two word queries: low threshold (lowered from 0.35)
+        elif query_word_count <= 4:
+            min_threshold = 0.40  # Medium queries (3-4 words): standard threshold
+        elif query_word_count <= 6:
+            min_threshold = 0.45  # Longer queries (5-6 words): higher threshold
+        else:
+            min_threshold = 0.48  # Very specific queries (7+ words): very high threshold
+        
         for listing in filtered_listings:
             listing_embedding = listing.get('listingEmbedding')
             if not listing_embedding:
@@ -538,11 +777,67 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
             listings_with_embeddings += 1
             
             similarity_score = cosine_similarity(query_embedding, listing_embedding)
+            similarity_scores.append(similarity_score)
             
-            # Apply dynamic similarity threshold based on query length
-            min_threshold = 0.40 if len(query.split()) <= 2 else 0.45
-            if similarity_score < min_threshold:
+            # For small filtered sets with relative ranking, be very lenient initially
+            # For simple queries, use a very low threshold to allow percentile filtering to work
+            # For specific queries, use a slightly higher threshold
+            if use_relative_ranking:
+                # With relative ranking, use very lenient initial threshold
+                # The percentile filtering later will do the actual filtering
+                absolute_min_threshold = 0.15 if query_word_count <= 2 else 0.20
+            else:
+                # Without relative ranking, use normal thresholds
+                absolute_min_threshold = 0.20 if query_word_count <= 2 else 0.25
+            if similarity_score < absolute_min_threshold:
                 continue
+            
+            # For non-relative ranking (larger sets), use the query-length-based threshold
+            if not use_relative_ranking and similarity_score < min_threshold:
+                continue
+            
+            # For simple queries (1-2 words), require keyword matching - the word must appear in the listing
+            # This ensures we don't return irrelevant results even if similarity is high
+            if query_word_count <= 2:
+                query_lower = query.lower().strip()
+                listing_text = (
+                    listing.get('description', '') + ' ' + 
+                    listing.get('embeddingText', '') + ' ' +
+                    listing.get('address', '')
+                ).lower()
+                
+                # Check if the query word(s) appear in the listing
+                query_words = [w.strip() for w in query_lower.split() if len(w.strip()) > 0]
+                matches = sum(1 for word in query_words if word in listing_text)
+                
+                # For single word queries, require the word to appear
+                # For two word queries, require at least one word to appear
+                if query_word_count == 1 and matches == 0:
+                    continue  # Skip listings that don't contain the word
+                elif query_word_count == 2 and matches == 0:
+                    continue  # Skip listings that don't contain either word
+            
+            # For longer, specific queries, also require some keyword matching to ensure relevance
+            if query_word_count >= 5:
+                # Check if listing mentions at least some key terms from the query
+                query_lower = query.lower()
+                listing_text = (
+                    listing.get('description', '') + ' ' + 
+                    listing.get('embeddingText', '') + ' ' +
+                    listing.get('address', '')
+                ).lower()
+                
+                # Extract meaningful words (skip common words)
+                stop_words = {'with', 'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'is', 'are'}
+                query_words = [w for w in query_lower.split() if w not in stop_words and len(w) > 2]
+                
+                # Require at least 30% of meaningful query words to appear in listing
+                matches = sum(1 for word in query_words if word in listing_text)
+                min_matches = max(1, int(len(query_words) * 0.3))
+                
+                if matches < min_matches:
+                    log_timestamp(f"Skipping listing {listing.get('id')[:8]}... - only {matches}/{len(query_words)} keywords matched (need {min_matches})")
+                    continue
             
             # Add similarity score to result
             result = {
@@ -555,8 +850,138 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
         # Sort by similarity score (highest first)
         results.sort(key=lambda x: x['similarity_score'], reverse=True)
         
-        # Limit results
+        # Log similarity score statistics for debugging
+        if similarity_scores:
+            max_score = max(similarity_scores)
+            min_score = min(similarity_scores)
+            avg_score = sum(similarity_scores) / len(similarity_scores)
+            log_timestamp(f"Similarity scores: min={min_score:.3f}, max={max_score:.3f}, avg={avg_score:.3f}, threshold={min_threshold:.3f}, listings_with_embeddings={listings_with_embeddings}")
+        
+        # For filtered searches with small result sets, use similarity score-based filtering
+        # Adjust threshold based on query complexity and how well results match
+        if use_relative_ranking and len(filtered_listings) <= 50 and results:
+            max_result_score = results[0]['similarity_score'] if results else 0
+            
+            # Calculate scores for percentile analysis
+            scores = [r['similarity_score'] for r in results]
+            scores_sorted = sorted(scores, reverse=True)
+            
+            # Use percentile-based filtering: be more lenient for simple queries, stricter for specific ones
+            # Simple queries like "quiet" should match more listings than specific queries
+            if query_word_count >= 5:
+                # Very specific queries: use top 40th percentile (stricter)
+                percentile_idx = int(len(scores_sorted) * 0.6)  # 40th percentile (top 40%)
+                percentile_idx = max(0, min(percentile_idx, len(scores_sorted) - 1))
+                percentile_threshold = scores_sorted[percentile_idx] if percentile_idx < len(scores_sorted) else scores_sorted[-1]
+            elif query_word_count >= 3:
+                # Medium queries: use top 55th percentile
+                percentile_idx = int(len(scores_sorted) * 0.45)  # 55th percentile (top 55%)
+                percentile_idx = max(0, min(percentile_idx, len(scores_sorted) - 1))
+                percentile_threshold = scores_sorted[percentile_idx] if percentile_idx < len(scores_sorted) else scores_sorted[-1]
+            else:
+                # Simple queries (1-2 words): use top 90th percentile (very lenient)
+                # This allows many more results for general terms like "quiet"
+                # For top 90%, we want to keep 90% of results (filter out bottom 10%)
+                # Scores are sorted descending (highest first)
+                # For 27 scores: keep 90% = keep 24.3 ≈ 24 results
+                # To keep top 24 results, we need threshold at index 23 (0-indexed)
+                # This keeps indices 0-23 (24 results) and filters indices 24-26 (3 results)
+                keep_count = int(len(scores_sorted) * 0.9)  # For 27: keep_count = 24
+                percentile_idx = keep_count - 1  # For 27: idx = 23 (0-indexed, so keeps 24 results)
+                percentile_idx = max(0, min(percentile_idx, len(scores_sorted) - 1))
+                percentile_threshold = scores_sorted[percentile_idx]
+            
+            # Also check if there's a natural gap in scores (standard deviation)
+            # Only apply this for specific queries (not simple ones)
+            if len(scores) > 2 and query_word_count >= 3:
+                std_dev = statistics.stdev(scores) if len(scores) > 1 else 0
+                mean_score = statistics.mean(scores)
+                
+                # For specific queries, if scores are tightly clustered, use a stricter threshold
+                if std_dev > 0:
+                    std_threshold = mean_score - (0.5 * std_dev)
+                    percentile_threshold = max(percentile_threshold, std_threshold)
+            
+            # For longer queries, also require minimum score relative to max
+            # This ensures very specific queries filter more aggressively
+            # For simple queries, be very lenient - don't apply this threshold at all
+            if query_word_count >= 5:
+                max_based_threshold = max_result_score * 0.70  # 70% of max for specific queries
+                percentile_threshold = max(percentile_threshold, max_based_threshold)
+            elif query_word_count >= 3:
+                max_based_threshold = max_result_score * 0.65  # 65% of max for medium queries
+                percentile_threshold = max(percentile_threshold, max_based_threshold)
+            # For simple queries, skip the max-based threshold entirely - only use percentile
+            
+            # For simple queries, use a balanced approach
+            # Use percentile threshold but ensure it's not too strict (use median as fallback)
+            # For specific queries, use the normal absolute minimum threshold
+            if query_word_count <= 2:
+                # Simple queries: use percentile threshold but be reasonable
+                # Use the lower of percentile threshold and median score (whichever is lower)
+                # This ensures we keep more results when scores are clustered
+                median_score = scores_sorted[len(scores_sorted) // 2] if len(scores_sorted) > 1 else scores_sorted[0] if scores_sorted else 0
+                # Use percentile or median, whichever is lower (more lenient)
+                lenient_threshold = min(percentile_threshold, median_score)
+                # But never go below the absolute minimum
+                simple_absolute_min = 0.15
+                effective_threshold = max(lenient_threshold, simple_absolute_min)
+            else:
+                # Specific queries: use the normal absolute minimum threshold
+                effective_threshold = max(percentile_threshold, absolute_min_threshold)
+            
+            # Filter results to only those above effective threshold
+            filtered_results = [r for r in results if r['similarity_score'] >= effective_threshold]
+            
+            median_score = scores_sorted[len(scores_sorted) // 2] if len(scores_sorted) > 1 else scores_sorted[0] if scores_sorted else 0
+            log_timestamp(f"Filtered search: max_score={max_result_score:.3f}, median_score={median_score:.3f}, percentile_threshold={percentile_threshold:.3f}, effective_threshold={effective_threshold:.3f}, query_words={query_word_count}, filtering from {len(results)} to {len(filtered_results)} results")
+            
+            results = filtered_results
+        
+        # Limit results to requested limit
         results = results[:limit]
+        
+        # If no results from similarity search, fall back to text-based search on filtered listings
+        if not results and listings_with_embeddings > 0:
+            log_timestamp(f"No results above threshold {min_threshold}, falling back to text-based search on {len(filtered_listings)} filtered listings")
+            # Use the same text-based fallback logic
+            query_lower = query.lower()
+            query_words = query_lower.split()
+            query_word_count = len(query_words)
+            
+            stop_words = {'with', 'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'is', 'are'}
+            meaningful_words = [w for w in query_words if w not in stop_words and len(w) > 2]
+            
+            min_keyword_matches = 0
+            if query_word_count >= 5:
+                min_keyword_matches = max(1, int(len(meaningful_words) * 0.3))
+            elif query_word_count >= 1 and len(meaningful_words) > 0:
+                min_keyword_matches = 1
+            
+            for listing in filtered_listings:
+                text_to_search = [
+                    listing.get('address', ''),
+                    listing.get('description', ''),
+                    listing.get('embeddingText', ''),
+                    listing.get('area', '')
+                ]
+                combined_text = ' '.join([str(text) for text in text_to_search if text]).lower()
+                
+                keyword_matches = sum(1 for word in meaningful_words if word in combined_text)
+                if min_keyword_matches > 0 and keyword_matches < min_keyword_matches:
+                    continue
+                
+                word_matches = sum(1 for word in query_words if word in combined_text)
+                if word_matches > 0:
+                    base_score = word_matches / len(query_words) if query_words else 0
+                    keyword_boost = keyword_matches / len(meaningful_words) if meaningful_words else 0
+                    relevance_score = base_score * 0.6 + keyword_boost * 0.4
+                    listing['similarity_score'] = relevance_score
+                    results.append(listing)
+            
+            results.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
+            results = results[:limit]
+            log_timestamp(f"✅ Text-based fallback found {len(results)} results from {len(filtered_listings)} filtered listings")
         
         log_timestamp(f"✅ Filtered AI search found {len(results)} results for query: '{query}' (requested limit: {limit})")
         return results

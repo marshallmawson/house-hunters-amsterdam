@@ -26,6 +26,7 @@ const Listings = () => {
   const [searchResults, setSearchResults] = useState<Listing[]>([]);
   const [useAISearch, setUseAISearch] = useState(!!searchQuery);
   const hasPerformedInitialSearch = useRef(false);
+  const searchInProgressRef = useRef(false); // Prevent concurrent searches
 
   // Initialize from URL params, then override with saved preferences if logged in
   const [sortOrder, setSortOrder] = useState(searchParams.get('sort') || 'date-new-old');
@@ -188,6 +189,13 @@ const Listings = () => {
   // AI Search function
   const performAISearch = useCallback(async (query: string) => {
     console.log('performAISearch called with:', query);
+    
+    // Prevent concurrent searches
+    if (searchInProgressRef.current) {
+      console.log('Search already in progress, skipping...');
+      return;
+    }
+    
     if (!query.trim() || query.trim().length < 3) {
       console.log('Query too short, clearing results');
       setSearchResults([]);
@@ -196,6 +204,7 @@ const Listings = () => {
     }
 
     console.log('Starting AI search...');
+    searchInProgressRef.current = true;
     setIsSearching(true);
     
     // Convert bedroom filter to numeric value for backend compatibility
@@ -231,7 +240,9 @@ const Listings = () => {
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
     
     try {
-        const response = await fetch('https://search-service-315949479081.europe-west4.run.app/search', {
+        // Use local search API in development, Cloud Run in production
+        const searchApiUrl = process.env.REACT_APP_SEARCH_API_URL || 'http://localhost:8080';
+        const response = await fetch(`${searchApiUrl}/search`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -317,6 +328,7 @@ const Listings = () => {
     } finally {
       console.log('Search completed, setting isSearching to false');
       setIsSearching(false);
+      searchInProgressRef.current = false;
     }
   }, [priceRange.min, priceRange.max, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas]);
 
@@ -329,12 +341,16 @@ const Listings = () => {
       performAISearch(searchQuery);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery]); // Only run once on component mount
+  }, [searchQuery]); // Only run when searchQuery changes
 
   // Trigger search when filters change (if there's an active search query)
+  // Only trigger if initial search has already been performed (prevents duplicate initial searches)
   useEffect(() => {
+    if (!hasPerformedInitialSearch.current) {
+      return; // Don't trigger on initial mount, wait for initial search to complete
+    }
     console.log('Filters changed, searchQuery:', searchQuery, 'isSearching:', isSearching);
-    if (searchQuery.trim() && !isSearching && hasPerformedInitialSearch.current) {
+    if (searchQuery.trim() && !isSearching) {
       console.log('Triggering search due to filter change for:', searchQuery);
       performAISearch(searchQuery);
     }
@@ -421,13 +437,7 @@ const Listings = () => {
     updateURLParams();
   }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, updateURLParams]);
 
-  // Trigger new AI search when filters change and we're in AI search mode
-  useEffect(() => {
-    if (useAISearch && searchQuery.trim()) {
-      performAISearch(searchQuery);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, useAISearch, searchQuery]);
+  // Note: Removed duplicate effect - filter changes are already handled by the effect on lines 337-344
 
   // Save preferences when they change (debounced)
   useEffect(() => {

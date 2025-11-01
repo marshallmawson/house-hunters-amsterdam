@@ -122,6 +122,7 @@ def search_listings():
             filters.pop('areas', None)
         
         logger.info(f"Search request - Query: '{query}', Type: {search_type}, Limit: {limit}, Filters: {filters}")
+        logger.info(f"Active filters check - bedrooms: {filters.get('bedrooms')}, floor: {filters.get('floor')}, outdoor: {filters.get('outdoor')}, minPrice: {filters.get('minPrice')}, maxPrice: {filters.get('maxPrice')}")
         
         # Perform search based on type
         try:
@@ -129,10 +130,18 @@ def search_listings():
             
             if search_type == 'semantic':
                 results = search_listings_by_similarity(query, limit, filters)
+                # Fall back to text-based search if semantic search returns no results
+                if not results:
+                    logger.info("Semantic search returned no results, falling back to text-based search")
+                    results = text_based_search(query, limit, filters)
             elif search_type == 'text':
                 results = text_based_search(query, limit, filters)
             elif search_type == 'filtered':
                 results = apply_structured_filters_then_ai_search(query, limit, filters)
+                # Note: apply_structured_filters_then_ai_search already has its own fallback to text-based
+                # on filtered listings, so we don't need another fallback here that would bypass filters
+                if not results:
+                    logger.info("Filtered search returned no results (filters may be too restrictive or no matches found)")
             else:  # hybrid (default)
                 results = hybrid_search(query, limit, filters)
             
