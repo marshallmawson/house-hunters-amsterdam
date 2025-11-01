@@ -22,6 +22,7 @@ const NeighborhoodMap: React.FC<NeighborhoodMapProps> = ({
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const polygonsRef = useRef<google.maps.Polygon[]>([]);
   const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
+  const [allNeighborhoodNames, setAllNeighborhoodNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [mapsLoaded, setMapsLoaded] = useState(false);
   const [mapsError, setMapsError] = useState(false);
@@ -51,12 +52,9 @@ const NeighborhoodMap: React.FC<NeighborhoodMapProps> = ({
         const kmlContent = await response.text();
         const parsedNeighborhoods = parseKMLNeighborhoods(kmlContent);
         
-        // Filter to only include neighborhoods that have listings
-        const filteredNeighborhoods = parsedNeighborhoods.filter(n =>
-          availableNeighborhoods.includes(n.name)
-        );
-        
-        setNeighborhoods(filteredNeighborhoods);
+        // Show all neighborhoods from KML, regardless of whether they have listings
+        setNeighborhoods(parsedNeighborhoods);
+        setAllNeighborhoodNames(parsedNeighborhoods.map(n => n.name));
         setLoading(false);
       } catch (error) {
         console.error('Error loading neighborhoods:', error);
@@ -67,7 +65,7 @@ const NeighborhoodMap: React.FC<NeighborhoodMapProps> = ({
     if (show) {
       loadNeighborhoods();
     }
-  }, [show, availableNeighborhoods]);
+  }, [show]);
 
   // Initialize map
   useEffect(() => {
@@ -165,7 +163,7 @@ const NeighborhoodMap: React.FC<NeighborhoodMapProps> = ({
   };
 
   const handleSelectAll = () => {
-    onNeighborhoodSelect(availableNeighborhoods);
+    onNeighborhoodSelect(allNeighborhoodNames);
   };
 
   return (
@@ -205,7 +203,7 @@ const NeighborhoodMap: React.FC<NeighborhoodMapProps> = ({
                   <div>
                     <small className="text-muted">
                       Click on neighborhoods to select/deselect them. 
-                      Selected: {selectedNeighborhoods.length} of {availableNeighborhoods.length}
+                      Selected: {selectedNeighborhoods.length} of {allNeighborhoodNames.length}
                     </small>
                   </div>
                   <div>
