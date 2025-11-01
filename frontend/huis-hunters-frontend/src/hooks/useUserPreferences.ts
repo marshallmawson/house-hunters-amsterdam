@@ -5,10 +5,10 @@ import { UserPreferences } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 const defaultPreferences: UserPreferences = {
-  priceRange: { min: 450000, max: 750000 },
-  bedrooms: '2+',
+  priceRange: { min: 400000, max: 1250000 },
+  bedrooms: '1+',
   floorLevel: 'any',
-  outdoorSpace: 'any',
+  selectedOutdoorSpaces: [],
   minSize: '',
   selectedAreas: [],
   searchQuery: '',
@@ -33,11 +33,20 @@ export const useUserPreferences = () => {
       
       if (prefDocSnap.exists()) {
         const data = prefDocSnap.data();
+        // Handle migration from outdoorSpace (string) to selectedOutdoorSpaces (array)
+        let outdoorSpaces: string[] = [];
+        if (data.selectedOutdoorSpaces && Array.isArray(data.selectedOutdoorSpaces)) {
+          outdoorSpaces = data.selectedOutdoorSpaces;
+        } else if (data.outdoorSpace && data.outdoorSpace !== 'any') {
+          // Migrate old format to new format
+          outdoorSpaces = [data.outdoorSpace];
+        }
+
         setPreferences({
           priceRange: data.priceRange || defaultPreferences.priceRange,
           bedrooms: data.bedrooms || defaultPreferences.bedrooms,
           floorLevel: data.floorLevel || defaultPreferences.floorLevel,
-          outdoorSpace: data.outdoorSpace || defaultPreferences.outdoorSpace,
+          selectedOutdoorSpaces: outdoorSpaces,
           minSize: data.minSize || defaultPreferences.minSize,
           selectedAreas: data.selectedAreas || defaultPreferences.selectedAreas,
           searchQuery: data.searchQuery || defaultPreferences.searchQuery,

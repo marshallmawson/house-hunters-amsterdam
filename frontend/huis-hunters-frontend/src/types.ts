@@ -82,7 +82,7 @@ export interface UserPreferences {
   };
   bedrooms: string;
   floorLevel: string;
-  outdoorSpace: string;
+  selectedOutdoorSpaces: string[];
   minSize: string;
   selectedAreas: string[];
   searchQuery: string;

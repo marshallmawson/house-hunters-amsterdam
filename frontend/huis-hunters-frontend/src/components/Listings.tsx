@@ -9,6 +9,7 @@ import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { useUserPreferences } from '../hooks/useUserPreferences';
+import { parseKMLNeighborhoods } from '../utils/neighborhoodParser';
 
 const Listings = () => {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -29,17 +30,18 @@ const Listings = () => {
   // Initialize from URL params, then override with saved preferences if logged in
   const [sortOrder, setSortOrder] = useState(searchParams.get('sort') || 'date-new-old');
   const [priceRange, setPriceRange] = useState({ 
-    min: parseInt(searchParams.get('minPrice') || '450000', 10),
-    max: parseInt(searchParams.get('maxPrice') || '750000', 10)
+    min: parseInt(searchParams.get('minPrice') || '400000', 10),
+    max: parseInt(searchParams.get('maxPrice') || '1250000', 10)
   });
-  const [bedrooms, setBedrooms] = useState(searchParams.get('bedrooms') || '2+');
+  const [bedrooms, setBedrooms] = useState(searchParams.get('bedrooms') || '1+');
   const [floorLevel, setFloorLevel] = useState(searchParams.get('floor') || 'any');
-  const [outdoorSpace, setOutdoorSpace] = useState(searchParams.get('outdoor') || 'any');
+  const [selectedOutdoorSpaces, setSelectedOutdoorSpaces] = useState<string[]>(searchParams.get('outdoor')?.split(',').filter(Boolean) || []);
   const [minSize, setMinSize] = useState(searchParams.get('minSize') || '');
   const [selectedAreas, setSelectedAreas] = useState<string[]>(searchParams.get('areas')?.split(',').filter(Boolean) || []);
   const [isModalOpen, setIsModalOpen] = useState(!!modalListingId);
   const [showFilters, setShowFilters] = useState(false);
   const [showNeighborhoodMap, setShowNeighborhoodMap] = useState(false);
+  const [allNeighborhoods, setAllNeighborhoods] = useState<string[]>([]);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,8 +70,8 @@ const Listings = () => {
       if (savedPreferences.floorLevel) {
         setFloorLevel(savedPreferences.floorLevel);
       }
-      if (savedPreferences.outdoorSpace) {
-        setOutdoorSpace(savedPreferences.outdoorSpace);
+      if (savedPreferences.selectedOutdoorSpaces && savedPreferences.selectedOutdoorSpaces.length > 0) {
+        setSelectedOutdoorSpaces(savedPreferences.selectedOutdoorSpaces);
       }
       if (savedPreferences.minSize) {
         setMinSize(savedPreferences.minSize);
@@ -87,6 +89,23 @@ const Listings = () => {
       preferencesLoadedRef.current = true;
     }
   }, [savedPreferences, preferencesLoading, searchParams]);
+
+  // Load all neighborhoods from KML file
+  useEffect(() => {
+    const loadNeighborhoods = async () => {
+      try {
+        const response = await fetch('/neighborhoods.kml');
+        const kmlContent = await response.text();
+        const parsedNeighborhoods = parseKMLNeighborhoods(kmlContent);
+        const neighborhoodNames = parsedNeighborhoods.map(n => n.name).sort();
+        setAllNeighborhoods(neighborhoodNames);
+      } catch (error) {
+        console.error('Error loading neighborhoods from KML:', error);
+      }
+    };
+
+    loadNeighborhoods();
+  }, []);
 
   const uniqueAreas = useMemo(() => {
     const areas = new Set<string>();
@@ -106,23 +125,28 @@ const Listings = () => {
         where("available", "==", true)
       );
       const querySnapshot = await getDocs(q);
-      const listingsData = querySnapshot.docs.map(doc => {
-        const { publishDate, ...rest } = doc.data();
-        let finalPublishedDate;
+      const listingsData = querySnapshot.docs
+        .map(doc => {
+          const { publishDate, ...rest } = doc.data();
+          let finalPublishedDate;
 
-        if (typeof publishDate === 'string') {
-          const date = new Date(publishDate);
-          finalPublishedDate = {
-            toDate: () => date,
-            seconds: Math.floor(date.getTime() / 1000),
-            nanoseconds: (date.getTime() % 1000) * 1000000
-          };
-        } else {
-          finalPublishedDate = publishDate;
-        }
+          if (typeof publishDate === 'string') {
+            const date = new Date(publishDate);
+            finalPublishedDate = {
+              toDate: () => date,
+              seconds: Math.floor(date.getTime() / 1000),
+              nanoseconds: (date.getTime() % 1000) * 1000000
+            };
+          } else {
+            finalPublishedDate = publishDate;
+          }
 
-        return { id: doc.id, ...rest, publishedDate: finalPublishedDate } as Listing;
-      });
+          return { id: doc.id, ...rest, publishedDate: finalPublishedDate } as Listing;
+        })
+        .filter(listing => {
+          // Filter out listings without images
+          return listing.imageGallery && listing.imageGallery.length > 0;
+        });
       setListings(listingsData);
     };
 
@@ -133,33 +157,33 @@ const Listings = () => {
   const updateURLParams = useCallback(() => {
     const params = new URLSearchParams();
     if (sortOrder !== 'date-new-old') params.set('sort', sortOrder);
-    if (priceRange.min !== 450000) params.set('minPrice', priceRange.min.toString());
-    if (priceRange.max !== 750000) params.set('maxPrice', priceRange.max.toString());
-    if (bedrooms !== '2+') params.set('bedrooms', bedrooms);
+    if (priceRange.min !== 400000) params.set('minPrice', priceRange.min.toString());
+    if (priceRange.max !== 1250000) params.set('maxPrice', priceRange.max.toString());
+    if (bedrooms !== '1+') params.set('bedrooms', bedrooms);
     if (floorLevel !== 'any') params.set('floor', floorLevel);
-    if (outdoorSpace !== 'any') params.set('outdoor', outdoorSpace);
+    if (selectedOutdoorSpaces.length > 0) params.set('outdoor', selectedOutdoorSpaces.join(','));
     if (minSize) params.set('minSize', minSize);
     if (selectedAreas.length > 0) params.set('areas', selectedAreas.join(','));
     // Keep existing search query if present
     const currentSearch = searchParams.get('search');
     if (currentSearch) params.set('search', currentSearch);
     setSearchParams(params, { replace: true });
-  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, setSearchParams, searchParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, setSearchParams, searchParams]);
 
   // Separate function for updating URL with search query
   const updateURLWithSearch = useCallback((query: string) => {
     const params = new URLSearchParams();
     if (sortOrder !== 'date-new-old') params.set('sort', sortOrder);
-    if (priceRange.min !== 450000) params.set('minPrice', priceRange.min.toString());
-    if (priceRange.max !== 750000) params.set('maxPrice', priceRange.max.toString());
-    if (bedrooms !== '2+') params.set('bedrooms', bedrooms);
+    if (priceRange.min !== 400000) params.set('minPrice', priceRange.min.toString());
+    if (priceRange.max !== 1250000) params.set('maxPrice', priceRange.max.toString());
+    if (bedrooms !== '1+') params.set('bedrooms', bedrooms);
     if (floorLevel !== 'any') params.set('floor', floorLevel);
-    if (outdoorSpace !== 'any') params.set('outdoor', outdoorSpace);
+    if (selectedOutdoorSpaces.length > 0) params.set('outdoor', selectedOutdoorSpaces.join(','));
     if (minSize) params.set('minSize', minSize);
     if (selectedAreas.length > 0) params.set('areas', selectedAreas.join(','));
     if (query) params.set('search', query);
     setSearchParams(params, { replace: true });
-  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, setSearchParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, setSearchParams]);
 
   // AI Search function
   const performAISearch = useCallback(async (query: string) => {
@@ -176,15 +200,16 @@ const Listings = () => {
     
     // Convert bedroom filter to numeric value for backend compatibility
     const bedroomFilter = bedrooms === 'any' ? 'any' : 
+                         bedrooms === '1+' ? '1' :
                          bedrooms === '2+' ? '2' : 
                          bedrooms;
     
     // Check if any filters are active (not default values)
-    const hasActiveFilters = bedrooms !== '2+' || 
-                            priceRange.min !== 450000 || 
-                            priceRange.max !== 750000 || 
+    const hasActiveFilters = bedrooms !== '1+' || 
+                            priceRange.min !== 400000 || 
+                            priceRange.max !== 1250000 || 
                             floorLevel !== 'any' || 
-                            outdoorSpace !== 'any' || 
+                            selectedOutdoorSpaces.length > 0 || 
                             minSize !== '' || 
                             selectedAreas.length > 0;
     
@@ -196,7 +221,7 @@ const Listings = () => {
         maxPrice: priceRange.max,
         bedrooms: bedroomFilter,
         floor: floorLevel,
-        outdoor: outdoorSpace,
+        outdoor: selectedOutdoorSpaces,
         minSize: minSize,
         areas: selectedAreas
       },
@@ -225,7 +250,12 @@ const Listings = () => {
       console.log('Full response structure:', JSON.stringify(data, null, 2));
       
       // Convert search results to Listing format
-      const formattedResults: Listing[] = data.results.map((result: any) => {
+      const formattedResults: Listing[] = data.results
+        .filter((result: any) => {
+          // Filter out listings without images
+          return result.imageGallery && result.imageGallery.length > 0;
+        })
+        .map((result: any) => {
         // Transform publishedDate to match the format expected by ListingCard
         let finalPublishedDate;
         if (typeof result.publishedDate === 'string') {
@@ -288,7 +318,7 @@ const Listings = () => {
       console.log('Search completed, setting isSearching to false');
       setIsSearching(false);
     }
-  }, [priceRange.min, priceRange.max, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas]);
+  }, [priceRange.min, priceRange.max, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas]);
 
   // Trigger search when component loads with a search query in URL
   useEffect(() => {
@@ -309,7 +339,7 @@ const Listings = () => {
       performAISearch(searchQuery);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [priceRange.min, priceRange.max, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas]);
+  }, [priceRange.min, priceRange.max, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas]);
 
   useEffect(() => {
     // Use AI search results if available, otherwise use regular listings
@@ -365,27 +395,31 @@ const Listings = () => {
       const passesFloorLevel = floorLevel === 'any' ||
         (floorLevel === 'ground' && listing.apartmentFloor === 'Ground') ||
         (floorLevel === 'top' && (listing.apartmentFloor === 'Upper' || listing.apartmentFloor === 'Top floor' || listing.apartmentFloor === 'Upper floor'));
-      const passesOutdoorSpace = outdoorSpace === 'any' || 
-        (outdoorSpace === 'garden' && listing.hasGarden) ||
-        (outdoorSpace === 'rooftop' && listing.hasRooftopTerrace) ||
-        (outdoorSpace === 'balcony' && listing.hasBalcony);
+      const passesOutdoorSpace = selectedOutdoorSpaces.length === 0 || 
+        selectedOutdoorSpaces.some(space => 
+          (space === 'garden' && listing.hasGarden) ||
+          (space === 'rooftop' && listing.hasRooftopTerrace) ||
+          (space === 'balcony' && listing.hasBalcony)
+        );
       const passesMinSize = !minSize || (listing.livingArea && listing.livingArea >= parseInt(minSize, 10));
       const passesArea = selectedAreas.length === 0 || (listing.area && selectedAreas.includes(listing.area));
+      // Filter out listings without images
+      const hasImages = listing.imageGallery && listing.imageGallery.length > 0;
       
 
-      return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesMinSize && passesArea;
+      return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesMinSize && passesArea && hasImages;
     });
     }
 
     setFilteredListings(result);
     // Reset to first page when filters change
     setCurrentPage(1);
-  }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas]);
+  }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas]);
 
   // Separate useEffect to update URL parameters only when filter values change
   useEffect(() => {
     updateURLParams();
-  }, [sortOrder, priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, updateURLParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, updateURLParams]);
 
   // Trigger new AI search when filters change and we're in AI search mode
   useEffect(() => {
@@ -393,7 +427,7 @@ const Listings = () => {
       performAISearch(searchQuery);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, useAISearch, searchQuery]);
+  }, [priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, useAISearch, searchQuery]);
 
   // Save preferences when they change (debounced)
   useEffect(() => {
@@ -404,7 +438,7 @@ const Listings = () => {
         priceRange,
         bedrooms,
         floorLevel,
-        outdoorSpace,
+        selectedOutdoorSpaces,
         minSize,
         selectedAreas,
         searchQuery,
@@ -413,7 +447,7 @@ const Listings = () => {
     }, 2000); // Debounce 2 seconds
 
     return () => clearTimeout(timeoutId);
-  }, [priceRange, bedrooms, floorLevel, outdoorSpace, minSize, selectedAreas, searchQuery, sortOrder, savePreferences]);
+  }, [priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, searchQuery, sortOrder, savePreferences]);
 
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
@@ -529,8 +563,8 @@ const Listings = () => {
                 <div style={{ padding: '0 4px' }}>
                   <Slider
                     range
-                    min={200000}
-                    max={1200000}
+                    min={400000}
+                    max={1250000}
                     step={25000}
                     value={[priceRange.min, priceRange.max]}
                     onChange={(values: number | number[]) => {
@@ -609,26 +643,72 @@ const Listings = () => {
             <Col lg={1} md={6}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Outdoor</Form.Label>
-                <Form.Control 
-                  as="select" 
-                  value={outdoorSpace} 
-                  onChange={e => setOutdoorSpace(e.target.value)}
-                  style={{ 
-                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 0.5rem center',
-                    backgroundSize: '12px 8px',
-                    paddingRight: '1.5rem',
-                    borderRadius: '8px',
-                    border: '1px solid #dee2e6',
-                    fontSize: '0.8rem'
-                  }}
-                >
-                  <option value="any">Any</option>
-                  <option value="garden">Garden</option>
-                  <option value="rooftop">Rooftop</option>
-                  <option value="balcony">Balcony</option>
-                </Form.Control>
+                <Dropdown>
+                  <Dropdown.Toggle 
+                    variant="outline-secondary" 
+                    className="custom-dropdown-toggle"
+                    style={{ 
+                      width: '100%',
+                      borderRadius: '8px',
+                      border: '1px solid #dee2e6',
+                      fontSize: '0.8rem',
+                      textAlign: 'left',
+                      backgroundColor: 'white',
+                      color: '#495057',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'right 0.5rem center',
+                      backgroundSize: '12px 8px',
+                      paddingRight: '1.5rem'
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedOutdoorSpaces.length === 0 
+                        ? 'Any' 
+                        : selectedOutdoorSpaces.length === 1 
+                          ? (selectedOutdoorSpaces[0] === 'garden' ? 'Garden' : selectedOutdoorSpaces[0] === 'rooftop' ? 'Rooftop' : 'Balcony')
+                          : `Multiple (${selectedOutdoorSpaces.length})`
+                      }
+                    </span>
+                  </Dropdown.Toggle>
+
+                  <Dropdown.Menu style={{ width: '100%', maxHeight: '300px', overflowY: 'auto' }}>
+                    {['garden', 'rooftop', 'balcony'].map(space => {
+                      const displayName = space === 'garden' ? 'Garden' : space === 'rooftop' ? 'Rooftop' : 'Balcony';
+                      return (
+                        <Dropdown.ItemText key={space}>
+                          <Form.Check
+                            type="checkbox"
+                            id={`outdoor-${space}`}
+                            label={displayName}
+                            checked={selectedOutdoorSpaces.includes(space)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedOutdoorSpaces([...selectedOutdoorSpaces, space]);
+                              } else {
+                                setSelectedOutdoorSpaces(selectedOutdoorSpaces.filter(s => s !== space));
+                              }
+                            }}
+                          />
+                        </Dropdown.ItemText>
+                      );
+                    })}
+                    {selectedOutdoorSpaces.length > 0 && (
+                      <>
+                        <Dropdown.Divider />
+                        <Dropdown.Item 
+                          onClick={() => setSelectedOutdoorSpaces([])}
+                          className="text-danger"
+                        >
+                          Clear All
+                        </Dropdown.Item>
+                      </>
+                    )}
+                  </Dropdown.Menu>
+                </Dropdown>
               </FormGroup>
             </Col>
 
@@ -702,7 +782,7 @@ const Listings = () => {
                       🗺️ Select on Map
                     </Dropdown.Item>
                     <Dropdown.Divider />
-                    {uniqueAreas.map(area => (
+                    {allNeighborhoods.map(area => (
                       <Dropdown.ItemText key={area}>
                         <Form.Check
                           type="checkbox"
@@ -743,10 +823,10 @@ const Listings = () => {
                   variant="outline-secondary" 
                   size="sm" 
                   onClick={() => {
-                    setPriceRange({ min: 450000, max: 750000 });
-                    setBedrooms('2+');
+                    setPriceRange({ min: 400000, max: 1250000 });
+                    setBedrooms('1+');
                     setFloorLevel('any');
-                    setOutdoorSpace('any');
+                    setSelectedOutdoorSpaces([]);
                     setMinSize('');
                     setSelectedAreas([]);
                     setSearchQuery('');
