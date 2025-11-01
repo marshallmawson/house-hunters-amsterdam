@@ -156,21 +156,74 @@ const Listings = () => {
   }, []);
 
   // URL params update function (for filter changes, not search queries)
+  // Note: This should NOT modify the search parameter - that's handled by updateURLWithSearch
+  // But it preserves the current search from URL (if present) when only filters change
   const updateURLParams = useCallback(() => {
-    const params = new URLSearchParams();
-    if (sortOrder !== 'date-new-old') params.set('sort', sortOrder);
-    if (priceRange.min !== 400000) params.set('minPrice', priceRange.min.toString());
-    if (priceRange.max !== 1250000) params.set('maxPrice', priceRange.max.toString());
-    if (bedrooms !== '1+') params.set('bedrooms', bedrooms);
-    if (floorLevel !== 'any') params.set('floor', floorLevel);
-    if (selectedOutdoorSpaces.length > 0) params.set('outdoor', selectedOutdoorSpaces.join(','));
-    if (minSize) params.set('minSize', minSize);
-    if (selectedAreas.length > 0) params.set('areas', selectedAreas.join(','));
-    // Keep existing search query if present
-    const currentSearch = searchParams.get('search');
-    if (currentSearch) params.set('search', currentSearch);
+    // Start with current URL params to preserve search and other params
+    const params = new URLSearchParams(searchParams);
+    
+    // Update all filter params
+    if (sortOrder !== 'date-new-old') {
+      params.set('sort', sortOrder);
+    } else {
+      params.delete('sort');
+    }
+    
+    if (priceRange.min !== 400000) {
+      params.set('minPrice', priceRange.min.toString());
+    } else {
+      params.delete('minPrice');
+    }
+    
+    if (priceRange.max !== 1250000) {
+      params.set('maxPrice', priceRange.max.toString());
+    } else {
+      params.delete('maxPrice');
+    }
+    
+    if (bedrooms !== '1+') {
+      params.set('bedrooms', bedrooms);
+    } else {
+      params.delete('bedrooms');
+    }
+    
+    if (floorLevel !== 'any') {
+      params.set('floor', floorLevel);
+    } else {
+      params.delete('floor');
+    }
+    
+    if (selectedOutdoorSpaces.length > 0) {
+      params.set('outdoor', selectedOutdoorSpaces.join(','));
+    } else {
+      params.delete('outdoor');
+    }
+    
+    if (minSize) {
+      params.set('minSize', minSize);
+    } else {
+      params.delete('minSize');
+    }
+    
+    if (selectedAreas.length > 0) {
+      params.set('areas', selectedAreas.join(','));
+    } else {
+      params.delete('areas');
+    }
+    
+    // Handle search parameter: only preserve if it exists in URL AND searchQuery state is not empty
+    // If searchQuery state is empty, don't preserve search from URL (it was likely just cleared)
+    const currentSearchInURL = searchParams.get('search');
+    if (currentSearchInURL && currentSearchInURL.trim() && searchQuery && searchQuery.trim()) {
+      // Only preserve search if both URL and state have it (user is searching)
+      params.set('search', currentSearchInURL.trim());
+    } else {
+      // Remove search if either URL or state is empty (search was cleared)
+      params.delete('search');
+    }
+    
     setSearchParams(params, { replace: true });
-  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, setSearchParams, searchParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, setSearchParams, searchParams, searchQuery]);
 
   // Separate function for updating URL with search query
   const updateURLWithSearch = useCallback((query: string, overrideFilters?: {
@@ -181,8 +234,8 @@ const Listings = () => {
     minSize?: string;
     areas?: string[];
   }) => {
-    // Start with current URL params to preserve other params, then modify
-    const params = new URLSearchParams(searchParams);
+    // Create fresh URLSearchParams (don't start with searchParams to avoid preserving old values)
+    const params = new URLSearchParams();
     const filtersToUse = overrideFilters || {
       priceRange,
       bedrooms,
@@ -1120,6 +1173,8 @@ const Listings = () => {
                           minSize: '',
                           areas: []
                         };
+                        
+                        // Update state first (but don't trigger URL update via useEffect yet)
                         setPriceRange(clearedFilters.priceRange);
                         setBedrooms(clearedFilters.bedrooms);
                         setFloorLevel(clearedFilters.floorLevel);
@@ -1127,8 +1182,24 @@ const Listings = () => {
                         setMinSize(clearedFilters.minSize);
                         setSelectedAreas(clearedFilters.areas);
                         
-                        // Update URL with cleared search and filters (pass explicit values to ensure they're used)
+                        // Update URL with cleared search and filters (explicitly remove search)
+                        // This must happen after state updates to ensure consistent state
                         updateURLWithSearch('', clearedFilters);
+                        
+                        // Also clear search query from saved preferences to prevent it from being restored
+                        // Wait a bit to ensure state has updated, then save empty searchQuery
+                        setTimeout(() => {
+                          savePreferences({
+                            priceRange: clearedFilters.priceRange,
+                            bedrooms: clearedFilters.bedrooms,
+                            floorLevel: clearedFilters.floorLevel,
+                            selectedOutdoorSpaces: clearedFilters.outdoor,
+                            minSize: clearedFilters.minSize,
+                            selectedAreas: clearedFilters.areas,
+                            searchQuery: '', // Clear saved search query
+                            sortOrder: sortOrder
+                          });
+                        }, 100);
                       }}
                       style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                     >
