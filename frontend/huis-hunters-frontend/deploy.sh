@@ -27,9 +27,27 @@ echo "Files in current directory:"
 ls -la
 # The '.' tells gcloud to build from the current directory where this script and the Dockerfile are located.
 # Pass build arguments for production environment variables using substitutions
+# Note: --tag is not used when --config is specified (cloudbuild.yaml handles tagging)
+
+# Get Google Maps API key from environment variable or .env file
+if [ -f .env ]; then
+  GOOGLE_MAPS_API_KEY=$(grep "REACT_APP_GOOGLE_MAPS_API_KEY" .env | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
+fi
+
+# Use environment variable if .env file doesn't have it or value is empty
+if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
+  GOOGLE_MAPS_API_KEY="${REACT_APP_GOOGLE_MAPS_API_KEY}"
+fi
+
+# Check if API key is set
+if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
+  echo "ERROR: REACT_APP_GOOGLE_MAPS_API_KEY is not set!"
+  echo "Please set it in your .env file or as an environment variable"
+  exit 1
+fi
+
 gcloud builds submit . \
-  --tag "${IMAGE_NAME}" \
-  --substitutions=_IMAGE_NAME="${IMAGE_NAME}",_REACT_APP_SEARCH_API_URL="https://search-service-315949479081.europe-west4.run.app" \
+  --substitutions=_IMAGE_NAME="${IMAGE_NAME}",_REACT_APP_SEARCH_API_URL="https://search-service-315949479081.europe-west4.run.app",_REACT_APP_GOOGLE_MAPS_API_KEY="${GOOGLE_MAPS_API_KEY}" \
   --config=cloudbuild.yaml
 
 # Check if the build was successful
