@@ -1,6 +1,14 @@
 # Stage 1: Build the React application
 FROM node:20-alpine AS build
 
+# Accept build arguments for environment variables
+ARG REACT_APP_SEARCH_API_URL=https://search-service-315949479081.europe-west4.run.app
+ARG REACT_APP_GOOGLE_MAPS_API_KEY
+
+# Set environment variables for the build
+ENV REACT_APP_SEARCH_API_URL=${REACT_APP_SEARCH_API_URL}
+ENV REACT_APP_GOOGLE_MAPS_API_KEY=${REACT_APP_GOOGLE_MAPS_API_KEY}
+
 # Set the working directory
 WORKDIR /app
 

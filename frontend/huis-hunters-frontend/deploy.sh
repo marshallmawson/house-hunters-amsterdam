@@ -26,7 +26,11 @@ echo "Current directory: $(pwd)"
 echo "Files in current directory:"
 ls -la
 # The '.' tells gcloud to build from the current directory where this script and the Dockerfile are located.
-gcloud builds submit . --tag "${IMAGE_NAME}"
+# Pass build arguments for production environment variables using substitutions
+gcloud builds submit . \
+  --tag "${IMAGE_NAME}" \
+  --substitutions=_IMAGE_NAME="${IMAGE_NAME}",_REACT_APP_SEARCH_API_URL="https://search-service-315949479081.europe-west4.run.app" \
+  --config=cloudbuild.yaml
 
 # Check if the build was successful
 if [ $? -ne 0 ]; then
