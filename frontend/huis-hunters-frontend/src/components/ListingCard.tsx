@@ -654,7 +654,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
               <>
                 <div ref={carouselContainerRef}>
                   <Carousel 
-                    className={`mb-4 ${isManualNavigation ? 'carousel-no-transition' : ''}`}
+                    className={`mb-4 listing-image-carousel ${isManualNavigation ? 'carousel-no-transition' : ''}`}
                     activeIndex={selectedImageIndex} 
                     onSelect={handleCarouselSelect}
                   >
@@ -746,8 +746,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
                   {listing.imageGallery && listing.imageGallery.length > 1 && (
                     <div
                       style={{
-                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                        color: 'white',
+                        backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                        color: '#212529',
                         padding: '4px 8px',
                         borderRadius: '4px',
                         fontSize: '0.75rem',
@@ -761,8 +761,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
                     variant="link"
                     onClick={() => setShowGridView(true)}
                     style={{
-                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                      color: 'white',
+                      backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                      color: '#212529',
                       padding: '4px 12px',
                       borderRadius: '4px',
                       fontSize: '0.75rem',
@@ -771,10 +771,10 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
                       border: 'none'
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.85)';
                     }}
                   >
                     <span style={{ marginRight: '6px' }}>📷</span>
@@ -911,36 +911,181 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
       {/* Floor Plan Modal */}
       <Modal show={showFloorPlanModal} onHide={() => setShowFloorPlanModal(false)} size="xl" centered>
         <Modal.Header closeButton>
-          <div className="d-flex justify-content-between align-items-center w-100">
-            <Modal.Title>Floor Plan {selectedFloorPlanIndex + 1}</Modal.Title>
-            <div className="d-flex gap-2">
-              <Button variant="outline-secondary" size="sm" onClick={handleZoomOut} disabled={floorPlanZoom <= 0.5}>
-                🔍-
-              </Button>
-              <Button variant="outline-secondary" size="sm" onClick={handleZoomReset}>
-                Reset ({Math.round(floorPlanZoom * 100)}%)
-              </Button>
-              <Button variant="outline-secondary" size="sm" onClick={handleZoomIn} disabled={floorPlanZoom >= 3}>
-                🔍+
-              </Button>
-            </div>
-          </div>
+          <Modal.Title>
+            Floor Plan {selectedFloorPlanIndex + 1}
+            {listing.floorPlans && listing.floorPlans.length > 1 && ` of ${listing.floorPlans.length}`}
+          </Modal.Title>
         </Modal.Header>
-        <Modal.Body className="text-center" style={{ overflow: 'auto', maxHeight: '80vh' }}>
+        <Modal.Body className="text-center" style={{ overflow: 'auto', maxHeight: '80vh', position: 'relative' }}>
           {listing.floorPlans && listing.floorPlans[selectedFloorPlanIndex] && (
-            <div style={{ transform: `scale(${floorPlanZoom})`, transformOrigin: 'center', transition: 'transform 0.2s ease' }}>
-              <img
-                src={listing.floorPlans[selectedFloorPlanIndex]}
-                alt={`Floor Plan ${selectedFloorPlanIndex + 1}`}
-                style={{ 
-                  maxWidth: '100%', 
-                  maxHeight: '80vh', 
-                  objectFit: 'contain',
-                  cursor: 'move'
+            <>
+              <div style={{ transform: `scale(${floorPlanZoom})`, transformOrigin: 'center', transition: 'transform 0.2s ease' }}>
+                <img
+                  src={listing.floorPlans[selectedFloorPlanIndex]}
+                  alt={`Floor Plan ${selectedFloorPlanIndex + 1}`}
+                  style={{ 
+                    maxWidth: '100%', 
+                    maxHeight: '80vh', 
+                    objectFit: 'contain',
+                    cursor: 'move'
+                  }}
+                  draggable={false}
+                />
+              </div>
+              
+              {/* Carousel navigation for multiple floor plans */}
+              {listing.floorPlans && listing.floorPlans.length > 1 && (
+                <>
+                  <button
+                    onClick={() => {
+                      const prevIndex = selectedFloorPlanIndex > 0 ? selectedFloorPlanIndex - 1 : (listing.floorPlans?.length || 1) - 1;
+                      setSelectedFloorPlanIndex(prevIndex);
+                      setFloorPlanZoom(1);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: '20px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                      border: '1px solid rgba(0, 0, 0, 0.2)',
+                      borderRadius: '4px',
+                      width: '40px',
+                      height: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      fontSize: '1.5rem',
+                      color: '#212529',
+                      zIndex: 10,
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+                    }}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    onClick={() => {
+                      const maxIndex = (listing.floorPlans?.length || 1) - 1;
+                      const nextIndex = selectedFloorPlanIndex < maxIndex ? selectedFloorPlanIndex + 1 : 0;
+                      setSelectedFloorPlanIndex(nextIndex);
+                      setFloorPlanZoom(1);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '20px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                      border: '1px solid rgba(0, 0, 0, 0.2)',
+                      borderRadius: '4px',
+                      width: '40px',
+                      height: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      fontSize: '1.5rem',
+                      color: '#212529',
+                      zIndex: 10,
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+                    }}
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+              
+              {/* Zoom controls in bottom right (map-style) */}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '20px',
+                  right: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                  zIndex: 10
                 }}
-                draggable={false}
-              />
-            </div>
+              >
+                <button
+                  onClick={handleZoomIn}
+                  disabled={floorPlanZoom >= 3}
+                  style={{
+                    backgroundColor: 'white',
+                    border: '1px solid rgba(0, 0, 0, 0.2)',
+                    borderRadius: '4px 4px 0 0',
+                    width: '36px',
+                    height: '36px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: floorPlanZoom >= 3 ? 'not-allowed' : 'pointer',
+                    fontSize: '1.2rem',
+                    fontWeight: 'bold',
+                    color: floorPlanZoom >= 3 ? '#ccc' : '#212529',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                    opacity: floorPlanZoom >= 3 ? 0.5 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (floorPlanZoom < 3) {
+                      e.currentTarget.style.backgroundColor = '#f8f9fa';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (floorPlanZoom < 3) {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }
+                  }}
+                >
+                  +
+                </button>
+                <button
+                  onClick={handleZoomOut}
+                  disabled={floorPlanZoom <= 0.5}
+                  style={{
+                    backgroundColor: 'white',
+                    border: '1px solid rgba(0, 0, 0, 0.2)',
+                    borderRadius: '0 0 4px 4px',
+                    width: '36px',
+                    height: '36px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: floorPlanZoom <= 0.5 ? 'not-allowed' : 'pointer',
+                    fontSize: '1.2rem',
+                    fontWeight: 'bold',
+                    color: floorPlanZoom <= 0.5 ? '#ccc' : '#212529',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                    opacity: floorPlanZoom <= 0.5 ? 0.5 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (floorPlanZoom > 0.5) {
+                      e.currentTarget.style.backgroundColor = '#f8f9fa';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (floorPlanZoom > 0.5) {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }
+                  }}
+                >
+                  −
+                </button>
+              </div>
+            </>
           )}
         </Modal.Body>
       </Modal>
