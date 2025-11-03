@@ -60,9 +60,14 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   const [savedPropertyId, setSavedPropertyId] = useState<string | null>(null);
   const [showUnsaveConfirm, setShowUnsaveConfirm] = useState(false);
   const [noteText, setNoteText] = useState('');
+  const [showGridView, setShowGridView] = useState(false);
   const hasHandledForceOpen = useRef(false);
   const clickedImageIndex = useRef(0);
   const originalSearchParamsRef = useRef<string>(''); // Store original search params when opening modal
+  const modalBodyRef = useRef<HTMLDivElement>(null);
+  const wasGridViewRef = useRef(false);
+  const carouselContainerRef = useRef<HTMLDivElement>(null);
+  const modalHeaderRef = useRef<HTMLDivElement>(null);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -120,6 +125,36 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     
     return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
+
+  // Scroll to top when switching from grid view back to carousel
+  useEffect(() => {
+    // Only scroll if we were in grid view and now we're not
+    if (wasGridViewRef.current && !showGridView && showModal) {
+      // Small delay to ensure view transition is complete before scrolling
+      setTimeout(() => {
+        const modal = document.querySelector('.modal.show');
+        if (modal) {
+          // Use scrollIntoView on the header - it will automatically find and scroll the scrollable ancestor
+          if (modalHeaderRef.current) {
+            modalHeaderRef.current.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+          }
+          
+          // Also explicitly scroll modal-body and modal-content to ensure we're at the top
+          const modalBody = modal.querySelector('.modal-body') as HTMLElement;
+          const modalContent = modal.querySelector('.modal-content') as HTMLElement;
+          
+          if (modalBody) {
+            modalBody.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+          if (modalContent) {
+            modalContent.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }
+      }, 100);
+    }
+    // Update the ref to track current state
+    wasGridViewRef.current = showGridView;
+  }, [showGridView, showModal]);
 
   // Check if property is saved
   useEffect(() => {
@@ -225,6 +260,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     onModalToggle(false);
     setIsModalDescriptionExpanded(false);
     setIsManualNavigation(false);
+    setShowGridView(false);
     hasHandledForceOpen.current = false;
     // Only navigate back to home if we navigated from home
     if (location.pathname !== '/saved-properties') {
@@ -232,6 +268,12 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
       // Use the stored original params instead of current params (which might be missing search)
       navigate(`/${originalSearchParamsRef.current}`);
     }
+  };
+
+  const handleGridImageClick = (index: number) => {
+    setSelectedImageIndex(index);
+    setShowGridView(false);
+    // The useEffect hook will handle scrolling to top when showGridView changes
   };
 
   const handleFloorPlanClick = (index: number) => {
@@ -535,7 +577,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
 
     <Modal show={showModal} onHide={handleHideModal} size="lg" centered>
         <Modal.Header closeButton>
-          <div className="d-flex justify-content-between align-items-center w-100 pr-3">
+          <div ref={modalHeaderRef} className="d-flex justify-content-between align-items-center w-100 pr-3">
             <div>
               <Modal.Title>{listing.address}</Modal.Title>
               {listing.area && <span className="badge bg-secondary mt-1">{listing.area}</span>}
@@ -546,101 +588,200 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
           </div>
         </Modal.Header>
         <Modal.Body>
-          <div style={{ position: 'relative' }}>
-            <Carousel 
-              className={`mb-4 ${isManualNavigation ? 'carousel-no-transition' : ''}`}
-              activeIndex={selectedImageIndex} 
-              onSelect={handleCarouselSelect}
-            >
-              {listing.imageGallery && listing.imageGallery.map((url: string, index: number) => (
-                <Carousel.Item key={index}>
-                <img
-                  className="d-block w-100 modal-image"
-                  src={url}
-                  alt={`Slide ${index}`}
-                  style={{ 
-                    height: '450px',
-                    objectFit: 'cover'
+          <div ref={modalBodyRef} style={{ position: 'relative' }}>
+            {showGridView ? (
+              // Grid view
+              <div style={{ paddingBottom: '1rem' }}>
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <h6 style={{ margin: 0, fontWeight: 'bold' }}>
+                    Photos {listing.imageGallery?.length || 0}
+                  </h6>
+                  <Button
+                    variant="link"
+                    onClick={() => setShowGridView(false)}
+                    style={{
+                      fontSize: '0.85rem',
+                      padding: 0,
+                      textDecoration: 'none',
+                      color: '#6c757d'
+                    }}
+                  >
+                    ← Back to carousel
+                  </Button>
+                </div>
+                <div 
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+                    gap: '8px'
                   }}
-                  onLoad={(e) => {
-                    const img = e.target as HTMLImageElement;
-                    if (img.naturalHeight > img.naturalWidth) {
-                      img.style.objectFit = 'contain';
-                      img.style.backgroundColor = 'white';
-                    }
-                  }}
-                />
-                </Carousel.Item>
-              ))}
-            </Carousel>
-            {/* Heart Save Button - Top Right Corner in Modal */}
-            {currentUser && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleSave();
-                }}
-                style={{
-                  position: 'absolute',
-                  top: '15px',
-                  right: '15px',
-                  backgroundColor: 'white',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '45px',
-                  height: '45px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                  transition: 'all 0.2s ease',
-                  zIndex: 10,
-                  padding: 0
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.25)';
-                  e.currentTarget.style.transform = 'scale(1.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
-                  e.currentTarget.style.transform = 'scale(1)';
-                }}
-                title={isSaved ? 'Remove from saved' : 'Save property'}
-              >
-                <svg
-                  width="22"
-                  height="20"
-                  viewBox="0 0 24 21"
-                  fill={isSaved ? '#dc3545' : 'none'}
-                  stroke={isSaved ? '#dc3545' : '#212529'}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{ transition: 'all 0.2s ease' }}
                 >
-                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                </svg>
-              </button>
-            )}
-            {/* Image counter */}
-            {listing.imageGallery && listing.imageGallery.length > 1 && (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '10px',
-                  right: '10px',
-                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                  color: 'white',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.75rem',
-                  fontWeight: '500',
-                  zIndex: 10
-                }}
-              >
-                {selectedImageIndex + 1} / {listing.imageGallery.length}
+                  {listing.imageGallery && listing.imageGallery.map((url: string, index: number) => (
+                    <img
+                      key={index}
+                      src={url}
+                      alt={`Image ${index + 1}`}
+                      style={{
+                        width: '100%',
+                        height: '200px',
+                        objectFit: 'cover',
+                        cursor: 'pointer',
+                        borderRadius: '4px',
+                        transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                      }}
+                      onClick={() => handleGridImageClick(index)}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'scale(1.02)';
+                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      onLoad={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        if (img.naturalHeight > img.naturalWidth) {
+                          img.style.objectFit = 'contain';
+                          img.style.backgroundColor = 'white';
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
+            ) : (
+              // Carousel view
+              <>
+                <div ref={carouselContainerRef}>
+                  <Carousel 
+                    className={`mb-4 ${isManualNavigation ? 'carousel-no-transition' : ''}`}
+                    activeIndex={selectedImageIndex} 
+                    onSelect={handleCarouselSelect}
+                  >
+                  {listing.imageGallery && listing.imageGallery.map((url: string, index: number) => (
+                    <Carousel.Item key={index}>
+                    <img
+                      className="d-block w-100 modal-image"
+                      src={url}
+                      alt={`Slide ${index}`}
+                      style={{ 
+                        height: '450px',
+                        objectFit: 'cover'
+                      }}
+                      onLoad={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        if (img.naturalHeight > img.naturalWidth) {
+                          img.style.objectFit = 'contain';
+                          img.style.backgroundColor = 'white';
+                        }
+                      }}
+                    />
+                    </Carousel.Item>
+                  ))}
+                </Carousel>
+                </div>
+                {/* Heart Save Button - Top Right Corner in Modal */}
+                {currentUser && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSave();
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: '15px',
+                      right: '15px',
+                      backgroundColor: 'white',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '45px',
+                      height: '45px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                      transition: 'all 0.2s ease',
+                      zIndex: 10,
+                      padding: 0
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.25)';
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    title={isSaved ? 'Remove from saved' : 'Save property'}
+                  >
+                    <svg
+                      width="22"
+                      height="20"
+                      viewBox="0 0 24 21"
+                      fill={isSaved ? '#dc3545' : 'none'}
+                      stroke={isSaved ? '#dc3545' : '#212529'}
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ transition: 'all 0.2s ease' }}
+                    >
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                  </button>
+                )}
+                {/* Image counter and "All images" link */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: '10px',
+                    left: '10px',
+                    right: '10px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    zIndex: 10
+                  }}
+                >
+                  {listing.imageGallery && listing.imageGallery.length > 1 && (
+                    <div
+                      style={{
+                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                        color: 'white',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        fontWeight: '500'
+                      }}
+                    >
+                      {selectedImageIndex + 1} / {listing.imageGallery.length}
+                    </div>
+                  )}
+                  <Button
+                    variant="link"
+                    onClick={() => setShowGridView(true)}
+                    style={{
+                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                      color: 'white',
+                      padding: '4px 12px',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: '500',
+                      textDecoration: 'none',
+                      border: 'none'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                    }}
+                  >
+                    <span style={{ marginRight: '6px' }}>📷</span>
+                    All images
+                  </Button>
+                </div>
+              </>
             )}
           </div>
           <Row>
