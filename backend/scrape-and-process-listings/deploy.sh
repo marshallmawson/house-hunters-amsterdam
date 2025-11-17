@@ -64,9 +64,23 @@ if [ "$SERVICE_NAME" = "search" ]; then
 else
     # Deploy as a Cloud Run Job for scraper and processor
     echo "Deploying job: ${SERVICE_NAME}-job"
+    
+    # Set memory and CPU based on service type
+    if [ "$SERVICE_NAME" = "processor" ]; then
+        # Processor needs more memory for ML models (translation + summarization)
+        MEMORY="6Gi"
+        CPU="2"
+    else
+        # Default memory for other jobs
+        MEMORY="2Gi"
+        CPU="1"
+    fi
+    
     gcloud run jobs deploy "${SERVICE_NAME}-job" \
       --image "${IMAGE_NAME}" \
       --region "${REGION}" \
+      --memory "${MEMORY}" \
+      --cpu "${CPU}" \
       --task-timeout 1800 # Set timeout to 30 minutes (1800 seconds)
     echo "Deployment of ${SERVICE_NAME}-job complete."
 fi

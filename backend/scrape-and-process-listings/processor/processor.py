@@ -256,16 +256,24 @@ def generate_embedding_text(clean_listing):
     
     return embedding_text
 
-def process_listings(limit=100):
+def process_listings(limit=None, batch_size=20):
     """
     Queries Firestore for listings that need AI processing,
-    generates the data, and updates them in a batch.
+    generates the data, and updates them in batches.
+    
+    Args:
+        limit: Maximum number of listings to process in this run (None = process all)
+        batch_size: Number of listings to process before committing to Firestore
     """
-    print(f"--- Starting AI Processing Run (limit: {limit}) ---")
+    limit_str = "all" if limit is None else str(limit)
+    print(f"--- Starting AI Processing Run (limit: {limit_str}, batch_size: {batch_size}) ---")
 
     areas = parse_kml_file('neighborhoods.kml')
     
-    docs_to_process = db.collection('listings').where('status', '==', 'needs_processing').limit(limit).stream()
+    query = db.collection('listings').where('status', '==', 'needs_processing')
+    if limit is not None:
+        query = query.limit(limit)
+    docs_to_process = query.stream()
     
     listings_to_update = list(docs_to_process)
     
@@ -274,10 +282,12 @@ def process_listings(limit=100):
         print("--- ✨ Processing Run Complete. ---")
         return
 
-    print(f"Found {len(listings_to_update)} listings to process. Preparing batch write...")
+    print(f"Found {len(listings_to_update)} listings to process. Processing in batches of {batch_size}...")
     
-    batch = db.batch()
     processed_count = 0
+    skipped_count = 0
+    current_batch = db.batch()
+    batch_operations = 0
 
     for doc in listings_to_update:
         listing_data = doc.to_dict()
@@ -295,7 +305,18 @@ def process_listings(limit=100):
         if not listing_area:
             print(f"❗️ Listing {listing_id} is not in any defined area. Skipping.")
             doc_ref = db.collection('listings').document(listing_id)
-            batch.update(doc_ref, {'status': 'processed_without_area'})
+            current_batch.update(doc_ref, {'status': 'processed_without_area'})
+            batch_operations += 1
+            skipped_count += 1
+            # Commit batch if it's getting large
+            if batch_operations >= batch_size:
+                try:
+                    current_batch.commit()
+                    print(f"✅ Committed batch of {batch_operations} listings (skipped).")
+                except Exception as e:
+                    print(f"❗️ Error during batch commit: {e}")
+                current_batch = db.batch()
+                batch_operations = 0
             continue
 
         listing_data['area'] = listing_area
@@ -326,17 +347,30 @@ def process_listings(limit=100):
         }
 
         doc_ref = db.collection('listings').document(listing_id)
-        batch.update(doc_ref, update_data)
+        current_batch.update(doc_ref, update_data)
+        batch_operations += 1
         processed_count += 1
-        print(f"Queued update for listing {listing_id}")
+        print(f"Processed listing {listing_id} ({processed_count}/{len(listings_to_update)})")
 
-    try:
-        batch.commit()
-        print(f"✅ Batch write of {processed_count} listings successful.")
-    except Exception as e:
-        print(f"❗️ Error during batch write: {e}")
+        # Commit batch when it reaches the batch size
+        if batch_operations >= batch_size:
+            try:
+                current_batch.commit()
+                print(f"✅ Committed batch of {batch_operations} listings.")
+            except Exception as e:
+                print(f"❗️ Error during batch commit: {e}")
+            current_batch = db.batch()
+            batch_operations = 0
 
-    print(f"--- ✨ Processing Run Complete. Processed {processed_count} listings. ---")
+    # Commit any remaining operations in the final batch
+    if batch_operations > 0:
+        try:
+            current_batch.commit()
+            print(f"✅ Committed final batch of {batch_operations} listings.")
+        except Exception as e:
+            print(f"❗️ Error during final batch commit: {e}")
+
+    print(f"--- ✨ Processing Run Complete. Processed {processed_count} listings, skipped {skipped_count}. ---")
 
 
 if __name__ == "__main__":
