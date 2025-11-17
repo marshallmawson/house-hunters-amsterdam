@@ -290,9 +290,6 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     setFloorPlanZoom(prev => Math.max(prev - 0.5, 0.5)); // Min zoom 0.5x
   };
 
-  const handleZoomReset = () => {
-    setFloorPlanZoom(1);
-  };
 
   const handleCarouselSelect = (selectedIndex: number | null) => {
     setSelectedImageIndex(selectedIndex || 0);
@@ -620,7 +617,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
                     <img
                       key={index}
                       src={url}
-                      alt={`Image ${index + 1}`}
+                      alt={`${listing.address} - ${index + 1}`}
                       style={{
                         width: '100%',
                         height: '200px',
