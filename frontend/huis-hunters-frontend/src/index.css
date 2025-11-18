@@ -403,12 +403,29 @@ html {
   }
   
   
-  /* Filters section adjustments for mobile */
+  /* Mobile filters button positioning */
+  .mobile-filters-button {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -150px;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  
+  .mobile-filters-button > div {
+    pointer-events: auto;
+  }
+  
+  /* Show filters section on mobile when opened */
   .filters-section {
-    margin-top: -50px !important;
+    position: absolute !important;
+    top: -100px !important;
+    left: 0.5rem !important;
+    right: 0.5rem !important;
+    width: calc(100% - 1rem) !important;
     padding: 1rem !important;
-    margin-left: 0.5rem !important;
-    margin-right: 0.5rem !important;
+    margin: 0 !important;
   }
   
   .filters-section h6 {
@@ -514,7 +531,7 @@ html {
   
   
   .filters-section {
-    margin-top: -30px !important;
+    margin-top: 0.5rem !important;
     padding: 0.75rem !important;
   }
   
@@ -692,10 +709,8 @@ html {
 
 /* Professional Details Grid - Mobile Responsive */
 @media (max-width: 768px) {
-  /* Make main details grid single column on mobile */
-  .modal-body .col-md-6 > div[style*="grid-template-columns"] {
-    grid-template-columns: 1fr !important;
-  }
+  /* Keep 2x2 grid on mobile for main property details (Living Area, Energy Label, Bedrooms, Bathrooms) */
+  /* Removed: .modal-body .col-md-6 > div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; } */
   
   /* Make property info grid single column on mobile */
   .modal-body div[style*="PROPERTY INFO"] + div[style*="grid-template-columns"],

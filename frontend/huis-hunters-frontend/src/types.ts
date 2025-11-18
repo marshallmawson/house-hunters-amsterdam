@@ -42,6 +42,7 @@ export interface Listing {
   area?: string;
   searchScore?: number;
   available?: boolean;
+  pricePerSquareMeter?: number;
 }
 
 export type PropertyStatus = 

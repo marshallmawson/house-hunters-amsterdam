@@ -804,10 +804,61 @@ const Listings = () => {
   };
 
   return (
-    <Container>
+    <Container style={{ position: 'relative' }}>
+      
+      {/* Mobile Filters Button - Floating over hero */}
+      <div className="mobile-filters-button d-md-none">
+        <div>
+        <Button 
+          onClick={() => {
+            setShowFilters(!showFilters);
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.5rem 1rem',
+            borderRadius: '50px',
+            fontSize: '0.875rem',
+            fontWeight: '600',
+            border: '2px solid rgba(255,255,255,0.9)',
+            color: '#4a90e2',
+            backgroundColor: '#ffffff',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+            backdropFilter: 'blur(10px)'
+          }}
+        >
+          🔍 Filters
+          {(() => {
+            const activeCount = [
+              bedrooms !== 'any',
+              priceRange.min !== 400000 || priceRange.max !== 1250000,
+              floorLevel !== 'any',
+              selectedOutdoorSpaces.length > 0,
+              minSize !== '',
+              selectedAreas.length > 0
+            ].filter(Boolean).length;
+            return activeCount > 0 && (
+              <span style={{
+                backgroundColor: '#4a90e2',
+                color: 'white',
+                borderRadius: '10px',
+                padding: '0.2rem 0.4rem',
+                fontSize: '0.75rem',
+                fontWeight: '700',
+                minWidth: '1.25rem',
+                textAlign: 'center'
+              }}>
+                {activeCount}
+              </span>
+            );
+          })()}
+        </Button>
+        </div>
+      </div>
 
-      {/* Modern Filter Section - Overlapping Header */}
-      <div className="mb-4 p-4 filters-section" style={{ 
+      {/* Filter Section */}
+      <div className={`mb-4 p-4 filters-section ${showFilters ? '' : 'd-none'} d-md-block`} style={{ 
         backgroundColor: '#f8f9fa', 
         borderRadius: '12px',
         border: '1px solid #e9ecef',
@@ -820,19 +871,8 @@ const Listings = () => {
           <h6 className="text-muted fw-semibold mb-0" style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Filter houses
           </h6>
-          <div className="d-flex gap-2">
-            <Button 
-              variant="outline-secondary" 
-              size="sm" 
-              className="d-md-none filters-toggle-btn"
-              onClick={() => setShowFilters(!showFilters)}
-              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-            >
-              🔍 {showFilters ? 'Hide' : 'Show'} Filters
-            </Button>
-          </div>
         </div>
-        <div className={`filters-content ${showFilters ? 'show' : ''}`}>
+        <div>
           <Form>
             <Row className="g-2">
             {/* Price Range */}
@@ -1176,9 +1216,60 @@ const Listings = () => {
           </Form>
         </div>
       </div>
-      {/* Sort and Pagination info */}
+      
+      {/* Mobile Sort Bar */}
       {filteredListings.length > 0 && (
-        <Row className="mb-3">
+        <div className="d-md-none mb-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginTop: '2rem', paddingTop: showFilters ? '600px' : '0', transition: 'padding-top 0.3s ease', position: 'relative', zIndex: 100 }}>
+          {/* Left: Results count */}
+          <div style={{
+            fontSize: '0.8rem',
+            color: '#6c757d',
+            whiteSpace: 'nowrap'
+          }}>
+            {filteredListings.length} listings • Page {currentPage} of {totalPages}
+          </div>
+          
+          {/* Right: Sort Dropdown */}
+          <Dropdown>
+            <Dropdown.Toggle 
+              variant="outline-secondary"
+              size="sm"
+              style={{
+                padding: '0.5rem 0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                border: '1px solid #dee2e6',
+                backgroundColor: 'white',
+                color: '#495057',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {sortOrder === 'date-new-old' ? (useAISearch ? 'Best match' : 'Date & Price') :
+               sortOrder === 'date-old-new' ? 'Oldest first' :
+               sortOrder === 'price-low-high' ? 'Price: Low-High' : 'Price: High-Low'}
+            </Dropdown.Toggle>
+            <Dropdown.Menu align="end">
+              <Dropdown.Item onClick={() => setSortOrder('date-new-old')} active={sortOrder === 'date-new-old'}>
+                {useAISearch ? 'Best match' : 'Date & Price'}
+              </Dropdown.Item>
+              <Dropdown.Item onClick={() => setSortOrder('date-old-new')} active={sortOrder === 'date-old-new'}>
+                Oldest first
+              </Dropdown.Item>
+              <Dropdown.Item onClick={() => setSortOrder('price-low-high')} active={sortOrder === 'price-low-high'}>
+                Price: Low-High
+              </Dropdown.Item>
+              <Dropdown.Item onClick={() => setSortOrder('price-high-low')} active={sortOrder === 'price-high-low'}>
+                Price: High-Low
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown>
+        </div>
+      )}
+      
+      {/* Desktop Sort and Pagination info */}
+      {filteredListings.length > 0 && (
+        <Row className="mb-3 d-none d-md-flex">
           <Col>
             <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
               <div className="d-flex align-items-center gap-3">
@@ -1210,6 +1301,7 @@ const Listings = () => {
                   <option value="date-new-old">{useAISearch ? 'Best match' : 'Date & Price'}</option>
                   <option value="date-old-new">Date (Old to New)</option>
                   <option value="price-low-high">Price (Low to High)</option>
+                  <option value="price-high-low">Price (High to Low)</option>
                 </Form.Control>
               </div>
             </div>
@@ -1220,7 +1312,7 @@ const Listings = () => {
       {/* Listings */}
       <Row>
         {currentListings.map(listing => (
-          <Col key={listing.id} sm={12} md={6} lg={6} xl={4} style={{ marginBottom: '2rem', paddingLeft: '0.5rem', paddingRight: '0.5rem' }}>
+          <Col key={listing.id} sm={12} md={6} lg={6} xl={4} className="mb-4">
             <ListingCard 
               listing={listing} 
               isAnyModalOpen={isModalOpen}

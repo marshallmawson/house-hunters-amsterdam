@@ -337,6 +337,14 @@ def process_listings(limit=None, batch_size=20):
         # 4. Generate the embedding vector
         listing_embedding = generate_embedding(embedding_text)
 
+        # 5. Calculate price per square meter if missing
+        price_per_sqm = listing_data.get('pricePerSquareMeter')
+        if price_per_sqm is None:
+            price = listing_data.get('price')
+            living_area = listing_data.get('livingArea')
+            if price and living_area and living_area > 0:
+                price_per_sqm = round(price / living_area)
+
         update_data = {
             'area': listing_area,
             'cleanedDescription': translated_description,
@@ -345,6 +353,10 @@ def process_listings(limit=None, batch_size=20):
             'status': 'processed',
             'processedAt': firestore.SERVER_TIMESTAMP
         }
+        
+        # Only add pricePerSquareMeter to update if it was calculated
+        if price_per_sqm is not None:
+            update_data['pricePerSquareMeter'] = price_per_sqm
 
         doc_ref = db.collection('listings').document(listing_id)
         current_batch.update(doc_ref, update_data)

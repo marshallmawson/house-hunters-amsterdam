@@ -231,6 +231,13 @@ def transform_listing_data(raw_item):
     if lat and lon:
         google_maps_url = f"https://maps.google.com/maps?q={lat},{lon}&z=15&output=embed"
 
+    # Calculate price per square meter
+    price = price_info.get("NumericSellingPrice")
+    living_area = parse_number_from_string(fast_view.get("LivingArea"))
+    price_per_sqm = None
+    if price and living_area and living_area > 0:
+        price_per_sqm = round(price / living_area)
+
     clean_listing = {
         "fundaId": url_id or raw_item.get("_id"),  # Prefer URL ID, fallback to _id
         "url": urls.get("FullUrl"),
@@ -241,8 +248,8 @@ def transform_listing_data(raw_item):
             "lat": lat,
             "lon": lon
         },
-        "price": price_info.get("NumericSellingPrice"),
-        "livingArea": parse_number_from_string(fast_view.get("LivingArea")),
+        "price": price,
+        "livingArea": living_area,
         "bedrooms": parse_number_from_string(fast_view.get("NumberOfBedrooms")),
         "bathrooms": parse_number_from_string(bathroom_str),
         "apartmentFloor": apartment_floor,
@@ -261,7 +268,8 @@ def transform_listing_data(raw_item):
         "mainImage": main_image,
         "imageGallery": gallery,
         "floorPlans": floor_plans,
-        "googleMapsUrl": google_maps_url
+        "googleMapsUrl": google_maps_url,
+        "pricePerSquareMeter": price_per_sqm
     }
     
     return clean_listing

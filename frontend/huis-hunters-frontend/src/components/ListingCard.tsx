@@ -413,19 +413,33 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
             </span>
           </div>
           
-          {/* Neighborhood Badge - Left aligned below price */}
-          {listing.area && (
-            <div style={{ marginTop: '0.25rem' }}>
-              <span className="badge bg-secondary" style={{ 
-                fontSize: '0.7rem', 
-                padding: '0.3rem 0.6rem',
-                borderRadius: '12px',
-                fontWeight: '500'
-              }}>
-                {listing.area}
-              </span>
+          {/* Neighborhood Badge (left) and Price per m² (right) on same line */}
+          <div className="d-flex justify-content-between align-items-center" style={{ marginTop: '0.25rem' }}>
+            <div>
+              {listing.area && (
+                <span className="badge bg-secondary" style={{ 
+                  fontSize: '0.7rem', 
+                  padding: '0.3rem 0.6rem',
+                  borderRadius: '12px',
+                  fontWeight: '500'
+                }}>
+                  {listing.area}
+                </span>
+              )}
             </div>
-          )}
+            <div>
+              {listing.pricePerSquareMeter && (
+                <span style={{ 
+                  fontSize: '0.75rem', 
+                  fontWeight: '500', 
+                  color: '#1a202c',
+                  whiteSpace: 'nowrap'
+                }}>
+                  per m² €{listing.pricePerSquareMeter.toLocaleString()}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
         
         {/* Main Specs - All inline */}
@@ -680,14 +694,25 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
 
     <Modal show={showModal} onHide={handleHideModal} size="lg" centered>
         <Modal.Header closeButton>
-          <div ref={modalHeaderRef} className="d-flex justify-content-between align-items-center w-100 pr-3">
-            <div>
-              <Modal.Title>{listing.address}</Modal.Title>
-              {listing.area && <span className="badge bg-secondary mt-1">{listing.area}</span>}
+          <div ref={modalHeaderRef} style={{ width: '100%', paddingRight: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem', gap: '0.5rem' }}>
+              <Modal.Title style={{ flex: '1 1 auto', minWidth: '0', wordBreak: 'break-word', paddingRight: '0.5rem' }}>{listing.address}</Modal.Title>
+              <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
+                €{listing.price?.toLocaleString()}
+              </span>
             </div>
-            <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap' }}>
-              €{listing.price?.toLocaleString()}
-            </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+              <div>
+                {listing.area && <span className="badge bg-secondary">{listing.area}</span>}
+              </div>
+              <div>
+                {listing.pricePerSquareMeter && (
+                  <span style={{ fontSize: '0.9rem', fontWeight: '500', color: '#1a202c', whiteSpace: 'nowrap' }}>
+                    per m² €{listing.pricePerSquareMeter.toLocaleString()}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         </Modal.Header>
         <Modal.Body>
@@ -900,7 +925,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
               {/* Property Specifications - Grid Layout */}
               <div style={{ 
                 display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                 gap: '0.5rem',
                 marginBottom: '0.75rem'
               }}>
