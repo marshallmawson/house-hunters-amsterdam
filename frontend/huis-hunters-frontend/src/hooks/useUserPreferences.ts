@@ -11,8 +11,8 @@ const defaultPreferences: UserPreferences = {
   selectedOutdoorSpaces: [],
   minSize: '',
   selectedAreas: [],
-  searchQuery: '',
   sortOrder: 'date-new-old'
+  // searchQuery is not included in default preferences (not saved)
 };
 
 export const useUserPreferences = () => {
@@ -49,8 +49,8 @@ export const useUserPreferences = () => {
           selectedOutdoorSpaces: outdoorSpaces,
           minSize: data.minSize || defaultPreferences.minSize,
           selectedAreas: data.selectedAreas || defaultPreferences.selectedAreas,
-          searchQuery: data.searchQuery || defaultPreferences.searchQuery,
           sortOrder: data.sortOrder || defaultPreferences.sortOrder
+          // searchQuery is not loaded from preferences
         });
       }
     } catch (error) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Carousel, Modal, Button, Row, Col, Form } from 'react-bootstrap';
+import { Card, Carousel, Modal, Button, Row, Col, Form, Toast } from 'react-bootstrap';
 import { Listing } from '../types';
 import BedIcon from './icons/BedIcon';
 import BathIcon from './icons/BathIcon';
@@ -61,6 +61,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   const [showUnsaveConfirm, setShowUnsaveConfirm] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [showGridView, setShowGridView] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const hasHandledForceOpen = useRef(false);
   const clickedImageIndex = useRef(0);
   const originalSearchParamsRef = useRef<string>(''); // Store original search params when opening modal
@@ -203,6 +205,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
           await deleteDoc(doc(db, 'savedProperties', savedPropertyId));
           setIsSaved(false);
           setSavedPropertyId(null);
+          setToastMessage('Removed from Saved Properties');
+          setShowToast(true);
         }
       } else {
         // Save
@@ -216,6 +220,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
         });
         setIsSaved(true);
         setSavedPropertyId(savedPropertyRef.id);
+        setToastMessage('Added to Saved Properties');
+        setShowToast(true);
       }
     } catch (error) {
       console.error('Error saving/unsaving property:', error);
@@ -231,6 +237,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
       setIsSaved(false);
       setSavedPropertyId(null);
       setShowUnsaveConfirm(false);
+      setToastMessage('Removed from Saved Properties');
+      setShowToast(true);
     } catch (error) {
       console.error('Error unsaving property:', error);
       alert('Failed to unsave property');
@@ -299,7 +307,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
   };
   return (
     <>
-    <Card className="listing-card" style={{ width: '24rem', margin: '1rem' }}>
+    <Card className="listing-card" style={{ width: '24rem' }}>
       <div style={{ position: 'relative' }}>
         <Carousel interval={isAnyModalOpen ? null : 5000}>
           {listing.imageGallery && listing.imageGallery.slice(0, 10).map((url: string, index: number) => (
@@ -376,62 +384,160 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
           </button>
         )}
       </div>
-      <Card.Body>
-        <div className="d-flex justify-content-between align-items-baseline">
-          <Card.Title 
-            style={{ fontSize: '1.1rem', marginRight: '1rem', cursor: 'pointer', textDecoration: 'underline' }}
-            onClick={() => handleShowModal()}
-          >
-            {listing.address}
-          </Card.Title>
-          <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap' }}>
-            €{listing.price?.toLocaleString()}
-          </span>
-        </div>
-        {listing.area && <span className="badge bg-secondary mb-2">{listing.area}</span>}
-        <div className="mb-2" style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'black' }}>
-          {listing.livingArea && <span style={{ marginRight: '1rem' }}><RulerIcon /> {listing.livingArea} m²</span>}
-          {listing.bedrooms && <span style={{ marginRight: '1rem' }}><BedIcon /> {listing.bedrooms}</span>}
-          {listing.bathrooms && <span style={{ marginRight: '1rem' }}><BathIcon /> {listing.bathrooms}</span>}
-          {listing.energyLabel && <span style={{ marginRight: '1rem' }}><BoltIcon /> {listing.energyLabel}</span>}
-        </div>
-        <div className="mb-2" style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'black' }}>
-          {listing.apartmentFloor && (
-            <span style={{ marginRight: '1rem' }}>
-              <BuildingIcon />{' '}
-              {typeof listing.apartmentFloor === 'number'
-                ? `Floor ${listing.apartmentFloor}`
-                : listing.apartmentFloor.toLowerCase().includes('floor')
-                ? listing.apartmentFloor
-                : `${listing.apartmentFloor} floor`}
-            </span>
-          )}
-          {listing.numberOfStories && listing.numberOfStories >= 2 && (
-            <span style={{ marginRight: '1rem' }}><LayersIcon /> {listing.numberOfStories} stories</span>
-          )}
-          {outdoorSpaceString && <span style={{ marginRight: '0.5rem' }}><LeafIcon /> {outdoorSpaceString}</span>}
-        </div>
-        <Card.Text style={{ fontSize: '0.85rem' }}>
-          {isExpanded ? listing.embeddingText : `${listing.embeddingText.substring(0, summaryTextLength)}...`}
-          <Button variant="link" onClick={() => setIsExpanded(!isExpanded)} style={{ fontSize: '0.8rem', verticalAlign: 'baseline', padding: '0 0.2rem' }}>
-            {isExpanded ? 'Show Less' : 'Show More'}
-          </Button>
-        </Card.Text>
-        <div className="d-flex justify-content-between align-items-center">
-            <Button 
-              variant="link" 
-              onClick={() => handleShowModal()} 
+      <Card.Body style={{ padding: '0.85rem', display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Header: Address and Price */}
+        <div style={{ marginBottom: '0.5rem' }}>
+          <div className="d-flex justify-content-between align-items-start">
+            <Card.Title 
               style={{ 
-                fontSize: '0.8rem', 
-                padding: '0', 
-                color: '#6c757d',
-                textDecoration: 'none'
+                fontSize: '1.05rem', 
+                marginRight: '0.75rem', 
+                cursor: 'pointer', 
+                textDecoration: 'underline',
+                marginBottom: '0',
+                lineHeight: '1.3',
+                fontWeight: '600',
+                color: '#4a90e2'
               }}
-              className="p-0"
+              onClick={() => handleShowModal()}
             >
-              View all details
-            </Button>
-            <small className="text-muted"><CalendarIcon /> {publishedDate?.toLocaleDateString()}</small>
+              {listing.address}
+            </Card.Title>
+            <span style={{ 
+              fontSize: '1.15rem', 
+              fontWeight: 'bold', 
+              color: 'black', 
+              whiteSpace: 'nowrap'
+            }}>
+              €{listing.price?.toLocaleString()}
+            </span>
+          </div>
+          
+          {/* Neighborhood Badge - Left aligned below price */}
+          {listing.area && (
+            <div style={{ marginTop: '0.25rem' }}>
+              <span className="badge bg-secondary" style={{ 
+                fontSize: '0.7rem', 
+                padding: '0.3rem 0.6rem',
+                borderRadius: '12px',
+                fontWeight: '500'
+              }}>
+                {listing.area}
+              </span>
+            </div>
+          )}
+        </div>
+        
+        {/* Main Specs - All inline */}
+        <div style={{ 
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          marginBottom: '0.6rem',
+          fontSize: '0.8rem',
+          fontWeight: '600',
+          color: '#1a202c'
+        }}>
+          {listing.livingArea && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span style={{ color: '#4a90e2', fontSize: '0.85rem' }}><RulerIcon /></span>
+              <span>{listing.livingArea} m²</span>
+            </div>
+          )}
+          {listing.bedrooms && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span style={{ color: '#4a90e2', fontSize: '0.85rem' }}><BedIcon /></span>
+              <span>{listing.bedrooms}</span>
+            </div>
+          )}
+          {listing.bathrooms && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span style={{ color: '#4a90e2', fontSize: '0.85rem' }}><BathIcon /></span>
+              <span>{listing.bathrooms}</span>
+            </div>
+          )}
+          {listing.energyLabel && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span style={{ color: '#4a90e2', fontSize: '0.85rem' }}><BoltIcon /></span>
+              <span>{listing.energyLabel}</span>
+            </div>
+          )}
+        </div>
+        
+        {/* Floor and Outdoor Info - Same style as main specs */}
+        {(listing.apartmentFloor || (listing.numberOfStories && listing.numberOfStories >= 2) || outdoorSpaceString) && (
+          <div style={{ 
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            marginBottom: '0.6rem',
+            fontSize: '0.75rem',
+            fontWeight: '500',
+            color: '#1a202c'
+          }}>
+            {listing.apartmentFloor && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <span style={{ color: '#4a90e2', fontSize: '0.8rem' }}><BuildingIcon /></span>
+                <span>
+                  {typeof listing.apartmentFloor === 'number'
+                    ? `Floor ${listing.apartmentFloor}`
+                    : listing.apartmentFloor.toLowerCase().includes('floor')
+                    ? listing.apartmentFloor
+                    : `${listing.apartmentFloor} floor`}
+                </span>
+              </div>
+            )}
+            {listing.numberOfStories && listing.numberOfStories >= 2 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <span style={{ color: '#4a90e2', fontSize: '0.8rem' }}><LayersIcon /></span>
+                <span>{listing.numberOfStories} stories</span>
+              </div>
+            )}
+            {outdoorSpaceString && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <span style={{ color: '#4a90e2', fontSize: '0.8rem' }}><LeafIcon /></span>
+                <span>{outdoorSpaceString}</span>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Description - Fixed height */}
+        <Card.Text style={{ 
+          fontSize: '0.8rem', 
+          lineHeight: '1.45', 
+          marginBottom: '0.5rem', 
+          color: '#495057',
+          minHeight: '4.6rem',
+          maxHeight: '4.6rem',
+          overflow: 'hidden',
+          display: '-webkit-box',
+          WebkitLineClamp: 4,
+          WebkitBoxOrient: 'vertical',
+          flex: '0 0 auto'
+        }}>
+          {listing.embeddingText}
+        </Card.Text>
+        
+        {/* Footer: View Details and Date */}
+        <div className="d-flex justify-content-between align-items-center" style={{ paddingTop: '0.6rem', borderTop: '1px solid #e9ecef', marginTop: 'auto' }}>
+          <Button 
+            variant="link" 
+            onClick={() => handleShowModal()} 
+            style={{ 
+              fontSize: '0.75rem', 
+              padding: '0', 
+              color: '#4a90e2',
+              textDecoration: 'none',
+              fontWeight: '600'
+            }}
+            className="p-0"
+          >
+            View all details →
+          </Button>
+          <small className="text-muted" style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+            <CalendarIcon /> {publishedDate?.toLocaleDateString()}
+          </small>
         </div>
         
         {/* Viewing Scheduled Section - Inside Card */}
@@ -783,108 +889,384 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
           </div>
           <Row>
             <Col md={6}>
-              <h5>Details</h5>
+              <h5 style={{ 
+                fontFamily: 'Playfair Display, serif', 
+                fontSize: '1.25rem', 
+                fontWeight: '600',
+                marginBottom: '0.75rem',
+                color: '#1a202c'
+              }}>Details</h5>
               
-              {/* Property Specifications */}
-              <div className="mb-3">
-                <div className="mb-2" style={{ fontSize: '0.9rem', color: 'black' }}>
-                  {listing.livingArea && <span style={{ marginRight: '1rem' }}><RulerIcon /> {listing.livingArea} m²</span>}
-                  {listing.bedrooms && <span style={{ marginRight: '1rem' }}><BedIcon /> {listing.bedrooms}</span>}
-                  {listing.bathrooms && <span style={{ marginRight: '1rem' }}><BathIcon /> {listing.bathrooms}</span>}
-                  {listing.energyLabel && <span style={{ marginRight: '1rem' }}><BoltIcon /> {listing.energyLabel}</span>}
-                </div>
-                <div className="mb-2" style={{ fontSize: '0.9rem', color: 'black' }}>
-                  {listing.apartmentFloor && (
-                    <span style={{ marginRight: '1rem' }}>
-                      <BuildingIcon />{' '}
-                      {typeof listing.apartmentFloor === 'number'
-                        ? `Floor ${listing.apartmentFloor}`
-                        : listing.apartmentFloor.toLowerCase().includes('floor')
-                        ? listing.apartmentFloor
-                        : `${listing.apartmentFloor} floor`}
-                    </span>
-                  )}
-                  {listing.numberOfStories && listing.numberOfStories >= 2 && (
-                    <span style={{ marginRight: '1rem' }}><LayersIcon /> {listing.numberOfStories} stories</span>
-                  )}
-                  {listing.yearBuilt && <span style={{ marginRight: '1rem' }}><CalendarIcon /> Built {listing.yearBuilt}</span>}
-                </div>
-                {outdoorSpaceString && (
-                  <div className="mb-2" style={{ fontSize: '0.9rem', color: 'black' }}>
-                    <span style={{ marginRight: '0.5rem' }}><LeafIcon /> {outdoorSpaceString}</span>
+              {/* Property Specifications - Grid Layout */}
+              <div style={{ 
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '0.5rem',
+                marginBottom: '0.75rem'
+              }}>
+                {/* Top row: Living Area, Energy Label */}
+                {listing.livingArea && (
+                  <div style={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.5rem',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '6px',
+                    border: '1px solid #e9ecef'
+                  }}>
+                    <span style={{ fontSize: '1rem', color: '#4a90e2' }}><RulerIcon /></span>
+                    <div style={{ lineHeight: '1.2' }}>
+                      <div style={{ fontSize: '0.95rem', fontWeight: '600', color: '#1a202c' }}>
+                        {listing.livingArea} m²
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#6c757d' }}>Living Area</div>
+                    </div>
+                  </div>
+                )}
+                
+                {listing.energyLabel && (
+                  <div style={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.5rem',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '6px',
+                    border: '1px solid #e9ecef'
+                  }}>
+                    <span style={{ fontSize: '1rem', color: '#4a90e2' }}><BoltIcon /></span>
+                    <div style={{ lineHeight: '1.2' }}>
+                      <div style={{ fontSize: '0.95rem', fontWeight: '600', color: '#1a202c' }}>
+                        {listing.energyLabel}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#6c757d' }}>Energy Label</div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Bottom row: Bedrooms, Bathrooms */}
+                {listing.bedrooms && (
+                  <div style={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.5rem',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '6px',
+                    border: '1px solid #e9ecef'
+                  }}>
+                    <span style={{ fontSize: '1rem', color: '#4a90e2' }}><BedIcon /></span>
+                    <div style={{ lineHeight: '1.2' }}>
+                      <div style={{ fontSize: '0.95rem', fontWeight: '600', color: '#1a202c' }}>
+                        {listing.bedrooms}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#6c757d' }}>Bedrooms</div>
+                    </div>
+                  </div>
+                )}
+                
+                {listing.bathrooms && (
+                  <div style={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.5rem',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '6px',
+                    border: '1px solid #e9ecef'
+                  }}>
+                    <span style={{ fontSize: '1rem', color: '#4a90e2' }}><BathIcon /></span>
+                    <div style={{ lineHeight: '1.2' }}>
+                      <div style={{ fontSize: '0.95rem', fontWeight: '600', color: '#1a202c' }}>
+                        {listing.bathrooms}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#6c757d' }}>Bathrooms</div>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Additional Information */}
-              <div className="mb-3">
-                {listing.neighborhood && (
-                  <p className="mb-2" style={{ fontSize: '0.9rem' }}>
-                    <strong><GlobeIcon /> Neighborhood:</strong> {listing.neighborhood}
-                  </p>
-                )}
-                {listing.vveContribution && (
-                  <p className="mb-2" style={{ fontSize: '0.9rem' }}>
-                    <strong>VVE Contribution:</strong> €{listing.vveContribution} per month
-                  </p>
-                )}
-                <p className="mb-2" style={{ fontSize: '0.9rem' }}>
-                  <strong>Agent:</strong> {listing.agentUrl ? <a href={listing.agentUrl} target="_blank" rel="noopener noreferrer">{listing.agentName}</a> : listing.agentName}
-                </p>
-                <Card.Link href={listing.url} target="_blank">View on Funda</Card.Link>
+              {/* Outdoor Space */}
+              {outdoorSpaceString && (
+                <div style={{ 
+                  marginBottom: '0.75rem',
+                  padding: '0.5rem',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '6px',
+                  border: '1px solid #e9ecef'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '1rem', color: '#4a90e2', flexShrink: 0 }}><LeafIcon /></span>
+                    <div style={{ lineHeight: '1.2', flex: 1 }}>
+                      <div style={{ fontSize: '0.7rem', fontWeight: '600', color: '#6c757d', marginBottom: '0.15rem' }}>
+                        Outdoor Space
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: '#495057', fontWeight: '600' }}>
+                        {outdoorSpaceString}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Property Information - 2x2 Grid */}
+              {(listing.apartmentFloor || listing.numberOfStories || listing.yearBuilt || listing.vveContribution) && (
+                <div style={{ 
+                  marginBottom: '0.75rem',
+                  padding: '0.65rem',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '6px',
+                  border: '1px solid #e9ecef'
+                }}>
+                  <div style={{ 
+                    fontSize: '0.7rem', 
+                    fontWeight: '600', 
+                    color: '#6c757d',
+                    marginBottom: '0.5rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>Property Info</div>
+                  <div style={{ 
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: '0.5rem'
+                  }}>
+                    {listing.apartmentFloor && (
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.4rem',
+                        padding: '0.4rem',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '4px'
+                      }}>
+                        <span style={{ fontSize: '0.9rem', color: '#4a90e2' }}><BuildingIcon /></span>
+                        <span style={{ fontSize: '0.8rem', color: '#495057', lineHeight: '1.2' }}>
+                          {typeof listing.apartmentFloor === 'number'
+                            ? `Floor ${listing.apartmentFloor}`
+                            : listing.apartmentFloor.toLowerCase().includes('floor')
+                            ? listing.apartmentFloor
+                            : `${listing.apartmentFloor} floor`}
+                        </span>
+                      </div>
+                    )}
+                    {listing.numberOfStories && listing.numberOfStories >= 2 && (
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.4rem',
+                        padding: '0.4rem',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '4px'
+                      }}>
+                        <span style={{ fontSize: '0.9rem', color: '#4a90e2' }}><LayersIcon /></span>
+                        <span style={{ fontSize: '0.8rem', color: '#495057', lineHeight: '1.2' }}>
+                          {listing.numberOfStories} stories
+                        </span>
+                      </div>
+                    )}
+                    {listing.yearBuilt && (
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.4rem',
+                        padding: '0.4rem',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '4px'
+                      }}>
+                        <span style={{ fontSize: '0.9rem', color: '#4a90e2' }}><CalendarIcon /></span>
+                        <span style={{ fontSize: '0.8rem', color: '#495057', lineHeight: '1.2' }}>
+                          Built {listing.yearBuilt}
+                        </span>
+                      </div>
+                    )}
+                    {listing.vveContribution && (
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.4rem',
+                        padding: '0.4rem',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '4px'
+                      }}>
+                        <span style={{ fontSize: '0.9rem', color: '#4a90e2' }}>€</span>
+                        <span style={{ fontSize: '0.8rem', color: '#495057', lineHeight: '1.2' }}>
+                          VVE €{listing.vveContribution}/mo
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Agent Info */}
+              <div style={{ 
+                marginBottom: '0.5rem',
+                fontSize: '0.85rem',
+                color: '#495057'
+              }}>
+                <strong style={{ color: '#1a202c' }}>Agent:</strong>{' '}
+                {listing.agentUrl ? (
+                  <a 
+                    href={listing.agentUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ color: '#4a90e2', textDecoration: 'none' }}
+                  >
+                    {listing.agentName}
+                  </a>
+                ) : listing.agentName}
               </div>
-              
-              <hr />
-              
-              <h5>Full Description</h5>
-              <p style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
-                {listing.cleanedDescription && (
-                  <>
-                    {(() => {
-                      const characterLimit = isMobile ? 500 : 1000;
-                      const shouldShowButton = listing.cleanedDescription.length > characterLimit;
-                      
-                      return (
-                        <>
-                          {isModalDescriptionExpanded 
-                            ? listing.cleanedDescription 
-                            : `${listing.cleanedDescription.substring(0, characterLimit)}...`
-                          }
-                          {shouldShowButton && (
-                            <Button 
-                              variant="link" 
-                              onClick={() => setIsModalDescriptionExpanded(!isModalDescriptionExpanded)} 
-                              style={{ fontSize: '0.85rem', verticalAlign: 'baseline', padding: '0 0.2rem' }}
-                            >
-                              {isModalDescriptionExpanded ? 'Show Less' : 'Show More'}
-                            </Button>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </>
-                )}
-              </p>
+
+              <a 
+                href={listing.url} 
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  padding: '0.5rem 1.25rem',
+                  backgroundColor: '#4a90e2',
+                  color: 'white',
+                  textDecoration: 'none',
+                  borderRadius: '6px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  marginBottom: '0.75rem'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#357abd';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(74, 144, 226, 0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#4a90e2';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                View on Funda →
+              </a>
             </Col>
             <Col md={6}>
               {mapUrl && (
                 <>
-                  <h5>Location</h5>
+                  <h5 style={{ 
+                    fontFamily: 'Playfair Display, serif', 
+                    fontSize: '1.25rem', 
+                    fontWeight: '600',
+                    marginBottom: '0.75rem',
+                    color: '#1a202c'
+                  }}>Location</h5>
                   <iframe
                     src={mapUrl}
                     width="100%"
                     height="300"
-                    style={{ border: 0 }}
+                    style={{ border: 0, borderRadius: '6px', marginBottom: '0.5rem' }}
                     allowFullScreen={false}
                     loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade"
                     title={`Map of ${listing.address}`}
                   ></iframe>
+                  
+                  {/* Neighborhood info directly below map */}
+                  {listing.neighborhood && (
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.4rem',
+                      marginBottom: '0.75rem',
+                      fontSize: '0.85rem',
+                      color: '#495057'
+                    }}>
+                      <span style={{ fontSize: '0.9rem', color: '#4a90e2' }}><GlobeIcon /></span>
+                      <span>
+                        <strong style={{ color: '#1a202c' }}>Neighborhood:</strong> {listing.neighborhood}
+                      </span>
+                    </div>
+                  )}
                 </>
               )}
+            </Col>
+          </Row>
+
+          {/* Full Description and Floor Plans Row - Aligned */}
+          <Row style={{ marginTop: '1.5rem' }}>
+            <Col md={6}>
+              <div style={{ 
+                borderTop: '1px solid #e9ecef',
+                paddingTop: '0.75rem'
+              }}>
+                <h5 style={{ 
+                  fontFamily: 'Playfair Display, serif', 
+                  fontSize: '1.25rem', 
+                  fontWeight: '600',
+                  marginBottom: '0.5rem',
+                  color: '#1a202c'
+                }}>Full Description</h5>
+                <div style={{ 
+                  fontSize: '0.9rem', 
+                  lineHeight: '1.6',
+                  color: '#495057',
+                  fontFamily: 'Inter, sans-serif'
+                }}>
+                  {listing.cleanedDescription && (
+                    <>
+                      {(() => {
+                        const characterLimit = isMobile ? 500 : 1000;
+                        const shouldShowButton = listing.cleanedDescription.length > characterLimit;
+                        
+                        return (
+                          <>
+                            {isModalDescriptionExpanded 
+                              ? listing.cleanedDescription 
+                              : `${listing.cleanedDescription.substring(0, characterLimit)}${shouldShowButton ? '...' : ''}`
+                            }
+                            {shouldShowButton && (
+                              <Button 
+                                variant="link" 
+                                onClick={() => setIsModalDescriptionExpanded(!isModalDescriptionExpanded)} 
+                                style={{ 
+                                  fontSize: '0.85rem', 
+                                  padding: '0.25rem 0',
+                                  marginLeft: '0.5rem',
+                                  color: '#4a90e2',
+                                  textDecoration: 'none',
+                                  fontWeight: '600'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.textDecoration = 'underline';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.textDecoration = 'none';
+                                }}
+                              >
+                                {isModalDescriptionExpanded ? 'Show Less ↑' : 'Show More ↓'}
+                              </Button>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </>
+                  )}
+                </div>
+              </div>
+            </Col>
+
+            <Col md={6}>
               {listing.floorPlans && listing.floorPlans.length > 0 && (
-                <>
-                  <h5 className="mt-4">Floor Plans</h5>
+                <div style={{ 
+                  borderTop: '1px solid #e9ecef',
+                  paddingTop: '0.75rem'
+                }}>
+                  <h5 style={{ 
+                    fontFamily: 'Playfair Display, serif', 
+                    fontSize: '1.25rem', 
+                    fontWeight: '600',
+                    marginBottom: '0.75rem',
+                    color: '#1a202c'
+                  }}>Floor Plans</h5>
                   <Carousel indicators={listing.floorPlans.length > 1} controls={listing.floorPlans.length > 1}>
                     {listing.floorPlans.map((url, index) => (
                       <Carousel.Item key={index}>
@@ -892,13 +1274,13 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
                           className="d-block w-100"
                           src={url}
                           alt={`Floor Plan ${index + 1}`}
-                          style={{ maxHeight: '350px', objectFit: 'contain', cursor: 'pointer' }}
+                          style={{ maxHeight: '350px', objectFit: 'contain', cursor: 'pointer', borderRadius: '6px' }}
                           onClick={() => handleFloorPlanClick(index)}
                         />
                       </Carousel.Item>
                     ))}
                   </Carousel>
-                </>
+                </div>
               )}
             </Col>
           </Row>
@@ -1104,6 +1486,35 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Toast Notification */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          zIndex: 9999
+        }}
+      >
+        <Toast
+          show={showToast}
+          onClose={() => setShowToast(false)}
+          delay={3000}
+          autohide
+          style={{
+            backgroundColor: '#2d3748',
+            color: 'white',
+            border: 'none',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            minWidth: 'auto',
+            maxWidth: 'fit-content'
+          }}
+        >
+          <Toast.Body style={{ color: 'white', fontWeight: '500', fontSize: '0.9rem', padding: '0.75rem 1rem' }}>
+            {toastMessage}
+          </Toast.Body>
+        </Toast>
+      </div>
     </>
   );
 };

@@ -85,7 +85,7 @@ export interface UserPreferences {
   selectedOutdoorSpaces: string[];
   minSize: string;
   selectedAreas: string[];
-  searchQuery: string;
+  searchQuery?: string; // Optional - not saved to preferences
   sortOrder: string;
 }
 

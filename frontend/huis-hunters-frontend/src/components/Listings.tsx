@@ -84,9 +84,7 @@ const Listings = () => {
       if (savedPreferences.sortOrder) {
         setSortOrder(savedPreferences.sortOrder);
       }
-      if (savedPreferences.searchQuery) {
-        setSearchQuery(savedPreferences.searchQuery);
-      }
+      // Note: searchQuery is not restored from saved preferences
     } else {
       preferencesLoadedRef.current = true;
     }
@@ -711,6 +709,7 @@ const Listings = () => {
   // Note: Removed duplicate effect - filter changes are already handled by the effect on lines 337-344
 
   // Save preferences when they change (debounced)
+  // Note: searchQuery is not saved to preferences
   useEffect(() => {
     if (!preferencesLoadedRef.current) return; // Don't save on initial load
     
@@ -722,13 +721,12 @@ const Listings = () => {
         selectedOutdoorSpaces,
         minSize,
         selectedAreas,
-        searchQuery,
         sortOrder
       });
     }, 2000); // Debounce 2 seconds
 
     return () => clearTimeout(timeoutId);
-  }, [priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, searchQuery, sortOrder, savePreferences]);
+  }, [priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, sortOrder, savePreferences]);
 
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
@@ -1166,20 +1164,6 @@ const Listings = () => {
                         
                         // Update URL with cleared search but preserve current filters
                         updateURLWithSearch('');
-                        
-                        // Clear search query from saved preferences but keep filters
-                        setTimeout(() => {
-                          savePreferences({
-                            priceRange,
-                            bedrooms,
-                            floorLevel,
-                            selectedOutdoorSpaces,
-                            minSize,
-                            selectedAreas,
-                            searchQuery: '', // Clear saved search query
-                            sortOrder: sortOrder
-                          });
-                        }, 100);
                       }}
                       style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                     >
@@ -1236,7 +1220,7 @@ const Listings = () => {
       {/* Listings */}
       <Row>
         {currentListings.map(listing => (
-          <Col key={listing.id} sm={12} md={6} lg={6} xl={4}>
+          <Col key={listing.id} sm={12} md={6} lg={6} xl={4} style={{ marginBottom: '2rem', paddingLeft: '0.5rem', paddingRight: '0.5rem' }}>
             <ListingCard 
               listing={listing} 
               isAnyModalOpen={isModalOpen}
