@@ -1159,43 +1159,23 @@ const Listings = () => {
                       variant="outline-secondary"
                       size="sm"
                       onClick={() => {
-                        // Clear search
+                        // Clear search only, keep filters
                         setSearchQuery('');
                         setUseAISearch(false);
                         setSearchResults([]);
                         
-                        // Also clear all filters (matching "Clear Filters" button behavior)
-                        const clearedFilters = {
-                          priceRange: { min: 400000, max: 1250000 },
-                          bedrooms: '1+',
-                          floorLevel: 'any',
-                          outdoor: [],
-                          minSize: '',
-                          areas: []
-                        };
+                        // Update URL with cleared search but preserve current filters
+                        updateURLWithSearch('');
                         
-                        // Update state first (but don't trigger URL update via useEffect yet)
-                        setPriceRange(clearedFilters.priceRange);
-                        setBedrooms(clearedFilters.bedrooms);
-                        setFloorLevel(clearedFilters.floorLevel);
-                        setSelectedOutdoorSpaces(clearedFilters.outdoor);
-                        setMinSize(clearedFilters.minSize);
-                        setSelectedAreas(clearedFilters.areas);
-                        
-                        // Update URL with cleared search and filters (explicitly remove search)
-                        // This must happen after state updates to ensure consistent state
-                        updateURLWithSearch('', clearedFilters);
-                        
-                        // Also clear search query from saved preferences to prevent it from being restored
-                        // Wait a bit to ensure state has updated, then save empty searchQuery
+                        // Clear search query from saved preferences but keep filters
                         setTimeout(() => {
                           savePreferences({
-                            priceRange: clearedFilters.priceRange,
-                            bedrooms: clearedFilters.bedrooms,
-                            floorLevel: clearedFilters.floorLevel,
-                            selectedOutdoorSpaces: clearedFilters.outdoor,
-                            minSize: clearedFilters.minSize,
-                            selectedAreas: clearedFilters.areas,
+                            priceRange,
+                            bedrooms,
+                            floorLevel,
+                            selectedOutdoorSpaces,
+                            minSize,
+                            selectedAreas,
                             searchQuery: '', // Clear saved search query
                             sortOrder: sortOrder
                           });

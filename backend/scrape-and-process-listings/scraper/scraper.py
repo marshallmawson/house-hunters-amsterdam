@@ -157,6 +157,16 @@ def transform_listing_data(raw_item):
     fast_view = raw_item.get('FastView', {})
     listing_description_text = raw_item.get('ListingDescription', {}).get("Description")
     urls = raw_item.get('Urls', {}).get('FriendlyUrl', {})
+    
+    # Extract the URL ID from the full URL (the actual listing ID)
+    full_url = urls.get("FullUrl", "")
+    url_id = None
+    if full_url:
+        # URL format: https://www.funda.nl/.../43101031/
+        # Extract the last number before the trailing slash
+        url_parts = full_url.rstrip('/').split('/')
+        if url_parts and url_parts[-1].isdigit():
+            url_id = url_parts[-1]
 
     bathroom_str = find_kenmerk_value(raw_item, 'indeling', 'indeling-totalbathroom')
     vve_str = find_kenmerk_value(raw_item, 'overdracht', 'overdracht-bijdragevve')
@@ -222,7 +232,7 @@ def transform_listing_data(raw_item):
         google_maps_url = f"https://maps.google.com/maps?q={lat},{lon}&z=15&output=embed"
 
     clean_listing = {
-        "fundaId": raw_item.get("_id"),
+        "fundaId": url_id or raw_item.get("_id"),  # Prefer URL ID, fallback to _id
         "url": urls.get("FullUrl"),
         "address": address_details.get("Title"),
         "postalCode": address_details.get("SubTitle"),
