@@ -239,7 +239,7 @@ def transform_listing_data(raw_item):
         price_per_sqm = round(price / living_area)
 
     clean_listing = {
-        "fundaId": url_id or raw_item.get("_id"),  # Prefer URL ID, fallback to _id
+        "fundaId": url_id,  # Use URL ID only - must extract from URL
         "url": urls.get("FullUrl"),
         "address": address_details.get("Title"),
         "postalCode": address_details.get("SubTitle"),
