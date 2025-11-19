@@ -338,19 +338,43 @@ const AppContent = () => {
       )}
 
       <Routes>
-        <Route path="/map" element={<MapView />} />
-        <Route path="/*" element={
-          <Container fluid>
-            <Routes>
-              <Route path="/" element={<Listings />} />
-              <Route path="/listings/:id" element={<Listings />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignUpPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/saved-properties" element={<SavedProperties />} />
-            </Routes>
-          </Container>
-        } />
+        <Route
+          path="/map"
+          element={
+            <MapView
+              onRequireLogin={() => setShowLoginPrompt(true)}
+            />
+          }
+        />
+        <Route
+          path="/*"
+          element={
+            <Container fluid>
+              <Routes>
+                <Route
+                  path="/"
+                  element={
+                    <Listings
+                      onRequireLogin={() => setShowLoginPrompt(true)}
+                    />
+                  }
+                />
+                <Route
+                  path="/listings/:id"
+                  element={
+                    <Listings
+                      onRequireLogin={() => setShowLoginPrompt(true)}
+                    />
+                  }
+                />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignUpPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/saved-properties" element={<SavedProperties />} />
+              </Routes>
+            </Container>
+          }
+        />
       </Routes>
     </div>
   );

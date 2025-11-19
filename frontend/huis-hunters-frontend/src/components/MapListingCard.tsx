@@ -19,6 +19,8 @@ interface MapListingCardProps {
   onClose: () => void;
   onModalToggle: (isOpen: boolean) => void;
   isAnyModalOpen: boolean;
+  // Optional callback to trigger the global login required prompt
+  onRequireLogin?: () => void;
 }
 
 const getOutdoorSpaceString = (listing: Listing) => {
@@ -33,7 +35,7 @@ const getOutdoorSpaceString = (listing: Listing) => {
   return `${outdoorSpaces.join(' + ')}${area}`;
 };
 
-const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onModalToggle, isAnyModalOpen }) => {
+const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onModalToggle, isAnyModalOpen, onRequireLogin }) => {
   const [showFullModal, setShowFullModal] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [isSaved, setIsSaved] = useState(false);
@@ -84,7 +86,10 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
 
   const handleSave = async () => {
     if (!currentUser) {
-      return; // Don't show alert, just silently fail
+      if (onRequireLogin) {
+        onRequireLogin();
+      }
+      return;
     }
 
     try {
@@ -211,56 +216,54 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
           ×
         </button>
 
-        {/* Heart Save Button - Top Right Corner */}
-        {currentUser && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSave();
-            }}
-            style={{
-              position: 'absolute',
-              top: '10px',
-              right: '10px',
-              backgroundColor: 'white',
-              border: 'none',
-              borderRadius: '50%',
-              width: '32px',
-              height: '32px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-              transition: 'all 0.2s ease',
-              zIndex: 10,
-              padding: 0
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.25)';
-              e.currentTarget.style.transform = 'scale(1.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
-              e.currentTarget.style.transform = 'scale(1)';
-            }}
-            title={isSaved ? 'Remove from saved' : 'Save property'}
+        {/* Heart Save Button - Top Right Corner (always visible, prompts login when needed) */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleSave();
+          }}
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            backgroundColor: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            width: '32px',
+            height: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+            transition: 'all 0.2s ease',
+            zIndex: 10,
+            padding: 0
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.25)';
+            e.currentTarget.style.transform = 'scale(1.05)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          title={isSaved ? 'Remove from saved' : 'Save property'}
+        >
+          <svg
+            width="18"
+            height="16"
+            viewBox="0 0 24 21"
+            fill={isSaved ? '#dc3545' : 'none'}
+            stroke={isSaved ? '#dc3545' : '#212529'}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ transition: 'all 0.2s ease' }}
           >
-            <svg
-              width="18"
-              height="16"
-              viewBox="0 0 24 21"
-              fill={isSaved ? '#dc3545' : 'none'}
-              stroke={isSaved ? '#dc3545' : '#212529'}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ transition: 'all 0.2s ease' }}
-            >
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-          </button>
-        )}
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </button>
 
         {/* Image Carousel */}
         {listing.imageGallery && listing.imageGallery.length > 0 && (
@@ -462,6 +465,7 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
             // and avoid syncing the URL with /listings/:id.
             disableRouting={true}
             forceOpen={true}
+            onRequireLogin={onRequireLogin}
           />
         </div>
       )}

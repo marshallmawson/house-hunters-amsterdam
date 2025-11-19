@@ -25,6 +25,9 @@ interface ListingCardProps {
   // in-place without navigating away from the current route.
   disableRouting?: boolean;
   onUnsave?: (propertyId: string) => void;
+  // Optional callback to trigger a global "login required" prompt
+  // when an unauthenticated user tries to save a property.
+  onRequireLogin?: () => void;
   viewingScheduledAt?: {
     seconds: number;
     nanoseconds: number;
@@ -50,7 +53,22 @@ const getOutdoorSpaceString = (listing: Listing) => {
   return `${outdoorSpaces.join(' + ')}${area}`;
 };
 
-const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onModalToggle, forceOpen, disableRouting, onUnsave, viewingScheduledAt, onAddToGoogleCalendar, note, onNoteChange, isNoteEditing, onNoteEditStart, onNoteEditCancel }) => {
+const ListingCard: React.FC<ListingCardProps> = ({
+  listing,
+  isAnyModalOpen,
+  onModalToggle,
+  forceOpen,
+  disableRouting,
+  onUnsave,
+  onRequireLogin,
+  viewingScheduledAt,
+  onAddToGoogleCalendar,
+  note,
+  onNoteChange,
+  isNoteEditing,
+  onNoteEditStart,
+  onNoteEditCancel
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -194,8 +212,11 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
 
   const handleSave = async () => {
     if (!currentUser) {
-      alert('Please log in to save properties');
-      navigate('/login');
+      if (onRequireLogin) {
+        onRequireLogin();
+      } else {
+        navigate('/login');
+      }
       return;
     }
 
@@ -337,56 +358,54 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
             </Carousel.Item>
           ))}
         </Carousel>
-        {/* Heart Save Button - Top Right Corner */}
-        {currentUser && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSave();
-            }}
-            style={{
-              position: 'absolute',
-              top: '10px',
-              right: '10px',
-              backgroundColor: 'white',
-              border: 'none',
-              borderRadius: '50%',
-              width: '40px',
-              height: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-              transition: 'all 0.2s ease',
-              zIndex: 5,
-              padding: 0
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.25)';
-              e.currentTarget.style.transform = 'scale(1.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
-              e.currentTarget.style.transform = 'scale(1)';
-            }}
-            title={isSaved ? 'Remove from saved' : 'Save property'}
+        {/* Heart Save Button - Top Right Corner (always visible, prompts login when needed) */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleSave();
+          }}
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            backgroundColor: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            width: '40px',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+            transition: 'all 0.2s ease',
+            zIndex: 5,
+            padding: 0
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.25)';
+            e.currentTarget.style.transform = 'scale(1.05)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          title={isSaved ? 'Remove from saved' : 'Save property'}
+        >
+          <svg
+            width="20"
+            height="18"
+            viewBox="0 0 24 21"
+            fill={isSaved ? '#dc3545' : 'none'}
+            stroke={isSaved ? '#dc3545' : '#212529'}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ transition: 'all 0.2s ease' }}
           >
-            <svg
-              width="20"
-              height="18"
-              viewBox="0 0 24 21"
-              fill={isSaved ? '#dc3545' : 'none'}
-              stroke={isSaved ? '#dc3545' : '#212529'}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ transition: 'all 0.2s ease' }}
-            >
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-          </button>
-        )}
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </button>
       </div>
       <Card.Body style={{ padding: '0.85rem', display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Header: Address and Price */}
@@ -812,56 +831,54 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
                   ))}
                 </Carousel>
                 </div>
-                {/* Heart Save Button - Top Right Corner in Modal */}
-                {currentUser && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSave();
-                    }}
-                    style={{
-                      position: 'absolute',
-                      top: '15px',
-                      right: '15px',
-                      backgroundColor: 'white',
-                      border: 'none',
-                      borderRadius: '50%',
-                      width: '45px',
-                      height: '45px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                      transition: 'all 0.2s ease',
-                      zIndex: 10,
-                      padding: 0
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.25)';
-                      e.currentTarget.style.transform = 'scale(1.05)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
-                      e.currentTarget.style.transform = 'scale(1)';
-                    }}
-                    title={isSaved ? 'Remove from saved' : 'Save property'}
+                {/* Heart Save Button - Top Right Corner in Modal (always visible, prompts login when needed) */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSave();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '15px',
+                    right: '15px',
+                    backgroundColor: 'white',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '45px',
+                    height: '45px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                    transition: 'all 0.2s ease',
+                    zIndex: 10,
+                    padding: 0
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.25)';
+                    e.currentTarget.style.transform = 'scale(1.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                  title={isSaved ? 'Remove from saved' : 'Save property'}
+                >
+                  <svg
+                    width="22"
+                    height="20"
+                    viewBox="0 0 24 21"
+                    fill={isSaved ? '#dc3545' : 'none'}
+                    stroke={isSaved ? '#dc3545' : '#212529'}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ transition: 'all 0.2s ease' }}
                   >
-                    <svg
-                      width="22"
-                      height="20"
-                      viewBox="0 0 24 21"
-                      fill={isSaved ? '#dc3545' : 'none'}
-                      stroke={isSaved ? '#dc3545' : '#212529'}
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ transition: 'all 0.2s ease' }}
-                    >
-                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                    </svg>
-                  </button>
-                )}
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                  </svg>
+                </button>
                 {/* Image counter and "All images" link */}
                 <div
                   style={{

@@ -464,6 +464,11 @@ html {
   .filters-content.show {
     display: block;
   }
+
+  /* Mobile: tighten spacing before Clear Filters button */
+  .filters-section .clear-filters-label {
+    display: none !important;
+  }
   
   /* Listing cards adjustments for mobile */
   .listing-card {
@@ -725,6 +730,116 @@ html {
   display: flex;
   flex-direction: column;
   flex: 1;
+}
+
+/* Desktop filter panel refinements */
+@media (min-width: 992px) {
+  .filters-section {
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: -80px;
+    padding: 1.5rem 1.75rem !important;
+    background-color: rgba(248, 249, 250, 0.98);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  .filters-header-row h6 {
+    font-size: 1rem !important;
+    letter-spacing: 0.16em !important;
+    text-transform: uppercase;
+    color: #343a40 !important;
+  }
+
+  .map-toggle-btn {
+    border-radius: 999px !important;
+    padding: 0.45rem 1.25rem !important;
+    font-size: 0.85rem !important;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  }
+
+  .filters-main-row .form-label {
+    font-size: 0.8rem !important;
+    text-transform: none;
+  }
+
+  .filters-main-row .form-control,
+  .filters-main-row .custom-dropdown-toggle {
+    height: 40px;
+    font-size: 0.85rem;
+    text-align: left;
+    padding-left: 0.6rem;
+  }
+
+  .filters-section .custom-dropdown-toggle {
+    text-align: left !important;
+    justify-content: flex-start !important;
+  }
+
+  .filters-main-row .btn {
+    height: 40px;
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .filters-section .dropdown-menu,
+  .filters-section .dropdown-item,
+  .filters-section .dropdown-item-text,
+  .filters-section .form-check-label {
+    font-size: 0.8rem;
+  }
+
+  .ai-search-row .form-control {
+    height: 44px;
+  }
+
+  .ai-search-row .btn {
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .ai-search-row .ai-map-btn {
+    border-radius: 999px;
+    padding: 0 1.4rem;
+    font-size: 0.9rem;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+    white-space: nowrap;
+  }
+
+  .results-bar-row {
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .results-bar-row strong {
+    font-weight: 500;
+  }
+
+  .results-sort-label {
+    font-size: 0.85rem;
+  }
+
+  .results-sort-select {
+    min-width: 150px !important;
+    height: 36px !important;
+    font-size: 0.85rem !important;
+    padding: 0.25rem 2rem 0.25rem 0.75rem !important;
+  }
+
+  .listings-grid-row {
+    padding-top: 0.25rem;
+  }
+
+  /* Align results bar width with filter card on desktop, leave listings grid full-width within Container */
+  .results-bar-row {
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
+  }
 }
 
 /* Professional Details Grid - Mobile Responsive */

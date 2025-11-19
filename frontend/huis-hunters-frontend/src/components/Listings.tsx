@@ -12,7 +12,12 @@ import { useUserPreferences } from '../hooks/useUserPreferences';
 import { parseKMLNeighborhoods } from '../utils/neighborhoodParser';
 import { extractFiltersFromQuery } from '../utils/queryFilterExtractor';
 
-const Listings = () => {
+interface ListingsProps {
+  // Optional callback to trigger the global login required prompt
+  onRequireLogin?: () => void;
+}
+
+const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
   const [listings, setListings] = useState<Listing[]>([]);
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -931,55 +936,23 @@ const Listings = () => {
       )}
 
       {/* Filter Section */}
-      <div className={`mb-4 p-4 filters-section ${showFilters ? '' : 'd-none'} d-md-block`} style={{ 
-        backgroundColor: '#f8f9fa', 
-        borderRadius: '12px',
-        border: '1px solid #e9ecef',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        marginTop: '-100px',
-        position: 'relative',
-        zIndex: 100,
-        minHeight: '1px'
-      }}>
-        <div className="d-flex justify-content-between align-items-center mb-3">
+      <div
+        className={`mb-4 p-4 filters-section ${showFilters ? '' : 'd-none'} d-md-block`}
+        style={{ 
+          backgroundColor: '#f8f9fa', 
+          borderRadius: '12px',
+          border: '1px solid #e9ecef',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          marginTop: '-100px',
+          position: 'relative',
+          zIndex: 100,
+          minHeight: '1px'
+        }}
+      >
+        <div className="d-flex justify-content-between align-items-center mb-3 filters-header-row">
           <h6 className="text-muted fw-semibold mb-0" style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Filter houses
           </h6>
-          {/* Desktop: View on Map button */}
-          <Button
-            className="d-none d-md-inline-flex"
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              // Navigate to map view with current filter parameters
-              const params = new URLSearchParams(searchParams);
-              navigate(`/map?${params.toString()}`);
-            }}
-            style={{
-              borderRadius: '8px',
-              padding: '0.4rem 1rem',
-              fontSize: '0.85rem',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-              <circle cx="12" cy="10" r="3" />
-            </svg>
-            View on Map
-          </Button>
           {/* Mobile: Close filters button */}
           <Button
             className="d-inline-flex d-md-none"
@@ -1002,11 +975,11 @@ const Listings = () => {
             Close
           </Button>
         </div>
-        <div>
+        <div className="filters-content-desktop">
           <Form>
-            <Row className="g-2">
+            <Row className="g-2 filters-main-row">
             {/* Price Range */}
-            <Col lg={2} md={6}>
+            <Col lg={3} md={6}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Price Range</Form.Label>
                 <div style={{ padding: '0 4px' }}>
@@ -1111,10 +1084,10 @@ const Listings = () => {
             {/* Min Size */}
             <Col lg={1} md={6}>
               <FormGroup>
-                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Min Size (m²)</Form.Label>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Min size</Form.Label>
                 <Form.Control 
                   type="number"
-                  placeholder="Any"
+                  placeholder="Any m²"
                   value={minSize}
                   onChange={e => setMinSize(e.target.value)}
                   style={{ 
@@ -1128,7 +1101,7 @@ const Listings = () => {
             </Col>
 
             {/* Outdoor Space */}
-            <Col lg={1} md={6}>
+            <Col lg={2} md={6}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Outdoor</Form.Label>
                 <Dropdown>
@@ -1201,7 +1174,7 @@ const Listings = () => {
             </Col>
 
             {/* Floor Level */}
-            <Col lg={1} md={6}>
+            <Col lg={2} md={6}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Floor</Form.Label>
                 <Dropdown>
@@ -1335,7 +1308,7 @@ const Listings = () => {
             {/* Clear Filters Button */}
             <Col lg={1} md={12}>
               <FormGroup>
-                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>&nbsp;</Form.Label>
+                <Form.Label className="fw-medium mb-2 clear-filters-label" style={{ fontSize: '0.85rem' }}>&nbsp;</Form.Label>
                 <Button 
                   variant="outline-secondary" 
                   size="sm" 
@@ -1358,9 +1331,9 @@ const Listings = () => {
             </Col>
             </Row>
             
-            {/* AI-Powered Search */}
-            <Row className="mt-3">
-              <Col lg={9} md={12}>
+            {/* AI-Powered Search + Map view (desktop/tablet) */}
+            <Row className="mt-3 ai-search-row align-items-end">
+              <Col lg={9} md={8} sm={12}>
                 <FormGroup>
                   <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>
                     🔍 AI-Powered Search (optional)
@@ -1368,7 +1341,7 @@ const Listings = () => {
                   <div className="d-flex gap-2">
                     <Form.Control
                       type="text"
-                      placeholder="Try: 'newly renovated apartment with garden' or 'quiet street with canal views'..."
+                      placeholder="Describe your ideal home (e.g. 'renovated with garden')"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyPress={(e) => {
@@ -1410,6 +1383,32 @@ const Listings = () => {
                   </div>
                 </FormGroup>
               </Col>
+              <Col lg={3} md={4} sm={12} className="mt-2 mt-md-0 d-none d-md-flex justify-content-md-end">
+                <Button
+                  className="ai-map-btn"
+                  variant="primary"
+                  onClick={() => {
+                    const params = new URLSearchParams(searchParams);
+                    navigate(`/map?${params.toString()}`);
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ marginRight: '0.4rem' }}
+                  >
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  View all on map
+                </Button>
+              </Col>
             </Row>
           </Form>
         </div>
@@ -1417,7 +1416,7 @@ const Listings = () => {
       
       {/* Mobile Sort Bar */}
       {filteredListings.length > 0 && (
-        <div className="d-md-none mb-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginTop: '2rem', paddingTop: showFilters ? '600px' : '0', transition: 'padding-top 0.3s ease', position: 'relative', zIndex: 100 }}>
+        <div className="d-md-none mb-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginTop: '2rem', paddingTop: showFilters ? '630px' : '0', transition: 'padding-top 0.3s ease', position: 'relative', zIndex: 100 }}>
           {/* Left: Results count */}
           <div style={{
             fontSize: '0.8rem',
@@ -1467,10 +1466,10 @@ const Listings = () => {
       
       {/* Desktop Sort and Pagination info */}
       {filteredListings.length > 0 && (
-        <Row className="mb-3 d-none d-md-flex">
+        <Row className="mb-2 d-none d-md-flex results-bar-row">
           <Col>
-            <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
-              <div className="d-flex align-items-center gap-3">
+            <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div className="d-flex align-items-center gap-2">
                 <div>
                   <strong>Showing {startIndex + 1}-{Math.min(endIndex, filteredListings.length)} of {filteredListings.length} listings</strong>
                 </div>
@@ -1480,12 +1479,13 @@ const Listings = () => {
                   </div>
                 )}
               </div>
-              <div className="d-flex align-items-center gap-2">
-                <Form.Label className="mb-0 me-2"><strong>Sort by:</strong></Form.Label>
+              <div className="d-flex align-items-center gap-1">
+                <Form.Label className="mb-0 me-1 results-sort-label"><strong>Sort by:</strong></Form.Label>
                 <Form.Control 
                   as="select" 
                   value={sortOrder} 
                   onChange={e => setSortOrder(e.target.value)}
+                  className="results-sort-select"
                   style={{ 
                     width: 'auto', 
                     minWidth: '180px',
@@ -1508,7 +1508,7 @@ const Listings = () => {
       )}
 
       {/* Listings */}
-      <Row>
+      <Row className="listings-grid-row">
         {currentListings.map(listing => (
           <Col key={listing.id} sm={12} md={6} lg={6} xl={4} className="mb-4">
             <ListingCard 
@@ -1516,6 +1516,7 @@ const Listings = () => {
               isAnyModalOpen={isModalOpen}
               onModalToggle={handleModalToggle} 
               forceOpen={listing.id === modalListingId}
+              onRequireLogin={onRequireLogin}
             />
           </Col>
         ))}

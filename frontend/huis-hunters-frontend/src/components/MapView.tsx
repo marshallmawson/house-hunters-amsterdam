@@ -7,7 +7,12 @@ import { loadGoogleMapsAPI } from '../config/maps';
 import { Button } from 'react-bootstrap';
 import MapListingCard from './MapListingCard';
 
-const MapView = () => {
+interface MapViewProps {
+  // Optional callback to trigger the global login required prompt
+  onRequireLogin?: () => void;
+}
+
+const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<{ marker: google.maps.Marker; listingId: string }[]>([]);
@@ -504,6 +509,7 @@ const MapView = () => {
           onClose={() => setSelectedListing(null)}
           onModalToggle={handleModalToggle}
           isAnyModalOpen={isModalOpen}
+          onRequireLogin={onRequireLogin}
         />
       )}
     </div>
