@@ -521,6 +521,7 @@ const Listings = () => {
           id: result.id,
           address: result.address,
           price: result.price,
+          pricePerSquareMeter: result.pricePerSquareMeter,
           bedrooms: result.bedrooms,
           bathrooms: result.bathrooms,
           livingArea: result.livingArea,

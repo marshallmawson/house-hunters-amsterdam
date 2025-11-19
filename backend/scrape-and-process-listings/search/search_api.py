@@ -154,10 +154,19 @@ def search_listings():
         formatted_results = []
         logger.info(f"Processing {len(results)} results for formatting")
         for result in results:
+            # Calculate pricePerSquareMeter if missing
+            price_per_sqm = result.get('pricePerSquareMeter')
+            if price_per_sqm is None:
+                price = result.get('price', 0)
+                living_area = result.get('livingArea', 0)
+                if price and living_area and living_area > 0:
+                    price_per_sqm = round(price / living_area)
+            
             formatted_result = {
                 'id': result['id'],
                 'address': result.get('address', ''),
                 'price': result.get('price', 0),
+                'pricePerSquareMeter': price_per_sqm,
                 'bedrooms': result.get('bedrooms', 0),
                 'bathrooms': result.get('bathrooms', 0),
                 'livingArea': result.get('livingArea', 0),
