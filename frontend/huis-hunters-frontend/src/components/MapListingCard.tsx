@@ -458,6 +458,9 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
                 handleModalClose();
               }
             }}
+            // When opened from the map view, keep the user on the /map route
+            // and avoid syncing the URL with /listings/:id.
+            disableRouting={true}
             forceOpen={true}
           />
         </div>

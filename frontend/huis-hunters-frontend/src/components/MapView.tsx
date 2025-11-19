@@ -10,7 +10,7 @@ import MapListingCard from './MapListingCard';
 const MapView = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]);
+  const markersRef = useRef<{ marker: google.maps.Marker; listingId: string }[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [searchParams] = useSearchParams();
@@ -277,11 +277,11 @@ const MapView = () => {
     mapInstanceRef.current = map;
 
     // Clear existing markers
-    markersRef.current.forEach(marker => marker.setMap(null));
+    markersRef.current.forEach(({ marker }) => marker.setMap(null));
     markersRef.current = [];
 
     // Create markers with clustering/offset logic
-    const markers: google.maps.Marker[] = [];
+    const markers: { marker: google.maps.Marker; listingId: string }[] = [];
     const markerPositions = new Map<string, { lat: number; lng: number; offset: number }>();
 
     filteredListings.forEach((listing, index) => {
@@ -337,7 +337,7 @@ const MapView = () => {
         setSelectedListing(listing);
       });
 
-      markers.push(marker);
+      markers.push({ marker, listingId: listing.id });
     });
 
     markersRef.current = markers;
@@ -345,7 +345,7 @@ const MapView = () => {
     // Fit bounds to show all markers
     if (markers.length > 0) {
       const bounds = new google.maps.LatLngBounds();
-      markers.forEach(marker => {
+      markers.forEach(({ marker }) => {
         const position = marker.getPosition();
         if (position) {
           bounds.extend(position);
@@ -360,16 +360,41 @@ const MapView = () => {
     }
   }, [mapsLoaded, filteredListings]);
 
+  // Highlight the selected marker in a different color
+  useEffect(() => {
+    if (!mapsLoaded) return;
+
+    const selectedId = selectedListing?.id || null;
+
+    markersRef.current.forEach(({ marker, listingId }) => {
+      const isSelected = selectedId && listingId === selectedId;
+
+      const fillColor = isSelected ? '#ff6b6b' : '#4a90e2'; // red-ish for selected, blue for others
+
+      marker.setIcon({
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+          <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 0C7.163 0 0 7.163 0 16c0 11.045 16 24 16 24s16-12.955 16-24C32 7.163 24.837 0 16 0z" fill="${fillColor}" stroke="#fff" stroke-width="2"/>
+            <circle cx="16" cy="16" r="6" fill="#fff"/>
+          </svg>
+        `),
+        scaledSize: new google.maps.Size(32, 40),
+        anchor: new google.maps.Point(16, 40)
+      });
+    });
+  }, [selectedListing, mapsLoaded]);
+
   const handleBackToListings = () => {
     const params = new URLSearchParams(searchParams);
     navigate(`/?${params.toString()}`);
   };
 
+  // Track whether the full listing modal (opened from the map card) is open.
+  // Closing this modal should NOT clear the selected listing so the card
+  // stays visible behind it; the card is only closed via MapListingCard's
+  // own close/backdrop handlers (which call onClose).
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
-    if (!isOpen) {
-      setSelectedListing(null);
-    }
   };
 
   if (mapsError) {

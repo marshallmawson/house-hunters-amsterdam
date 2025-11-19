@@ -20,6 +20,10 @@ interface ListingCardProps {
   isAnyModalOpen: boolean;
   onModalToggle: (isOpen: boolean) => void;
   forceOpen?: boolean;
+  // When true, the card will not sync the URL with the opened/closed modal.
+  // Used for contexts like the Map view where we want the modal to open
+  // in-place without navigating away from the current route.
+  disableRouting?: boolean;
   onUnsave?: (propertyId: string) => void;
   viewingScheduledAt?: {
     seconds: number;
@@ -46,7 +50,7 @@ const getOutdoorSpaceString = (listing: Listing) => {
   return `${outdoorSpaces.join(' + ')}${area}`;
 };
 
-const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onModalToggle, forceOpen, onUnsave, viewingScheduledAt, onAddToGoogleCalendar, note, onNoteChange, isNoteEditing, onNoteEditStart, onNoteEditCancel }) => {
+const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onModalToggle, forceOpen, disableRouting, onUnsave, viewingScheduledAt, onAddToGoogleCalendar, note, onNoteChange, isNoteEditing, onNoteEditStart, onNoteEditCancel }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -251,8 +255,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     setShowModal(true);
     onModalToggle(true);
     setIsManualNavigation(false);
-    // Only navigate if we're not on the saved properties page
-    if (location.pathname !== '/saved-properties') {
+    // Only navigate if routing is enabled and we're not on the saved properties page
+    if (!disableRouting && location.pathname !== '/saved-properties') {
       // Store original search params (including search query) before navigation
       // Use location.search to get the actual URL query string, not searchParams which might be missing params
       originalSearchParamsRef.current = location.search;
@@ -270,8 +274,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
     setIsManualNavigation(false);
     setShowGridView(false);
     hasHandledForceOpen.current = false;
-    // Only navigate back to home if we navigated from home
-    if (location.pathname !== '/saved-properties') {
+    // Only navigate back if routing is enabled and we navigated from a listings route
+    if (!disableRouting && location.pathname !== '/saved-properties') {
       // Restore original search parameters (including search query) when navigating back
       // Use the stored original params instead of current params (which might be missing search)
       navigate(`/${originalSearchParamsRef.current}`);
