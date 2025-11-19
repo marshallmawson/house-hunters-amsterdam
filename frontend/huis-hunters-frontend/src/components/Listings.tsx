@@ -915,27 +915,66 @@ const Listings = () => {
             <Col lg={1} md={6}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Beds</Form.Label>
-                <Form.Control 
-                  as="select" 
-                  value={bedrooms} 
-                  onChange={e => setBedrooms(e.target.value)}
-                  style={{ 
-                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 0.5rem center',
-                    backgroundSize: '12px 8px',
-                    paddingRight: '1.5rem',
-                    borderRadius: '8px',
-                    border: '1px solid #dee2e6',
-                    fontSize: '0.8rem'
-                  }}
-                >
-                  <option value="any">Any</option>
-                  <option value="1+">1+</option>
-                  <option value="2+">2+</option>
-                  <option value="3+">3+</option>
-                  <option value="4+">4+</option>
-                </Form.Control>
+                <Dropdown>
+                  <Dropdown.Toggle 
+                    variant="outline-secondary" 
+                    className="custom-dropdown-toggle"
+                    style={{ 
+                      width: '100%',
+                      borderRadius: '8px',
+                      border: '1px solid #dee2e6',
+                      fontSize: '0.8rem',
+                      textAlign: 'left',
+                      backgroundColor: 'white',
+                      color: '#495057',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'right 0.5rem center',
+                      backgroundSize: '12px 8px',
+                      paddingRight: '1.5rem'
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {bedrooms === 'any' ? 'Any' : bedrooms}
+                    </span>
+                  </Dropdown.Toggle>
+
+                  <Dropdown.Menu style={{ width: '100%' }}>
+                    <Dropdown.Item 
+                      onClick={() => setBedrooms('any')}
+                      active={bedrooms === 'any'}
+                    >
+                      Any
+                    </Dropdown.Item>
+                    <Dropdown.Item 
+                      onClick={() => setBedrooms('1+')}
+                      active={bedrooms === '1+'}
+                    >
+                      1+
+                    </Dropdown.Item>
+                    <Dropdown.Item 
+                      onClick={() => setBedrooms('2+')}
+                      active={bedrooms === '2+'}
+                    >
+                      2+
+                    </Dropdown.Item>
+                    <Dropdown.Item 
+                      onClick={() => setBedrooms('3+')}
+                      active={bedrooms === '3+'}
+                    >
+                      3+
+                    </Dropdown.Item>
+                    <Dropdown.Item 
+                      onClick={() => setBedrooms('4+')}
+                      active={bedrooms === '4+'}
+                    >
+                      4+
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown>
               </FormGroup>
             </Col>
 
@@ -1035,25 +1074,54 @@ const Listings = () => {
             <Col lg={1} md={6}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Floor</Form.Label>
-                <Form.Control 
-                  as="select" 
-                  value={floorLevel} 
-                  onChange={e => setFloorLevel(e.target.value)}
-                  style={{ 
-                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 0.5rem center',
-                    backgroundSize: '12px 8px',
-                    paddingRight: '1.5rem',
-                    borderRadius: '8px',
-                    border: '1px solid #dee2e6',
-                    fontSize: '0.8rem'
-                  }}
-                >
-                  <option value="any">Any</option>
-                  <option value="top">Upper</option>
-                  <option value="ground">Ground</option>
-                </Form.Control>
+                <Dropdown>
+                  <Dropdown.Toggle 
+                    variant="outline-secondary" 
+                    className="custom-dropdown-toggle"
+                    style={{ 
+                      width: '100%',
+                      borderRadius: '8px',
+                      border: '1px solid #dee2e6',
+                      fontSize: '0.8rem',
+                      textAlign: 'left',
+                      backgroundColor: 'white',
+                      color: '#495057',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'right 0.5rem center',
+                      backgroundSize: '12px 8px',
+                      paddingRight: '1.5rem'
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {floorLevel === 'any' ? 'Any' : floorLevel === 'top' ? 'Upper' : 'Ground'}
+                    </span>
+                  </Dropdown.Toggle>
+
+                  <Dropdown.Menu style={{ width: '100%' }}>
+                    <Dropdown.Item 
+                      onClick={() => setFloorLevel('any')}
+                      active={floorLevel === 'any'}
+                    >
+                      Any
+                    </Dropdown.Item>
+                    <Dropdown.Item 
+                      onClick={() => setFloorLevel('top')}
+                      active={floorLevel === 'top'}
+                    >
+                      Upper
+                    </Dropdown.Item>
+                    <Dropdown.Item 
+                      onClick={() => setFloorLevel('ground')}
+                      active={floorLevel === 'ground'}
+                    >
+                      Ground
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown>
               </FormGroup>
             </Col>
 

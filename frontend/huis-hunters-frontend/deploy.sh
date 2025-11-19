@@ -30,7 +30,10 @@ ls -la
 # Note: --tag is not used when --config is specified (cloudbuild.yaml handles tagging)
 
 # Get Google Maps API key from environment variable or .env file
-if [ -f .env ]; then
+# Check root .env file first, then local .env file
+if [ -f ../../.env ]; then
+  GOOGLE_MAPS_API_KEY=$(grep "REACT_APP_GOOGLE_MAPS_API_KEY" ../../.env | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
+elif [ -f .env ]; then
   GOOGLE_MAPS_API_KEY=$(grep "REACT_APP_GOOGLE_MAPS_API_KEY" .env | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
 fi
 
