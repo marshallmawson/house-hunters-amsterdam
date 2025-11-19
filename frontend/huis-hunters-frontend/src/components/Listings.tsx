@@ -27,6 +27,7 @@ const Listings = () => {
   const [searchResults, setSearchResults] = useState<Listing[]>([]);
   const [useAISearch, setUseAISearch] = useState(!!searchQuery);
   const hasPerformedInitialSearch = useRef(false);
+  const initialSearchQueryRef = useRef(searchParams.get('search') || '');
   const searchInProgressRef = useRef(false); // Prevent concurrent searches
 
   // Initialize from URL params, then override with saved preferences if logged in
@@ -306,6 +307,13 @@ const Listings = () => {
   // AI Search function
   const performAISearch = useCallback(async (query: string) => {
     console.log('performAISearch called with:', query);
+
+    // Mark that a search has been performed so that future filter changes
+    // can safely trigger auto-search. This covers both URL-initialized
+    // searches and user-initiated searches (Enter key or button click).
+    if (!hasPerformedInitialSearch.current) {
+      hasPerformedInitialSearch.current = true;
+    }
     
     // Prevent concurrent searches
     if (searchInProgressRef.current) {
@@ -604,7 +612,20 @@ const Listings = () => {
   // Trigger search when component loads with a search query in URL
   useEffect(() => {
     console.log('Component mounted, searchQuery:', searchQuery, 'isSearching:', isSearching, 'hasPerformedInitialSearch:', hasPerformedInitialSearch.current);
-    if (searchQuery.trim() && !isSearching && !hasPerformedInitialSearch.current) {
+    const trimmedSearchQuery = searchQuery.trim();
+    const initialTrimmedQuery = (initialSearchQueryRef.current || '').trim();
+
+    // Only auto-trigger an initial search if:
+    // - There is a non-empty search query
+    // - No search has been performed yet
+    // - The current searchQuery still matches the initial URL search value
+    //   (prevents auto-searching when the user starts typing from an empty box)
+    if (
+      trimmedSearchQuery &&
+      !isSearching &&
+      !hasPerformedInitialSearch.current &&
+      trimmedSearchQuery === initialTrimmedQuery
+    ) {
       console.log('Triggering initial search for:', searchQuery);
       hasPerformedInitialSearch.current = true;
       performAISearch(searchQuery);
