@@ -696,8 +696,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isAnyModalOpen, onMo
         <Modal.Header closeButton>
           <div ref={modalHeaderRef} style={{ width: '100%', paddingRight: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem', gap: '0.5rem' }}>
-              <Modal.Title style={{ flex: '1 1 auto', minWidth: '0', wordBreak: 'break-word', paddingRight: '0.5rem' }}>{listing.address}</Modal.Title>
-              <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
+              <Modal.Title style={{ flex: '1 1 auto', minWidth: '0', wordBreak: 'break-word', paddingRight: '0.5rem', fontSize: isMobile ? '0.95rem' : '1.3rem' }}>{listing.address}</Modal.Title>
+              <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
                 €{listing.price?.toLocaleString()}
               </span>
             </div>

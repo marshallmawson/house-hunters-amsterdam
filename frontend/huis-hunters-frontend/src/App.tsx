@@ -5,6 +5,7 @@ import LoginPage from './components/LoginPage';
 import SignUpPage from './components/SignUpPage';
 import ProfilePage from './components/ProfilePage';
 import SavedProperties from './components/SavedProperties';
+import MapView from './components/MapView';
 import { Container, Navbar, Dropdown, Nav, Offcanvas, Modal, Button } from 'react-bootstrap';
 import './index.css';
 import { Route, Routes, useNavigate, useLocation, Link } from 'react-router-dom';
@@ -336,16 +337,21 @@ const AppContent = () => {
         </div>
       )}
 
-      <Container fluid>
-        <Routes>
-          <Route path="/" element={<Listings />} />
-          <Route path="/listings/:id" element={<Listings />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignUpPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/saved-properties" element={<SavedProperties />} />
-        </Routes>
-      </Container>
+      <Routes>
+        <Route path="/map" element={<MapView />} />
+        <Route path="/*" element={
+          <Container fluid>
+            <Routes>
+              <Route path="/" element={<Listings />} />
+              <Route path="/listings/:id" element={<Listings />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignUpPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/saved-properties" element={<SavedProperties />} />
+            </Routes>
+          </Container>
+        } />
+      </Routes>
     </div>
   );
 };

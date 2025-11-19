@@ -272,6 +272,14 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Modal close button positioning */
+.modal-header .btn-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 1050;
+}
+
 /* Floor Plan Carousel Arrow Styling */
 .modal .carousel-control-prev-icon,
 .modal .carousel-control-next-icon {
@@ -356,6 +364,7 @@ html {
   /* Header adjustments for mobile */
   .hero-header {
     min-height: 350px !important;
+    height: 350px !important;
     margin-top: 35px !important;
   }
   
@@ -533,7 +542,9 @@ html {
   
   /* Mobile filters button positioning for extra small screens */
   .mobile-filters-button {
-    top: -110px !important;
+    /* Keep the same vertical position as larger mobile screens to avoid
+       any visual "jump" when styles finish loading on initial page render. */
+    top: -120px !important;
   }
   
   .filters-section {

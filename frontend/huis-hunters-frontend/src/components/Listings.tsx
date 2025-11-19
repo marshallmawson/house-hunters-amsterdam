@@ -45,6 +45,7 @@ const Listings = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [showNeighborhoodMap, setShowNeighborhoodMap] = useState(false);
   const [allNeighborhoods, setAllNeighborhoods] = useState<string[]>([]);
+  const [hasLoadedInitialListings, setHasLoadedInitialListings] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -120,35 +121,41 @@ const Listings = () => {
 
   useEffect(() => {
     const fetchListings = async () => {
-      const q = query(
-        collection(db, "listings"), 
-        where("status", "==", "processed"),
-        where("available", "==", true)
-      );
-      const querySnapshot = await getDocs(q);
-      const listingsData = querySnapshot.docs
-        .map(doc => {
-          const { publishDate, ...rest } = doc.data();
-          let finalPublishedDate;
+      try {
+        const q = query(
+          collection(db, "listings"), 
+          where("status", "==", "processed"),
+          where("available", "==", true)
+        );
+        const querySnapshot = await getDocs(q);
+        const listingsData = querySnapshot.docs
+          .map(doc => {
+            const { publishDate, ...rest } = doc.data();
+            let finalPublishedDate;
 
-          if (typeof publishDate === 'string') {
-            const date = new Date(publishDate);
-            finalPublishedDate = {
-              toDate: () => date,
-              seconds: Math.floor(date.getTime() / 1000),
-              nanoseconds: (date.getTime() % 1000) * 1000000
-            };
-          } else {
-            finalPublishedDate = publishDate;
-          }
+            if (typeof publishDate === 'string') {
+              const date = new Date(publishDate);
+              finalPublishedDate = {
+                toDate: () => date,
+                seconds: Math.floor(date.getTime() / 1000),
+                nanoseconds: (date.getTime() % 1000) * 1000000
+              };
+            } else {
+              finalPublishedDate = publishDate;
+            }
 
-          return { id: doc.id, ...rest, publishedDate: finalPublishedDate } as Listing;
-        })
-        .filter(listing => {
-          // Filter out listings without images
-          return listing.imageGallery && listing.imageGallery.length > 0;
-        });
-      setListings(listingsData);
+            return { id: doc.id, ...rest, publishedDate: finalPublishedDate } as Listing;
+          })
+          .filter(listing => {
+            // Filter out listings without images
+            return listing.imageGallery && listing.imageGallery.length > 0;
+          });
+        setListings(listingsData);
+      } finally {
+        // Ensure we mark the initial load as complete even if the request fails,
+        // so the UI doesn't get stuck in a "pre-load" visual state.
+        setHasLoadedInitialListings(true);
+      }
     };
 
     fetchListings();
@@ -826,58 +833,102 @@ const Listings = () => {
   };
 
   return (
-    <Container style={{ position: 'relative' }}>
-      
-      {/* Mobile Filters Button - Floating over hero */}
-      <div className="mobile-filters-button d-md-none">
-        <div>
-        <Button 
-          onClick={() => {
-            setShowFilters(!showFilters);
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.5rem 1rem',
-            borderRadius: '50px',
-            fontSize: '0.875rem',
-            fontWeight: '600',
-            border: '2px solid rgba(255,255,255,0.9)',
-            color: '#4a90e2',
-            backgroundColor: '#ffffff',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-            backdropFilter: 'blur(10px)'
-          }}
-        >
-          🔍 Filters
-          {(() => {
-            const activeCount = [
-              bedrooms !== 'any',
-              priceRange.min !== 400000 || priceRange.max !== 1250000,
-              floorLevel !== 'any',
-              selectedOutdoorSpaces.length > 0,
-              minSize !== '',
-              selectedAreas.length > 0
-            ].filter(Boolean).length;
-            return activeCount > 0 && (
-              <span style={{
-                backgroundColor: '#4a90e2',
-                color: 'white',
-                borderRadius: '10px',
-                padding: '0.2rem 0.4rem',
-                fontSize: '0.75rem',
-                fontWeight: '700',
-                minWidth: '1.25rem',
-                textAlign: 'center'
-              }}>
-                {activeCount}
+    <Container style={{ position: 'relative', paddingTop: '0', marginTop: '0' }}>
+      {/* Mobile Filters and Map Buttons - Floating over hero
+          Only show after the initial listings load has completed to avoid
+          any visible vertical "jump" as data and layout settle. */}
+      {hasLoadedInitialListings && (
+        <div className="mobile-filters-button d-md-none">
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <Button 
+              onClick={() => {
+                setShowFilters(!showFilters);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem 1.5rem',
+                borderRadius: '50px',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                border: '2px solid rgba(255,255,255,0.9)',
+                color: '#4a90e2',
+                backgroundColor: '#ffffff',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                backdropFilter: 'blur(10px)',
+                minWidth: '140px',
+                whiteSpace: 'nowrap',
+                flexShrink: 0
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}>
+                🔍 Filters
+                {(() => {
+                  const activeCount = [
+                    bedrooms !== 'any',
+                    priceRange.min !== 400000 || priceRange.max !== 1250000,
+                    floorLevel !== 'any',
+                    selectedOutdoorSpaces.length > 0,
+                    minSize !== '',
+                    selectedAreas.length > 0
+                  ].filter(Boolean).length;
+                  return activeCount > 0 && (
+                    <span style={{
+                      backgroundColor: '#4a90e2',
+                      color: 'white',
+                      borderRadius: '10px',
+                      padding: '0.2rem 0.4rem',
+                      fontSize: '0.75rem',
+                      fontWeight: '700',
+                      minWidth: '1.25rem',
+                      textAlign: 'center',
+                      flexShrink: 0
+                    }}>
+                      {activeCount}
+                    </span>
+                  );
+                })()}
               </span>
-            );
-          })()}
-        </Button>
+            </Button>
+            <Button 
+              onClick={() => {
+                const params = new URLSearchParams(searchParams);
+                navigate(`/map?${params.toString()}`);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem 1rem',
+                borderRadius: '50px',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                border: '2px solid rgba(255,255,255,0.9)',
+                color: '#4a90e2',
+                backgroundColor: '#ffffff',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                backdropFilter: 'blur(10px)'
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              Map
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filter Section */}
       <div className={`mb-4 p-4 filters-section ${showFilters ? '' : 'd-none'} d-md-block`} style={{ 
@@ -887,12 +938,69 @@ const Listings = () => {
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
         marginTop: '-100px',
         position: 'relative',
-        zIndex: 10
+        zIndex: 100,
+        minHeight: '1px'
       }}>
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h6 className="text-muted fw-semibold mb-0" style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Filter houses
           </h6>
+          {/* Desktop: View on Map button */}
+          <Button
+            className="d-none d-md-inline-flex"
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              // Navigate to map view with current filter parameters
+              const params = new URLSearchParams(searchParams);
+              navigate(`/map?${params.toString()}`);
+            }}
+            style={{
+              borderRadius: '8px',
+              padding: '0.4rem 1rem',
+              fontSize: '0.85rem',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+            View on Map
+          </Button>
+          {/* Mobile: Close filters button */}
+          <Button
+            className="d-inline-flex d-md-none"
+            variant="outline-secondary"
+            size="sm"
+            onClick={() => {
+              setShowFilters(false);
+            }}
+            style={{
+              borderRadius: '8px',
+              padding: '0.4rem 1rem',
+              fontSize: '0.85rem',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <span style={{ fontSize: '1rem', lineHeight: 1, marginRight: '0.25rem' }}>×</span>
+            Close
+          </Button>
         </div>
         <div>
           <Form>
