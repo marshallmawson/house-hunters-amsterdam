@@ -470,6 +470,11 @@ html {
     display: none !important;
   }
   
+  /* Reduce spacing between Published filter and Clear Filters button on mobile */
+  .clear-filters-col {
+    margin-top: -0.75rem !important;
+  }
+  
   /* Listing cards adjustments for mobile */
   .listing-card {
     width: 100% !important;

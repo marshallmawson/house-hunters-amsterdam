@@ -982,7 +982,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
 
       {/* Filter Section */}
       <div
-        className={`mb-4 p-3 p-md-5 filters-section ${showFilters ? '' : 'd-none'} d-md-block`}
+        className={`mb-2 mb-md-4 p-3 p-md-5 filters-section ${showFilters ? '' : 'd-none'} d-md-block`}
         style={{ 
           backgroundColor: '#f8f9fa', 
           borderRadius: '16px',
@@ -1026,7 +1026,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
         </div>
         <div className="filters-content-desktop">
           <Form>
-            <Row className="g-1 filters-main-row align-items-end flex-wrap flex-md-nowrap">
+            <Row className="g-1 g-md-2 filters-main-row align-items-end flex-wrap flex-md-nowrap">
             {/* Price Range */}
             <Col lg={2} md={6}>
               <FormGroup>
@@ -1409,7 +1409,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
             </Col>
 
             {/* Clear Filters button */}
-            <Col lg={1} md={6}>
+            <Col lg={1} md={6} className="clear-filters-col">
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem', visibility: 'hidden' }}>
                   Clear Filters
@@ -1522,8 +1522,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       </div>
       
       {/* Mobile Sort Bar */}
-      {filteredListings.length > 0 && (
-        <div className="d-md-none mb-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginTop: '2rem', paddingTop: showFilters ? '680px' : '0', transition: 'padding-top 0.3s ease', position: 'relative', zIndex: 100 }}>
+      {hasLoadedInitialListings && filteredListings.length > 0 && (
+        <div className="d-md-none mb-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', paddingTop: showFilters ? '680px' : '0', transition: 'padding-top 0.3s ease', position: 'relative', zIndex: 100 }}>
           {/* Left: Results count */}
           <div style={{
             fontSize: '0.8rem',
@@ -1572,7 +1572,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       )}
       
       {/* Desktop Sort and Pagination info */}
-      {filteredListings.length > 0 && (
+      {hasLoadedInitialListings && filteredListings.length > 0 && (
         <div className="mb-2 d-none d-md-flex" style={{ maxWidth: '1180px', marginLeft: 'auto', marginRight: 'auto' }}>
           <div style={{ width: '100%' }}>
             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2" style={{ fontSize: '0.85rem' }}>
@@ -1614,23 +1614,39 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
         </div>
       )}
 
-      {/* Listings */}
-      <Row className="listings-grid-row">
-        {currentListings.map(listing => (
-          <Col key={listing.id} sm={12} md={6} lg={6} xl={4} className="mb-4">
-            <ListingCard 
-              listing={listing} 
-              isAnyModalOpen={isModalOpen}
-              onModalToggle={handleModalToggle} 
-              forceOpen={listing.id === modalListingId}
-              onRequireLogin={onRequireLogin}
-            />
+      {/* Loading message */}
+      {!hasLoadedInitialListings && (
+        <Row>
+          <Col>
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <h4 style={{ color: '#6c757d', fontWeight: '500' }}>Loading homes...</h4>
+            </div>
           </Col>
-        ))}
-      </Row>
+        </Row>
+      )}
+
+      {/* Listings */}
+      {hasLoadedInitialListings && (
+        <Row className="listings-grid-row">
+          {currentListings.map(listing => (
+            <Col key={listing.id} sm={12} md={6} lg={6} xl={4} className="mb-4">
+              <ListingCard 
+                listing={listing} 
+                isAnyModalOpen={isModalOpen}
+                onModalToggle={handleModalToggle} 
+                forceOpen={listing.id === modalListingId}
+                onRequireLogin={onRequireLogin}
+              />
+            </Col>
+          ))}
+        </Row>
+      )}
 
       {/* Pagination controls */}
-      {totalPages > 1 && (
+      {hasLoadedInitialListings && totalPages > 1 && (
         <Row className="mt-4">
           <Col>
             <div className="d-flex justify-content-center">
@@ -1651,7 +1667,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       )}
 
       {/* No results message */}
-      {filteredListings.length === 0 && (
+      {filteredListings.length === 0 && 
+       ((!useAISearch && hasLoadedInitialListings) || (useAISearch && !isSearching)) && (
         <Row>
           <Col>
             <div className="text-center py-5">

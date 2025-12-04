@@ -19,6 +19,7 @@ const AppContent = () => {
   const isHomePage = location.pathname === '/' || location.pathname.startsWith('/listings/');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [heroImageLoaded, setHeroImageLoaded] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -228,9 +229,23 @@ const AppContent = () => {
             minHeight: '500px',
             position: 'relative',
             overflow: 'hidden',
-            marginTop: '40px'
+            marginTop: '40px',
+            backgroundColor: '#2c3e50'
           }}
         >
+          {/* Gradient Fallback Background - Shows while image loads */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'linear-gradient(135deg, #4a90e2 0%, #2c3e50 50%, #1a252f 100%)',
+              zIndex: 0
+            }}
+          />
+          
           {/* Background Image with Enhanced Overlay */}
           <div
             className="hero-background"
@@ -243,9 +258,18 @@ const AppContent = () => {
               backgroundImage: `url('https://images.unsplash.com/photo-1576924542622-772281b13aa8?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=3540')`,
               backgroundSize: '140%',
               backgroundPosition: 'center 90%',
-              opacity: 1,
+              opacity: heroImageLoaded ? 1 : 0,
+              transition: 'opacity 0.6s ease-in-out',
               zIndex: 1
             }}
+          />
+          
+          {/* Preload Image */}
+          <img
+            src="https://images.unsplash.com/photo-1576924542622-772281b13aa8?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=3540"
+            alt=""
+            style={{ display: 'none' }}
+            onLoad={() => setHeroImageLoaded(true)}
           />
           
           {/* Premium Gradient Overlay */}
