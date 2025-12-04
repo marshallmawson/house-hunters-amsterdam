@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Carousel, Button, Toast } from 'react-bootstrap';
 import { Listing } from '../types';
 import BedIcon from './icons/BedIcon';
@@ -21,6 +21,8 @@ interface MapListingCardProps {
   isAnyModalOpen: boolean;
   // Optional callback to trigger the global login required prompt
   onRequireLogin?: () => void;
+  // Function to check if a marker was just clicked (to prevent backdrop from closing)
+  wasMarkerJustClicked?: () => boolean;
 }
 
 const getOutdoorSpaceString = (listing: Listing) => {
@@ -35,7 +37,7 @@ const getOutdoorSpaceString = (listing: Listing) => {
   return `${outdoorSpaces.join(' + ')}${area}`;
 };
 
-const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onModalToggle, isAnyModalOpen, onRequireLogin }) => {
+const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onModalToggle, isAnyModalOpen, onRequireLogin, wasMarkerJustClicked }) => {
   const [showFullModal, setShowFullModal] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [isSaved, setIsSaved] = useState(false);
@@ -45,6 +47,9 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
   const { currentUser } = useAuth();
   const outdoorSpaceString = getOutdoorSpaceString(listing);
   const publishedDate = listing.publishedDate ? listing.publishedDate.toDate() : null;
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const cardOpenedAtRef = useRef<number>(Date.now());
 
   useEffect(() => {
     const handleResize = () => {
@@ -53,6 +58,88 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Prevent page zoom (Ctrl/Cmd + wheel) when card is open, but allow map zoom
+  useEffect(() => {
+    const cardElement = cardRef.current;
+    
+    // Handler for card - prevent page zoom when scrolling directly on card
+    const handleCardWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    // Global handler to prevent page zoom but allow map zoom
+    const handleGlobalWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        const target = e.target as HTMLElement;
+        const isOnCard = cardElement && cardElement.contains(target);
+        const isOnBackdrop = backdropRef.current && (backdropRef.current === target || backdropRef.current.contains(target));
+        
+        if (!isOnCard) {
+          // Temporarily disable backdrop to see what's underneath
+          let elementAtPoint: Element | null = null;
+          if (isOnBackdrop && backdropRef.current) {
+            const originalPE = backdropRef.current.style.pointerEvents;
+            backdropRef.current.style.pointerEvents = 'none';
+            elementAtPoint = document.elementFromPoint(e.clientX, e.clientY);
+            backdropRef.current.style.pointerEvents = originalPE;
+          } else {
+            elementAtPoint = document.elementFromPoint(e.clientX, e.clientY);
+          }
+          
+          const isOverMap = elementAtPoint && (
+            elementAtPoint.closest('.gm-style') !== null ||
+            elementAtPoint.tagName === 'CANVAS' ||
+            (elementAtPoint as HTMLElement).classList.toString().includes('gm-')
+          );
+          
+          if (isOverMap && elementAtPoint) {
+            // Over map - prevent page zoom but forward event to map
+            e.preventDefault();
+            // Forward the event to the map element
+            const mapEvent = new WheelEvent('wheel', {
+              bubbles: true,
+              cancelable: true,
+              clientX: e.clientX,
+              clientY: e.clientY,
+              deltaX: e.deltaX,
+              deltaY: e.deltaY,
+              deltaZ: e.deltaZ,
+              deltaMode: e.deltaMode,
+              ctrlKey: e.ctrlKey,
+              metaKey: e.metaKey,
+              shiftKey: e.shiftKey,
+              altKey: e.altKey
+            });
+            elementAtPoint.dispatchEvent(mapEvent);
+          } else {
+            // Not over map - prevent page zoom
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+      }
+    };
+
+    if (cardElement) {
+      cardElement.addEventListener('wheel', handleCardWheel, { passive: false });
+    }
+    
+    // Add global handler in bubble phase (not capture) so map receives it first
+    document.addEventListener('wheel', handleGlobalWheel, { passive: false });
+    
+    return () => {
+      if (cardElement) {
+        cardElement.removeEventListener('wheel', handleCardWheel);
+      }
+      document.removeEventListener('wheel', handleGlobalWheel);
+    };
+  }, []);
+
+
 
   // Check if property is saved
   useEffect(() => {
@@ -118,7 +205,18 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
     }
   };
 
+  // Track when card was opened to prevent immediate modal opening
+  useEffect(() => {
+    cardOpenedAtRef.current = Date.now();
+  }, [listing.id]);
+
   const handleCardClick = () => {
+    // On mobile, prevent immediate opening if card was just opened (within 300ms)
+    // This prevents the touch event from marker click from opening modal directly
+    const timeSinceOpen = Date.now() - cardOpenedAtRef.current;
+    if (isMobile && timeSinceOpen < 300) {
+      return; // Ignore clicks immediately after card opens on mobile
+    }
     setShowFullModal(true);
     onModalToggle(true);
   };
@@ -130,19 +228,236 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
 
   return (
     <>
-      {/* Backdrop to close on click outside - only blocks clicks, not card interactions */}
+      {/* Backdrop - handles clicks but allows drag events through */}
       <div
-        onClick={(e) => {
-          // Only close if clicking directly on backdrop
-          if (e.target === e.currentTarget) {
-            onClose();
+        ref={backdropRef}
+        onMouseDown={(e) => {
+          // Desktop: Handle clicks and panning
+          if (!isMobile) {
+            // Check if click is on the card
+            const target = e.target as HTMLElement;
+            const isClickOnCard = cardRef.current && (
+              target === cardRef.current || 
+              cardRef.current.contains(target)
+            );
+            
+            if (isClickOnCard) {
+              return; // Don't handle if clicking on card
+            }
+            
+            // Only handle if clicking directly on backdrop
+            if (e.target !== e.currentTarget) {
+              return;
+            }
+            
+            const startX = e.clientX;
+            const startY = e.clientY;
+            let moved = false;
+            
+            // Check what's underneath by temporarily disabling pointer events
+            const originalPE = backdropRef.current?.style.pointerEvents;
+            if (backdropRef.current) {
+              backdropRef.current.style.pointerEvents = 'none';
+            }
+            const elementUnder = document.elementFromPoint(e.clientX, e.clientY);
+            
+            // If over map, keep pointer events disabled to allow marker clicks
+            const isOverMap = elementUnder && (
+              elementUnder.closest('.gm-style') !== null ||
+              elementUnder.tagName === 'CANVAS' ||
+              (elementUnder as HTMLElement).classList.toString().includes('gm-')
+            );
+            
+            if (isOverMap && elementUnder) {
+              // Forward mousedown to map element so panning works
+              const mapEvent = new MouseEvent('mousedown', {
+                bubbles: true,
+                cancelable: true,
+                clientX: e.clientX,
+                clientY: e.clientY,
+                button: e.button,
+                buttons: e.buttons,
+                ctrlKey: e.ctrlKey,
+                shiftKey: e.shiftKey,
+                altKey: e.altKey,
+                metaKey: e.metaKey
+              });
+              elementUnder.dispatchEvent(mapEvent);
+              
+              // Re-enable pointer events after a short delay to allow marker clicks but be ready for next click
+              setTimeout(() => {
+                if (backdropRef.current) {
+                  backdropRef.current.style.pointerEvents = 'auto';
+                }
+              }, 100);
+              
+              // Track mouse movement to detect if it's a click vs drag
+              const handleMouseMove = () => {
+                moved = true;
+              };
+              
+              const handleMouseUp = (upEvent: MouseEvent) => {
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+                
+                // Re-enable pointer events immediately so backdrop is ready for next click
+                if (backdropRef.current) {
+                  backdropRef.current.style.pointerEvents = 'auto';
+                }
+                
+                // If mouse didn't move much, it was a click - close the card
+                if (!moved) {
+                  const deltaX = Math.abs(upEvent.clientX - startX);
+                  const deltaY = Math.abs(upEvent.clientY - startY);
+                  if (deltaX < 5 && deltaY < 5) {
+                    // It was a click, not a drag
+                    // Forward click event to map so marker clicks can fire
+                    const clickEvent = new MouseEvent('click', {
+                      bubbles: true,
+                      cancelable: true,
+                      clientX: upEvent.clientX,
+                      clientY: upEvent.clientY,
+                      button: upEvent.button,
+                      buttons: upEvent.buttons,
+                      ctrlKey: upEvent.ctrlKey,
+                      shiftKey: upEvent.shiftKey,
+                      altKey: upEvent.altKey,
+                      metaKey: upEvent.metaKey
+                    });
+                    if (elementUnder) {
+                      elementUnder.dispatchEvent(clickEvent);
+                    }
+                    
+                    // Use requestAnimationFrame to ensure marker click handler runs first
+                    requestAnimationFrame(() => {
+                      requestAnimationFrame(() => {
+                        // Don't close if a marker was just clicked
+                        if (wasMarkerJustClicked && wasMarkerJustClicked()) {
+                          return;
+                        }
+                        // Close the card
+                        onClose();
+                      });
+                    });
+                  }
+                }
+              };
+              
+              document.addEventListener('mousemove', handleMouseMove);
+              document.addEventListener('mouseup', handleMouseUp);
+            } else {
+              // Not over map - restore pointer events and handle click on backdrop
+              if (backdropRef.current) {
+                backdropRef.current.style.pointerEvents = originalPE || 'auto';
+              }
+              
+              const handleMouseUp = (upEvent: MouseEvent) => {
+                document.removeEventListener('mouseup', handleMouseUp);
+                
+                const deltaX = Math.abs(upEvent.clientX - startX);
+                const deltaY = Math.abs(upEvent.clientY - startY);
+                if (deltaX < 5 && deltaY < 5) {
+                  // It was a click - close immediately
+                  onClose();
+                }
+              };
+              
+              document.addEventListener('mouseup', handleMouseUp);
+            }
           }
         }}
         onTouchStart={(e) => {
-          // Only close if touching the backdrop directly, not child elements
-          if (e.target === e.currentTarget) {
-            onClose();
+          // Mobile: handle taps on backdrop or map to close card
+          if (!isMobile) return;
+          
+          // Check if touch is on the card - if so, don't handle it here
+          const target = e.target as HTMLElement;
+          const isTouchOnCard = cardRef.current && (
+            target === cardRef.current || 
+            cardRef.current.contains(target)
+          );
+          
+          if (isTouchOnCard) {
+            return; // Let card handle its own touches
           }
+          
+          const touch = e.touches[0];
+          const touchX = touch.clientX;
+          const touchY = touch.clientY;
+          
+          // Check if touch is over the map - if so, temporarily allow pointer events through
+          const originalPE = backdropRef.current?.style.pointerEvents;
+          if (backdropRef.current) {
+            backdropRef.current.style.pointerEvents = 'none';
+          }
+          const elementUnder = document.elementFromPoint(touchX, touchY);
+          if (backdropRef.current) {
+            backdropRef.current.style.pointerEvents = originalPE || 'auto';
+          }
+          
+          const isOverMap = elementUnder && (
+            elementUnder.closest('.gm-style') !== null ||
+            elementUnder.tagName === 'CANVAS' ||
+            (elementUnder as HTMLElement).classList.toString().includes('gm-')
+          );
+          
+          // If over map, temporarily disable pointer events to allow marker clicks
+          if (isOverMap && backdropRef.current) {
+            backdropRef.current.style.pointerEvents = 'none';
+            // Re-enable after a delay to allow marker click to process
+            setTimeout(() => {
+              if (backdropRef.current) {
+                backdropRef.current.style.pointerEvents = 'auto';
+              }
+            }, 300);
+          }
+          
+          // Set up touchend handler to detect tap
+          const handleTouchEnd = (endEvent: TouchEvent) => {
+            if (endEvent.changedTouches.length > 0) {
+              const endTouch = endEvent.changedTouches[0];
+              const deltaX = Math.abs(endTouch.clientX - touchX);
+              const deltaY = Math.abs(endTouch.clientY - touchY);
+              
+              // If it was a tap (not a drag)
+              if (deltaX < 15 && deltaY < 15) {
+                // Use a delay to let map marker clicks process first
+                setTimeout(() => {
+                  if (!cardRef.current) return; // Card already closed
+                  
+                  // Don't close if a marker was just clicked
+                  if (wasMarkerJustClicked && wasMarkerJustClicked()) {
+                    return;
+                  }
+                  
+                  // Check what's under the touch point
+                  const originalPE = backdropRef.current?.style.pointerEvents;
+                  if (backdropRef.current) {
+                    backdropRef.current.style.pointerEvents = 'none';
+                  }
+                  const elementAtPoint = document.elementFromPoint(endTouch.clientX, endTouch.clientY);
+                  if (backdropRef.current) {
+                    backdropRef.current.style.pointerEvents = originalPE || 'auto';
+                  }
+                  
+                  // Check if element is the card (shouldn't close)
+                  const isTouchOnCard = cardRef.current && (
+                    elementAtPoint === cardRef.current ||
+                    cardRef.current.contains(elementAtPoint)
+                  );
+                  
+                  // Close if it's not the card (backdrop or map)
+                  if (!isTouchOnCard) {
+                    onClose();
+                  }
+                }, 250); // Delay to let map marker clicks process
+              }
+            }
+            document.removeEventListener('touchend', handleTouchEnd);
+          };
+          
+          // Add touchend listener immediately
+          document.addEventListener('touchend', handleTouchEnd, { once: true });
         }}
         style={{
           position: 'fixed',
@@ -157,6 +472,7 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
       />
 
       <div
+        ref={cardRef}
         style={{
           position: 'absolute',
           bottom: isMobile ? '10px' : '20px',

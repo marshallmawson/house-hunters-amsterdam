@@ -16,6 +16,8 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<{ marker: google.maps.Marker; listingId: string }[]>([]);
+  const lastMarkerClickTimeRef = useRef<number>(0);
+  const pendingListingRef = useRef<Listing | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [searchParams] = useSearchParams();
@@ -358,8 +360,17 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
       });
 
       // Click event works on both desktop and mobile
-      marker.addListener('click', () => {
+      marker.addListener('click', (e: google.maps.MapMouseEvent) => {
+        // Track marker click time to prevent backdrop from closing
+        lastMarkerClickTimeRef.current = Date.now();
+        // Store the pending listing to open
+        pendingListingRef.current = listing;
+        // Set the listing immediately (synchronously) so the card opens right away
         setSelectedListing(listing);
+        // Clear pending after a short delay
+        setTimeout(() => {
+          pendingListingRef.current = null;
+        }, 300);
       });
 
       markers.push({ marker, listingId: listing.id });
@@ -421,6 +432,61 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
   };
+
+  // Close the listing card when user starts panning the map
+  useEffect(() => {
+    if (!selectedListing || !mapInstanceRef.current) return;
+
+    const map = mapInstanceRef.current;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let isDragging = false;
+
+    // Detect map panning (dragging) - close card when user starts dragging
+    const dragStartListener = map.addListener('dragstart', () => {
+      setSelectedListing(null);
+      isDragging = true;
+    });
+
+    // Also detect touch-based panning on mobile
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        isDragging = false;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1 && !isDragging) {
+        const touch = e.touches[0];
+        const deltaX = Math.abs(touch.clientX - touchStartX);
+        const deltaY = Math.abs(touch.clientY - touchStartY);
+        
+        // If user has moved more than 10px, they're panning
+        if (deltaX > 10 || deltaY > 10) {
+          setSelectedListing(null);
+          isDragging = true;
+        }
+      }
+    };
+
+    const mapDiv = mapRef.current;
+    if (mapDiv) {
+      mapDiv.addEventListener('touchstart', handleTouchStart, { passive: true });
+      mapDiv.addEventListener('touchmove', handleTouchMove, { passive: true });
+    }
+
+    return () => {
+      if (dragStartListener) {
+        google.maps.event.removeListener(dragStartListener);
+      }
+      if (mapDiv) {
+        mapDiv.removeEventListener('touchstart', handleTouchStart);
+        mapDiv.removeEventListener('touchmove', handleTouchMove);
+      }
+    };
+  }, [selectedListing]);
 
   if (mapsError) {
     return (
@@ -530,6 +596,10 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
           onModalToggle={handleModalToggle}
           isAnyModalOpen={isModalOpen}
           onRequireLogin={onRequireLogin}
+          wasMarkerJustClicked={() => {
+            const timeSinceClick = Date.now() - lastMarkerClickTimeRef.current;
+            return timeSinceClick < 500 || pendingListingRef.current !== null;
+          }}
         />
       )}
     </div>
