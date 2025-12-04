@@ -777,7 +777,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     setFilteredListings(result);
     // Reset to first page when filters change
     setCurrentPage(1);
-  }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas]);
+  }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
 
   // Separate useEffect to update URL parameters only when filter values change
   useEffect(() => {
@@ -982,7 +982,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
 
       {/* Filter Section */}
       <div
-        className={`mb-4 p-5 filters-section ${showFilters ? '' : 'd-none'} d-md-block`}
+        className={`mb-4 p-3 p-md-5 filters-section ${showFilters ? '' : 'd-none'} d-md-block`}
         style={{ 
           backgroundColor: '#f8f9fa', 
           borderRadius: '16px',
@@ -994,7 +994,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
           minHeight: '1px',
           maxWidth: '1180px',
           marginLeft: 'auto',
-          marginRight: 'auto'
+          marginRight: 'auto',
+          width: '100%'
         }}
       >
         <div className="d-flex justify-content-between align-items-center mb-3 filters-header-row">
@@ -1025,7 +1026,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
         </div>
         <div className="filters-content-desktop">
           <Form>
-            <Row className="g-2 filters-main-row align-items-end flex-nowrap">
+            <Row className="g-1 filters-main-row align-items-end flex-wrap flex-md-nowrap">
             {/* Price Range */}
             <Col lg={2} md={6}>
               <FormGroup>

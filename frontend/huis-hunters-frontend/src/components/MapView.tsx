@@ -42,6 +42,7 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
   const [selectedOutdoorSpaces] = useState<string[]>(searchParams.get('outdoor')?.split(',').filter(Boolean) || []);
   const [minSize] = useState(searchParams.get('minSize') || '');
   const [selectedAreas] = useState<string[]>(searchParams.get('areas')?.split(',').filter(Boolean) || []);
+  const [publishedWithin] = useState(searchParams.get('publishedWithin') || 'all');
 
   // Load Google Maps API
   useEffect(() => {
@@ -69,10 +70,13 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
       const querySnapshot = await getDocs(q);
       const listingsData = querySnapshot.docs
         .map(doc => {
-          const { publishDate, ...rest } = doc.data();
+          const { publishDate, publishedAt, ...rest } = doc.data();
           let finalPublishedDate;
 
-          if (typeof publishDate === 'string') {
+          if (publishedAt && typeof publishedAt.toDate === 'function') {
+            // Preferred canonical Firestore Timestamp
+            finalPublishedDate = publishedAt;
+          } else if (typeof publishDate === 'string') {
             const date = new Date(publishDate);
             finalPublishedDate = {
               toDate: () => date,
@@ -128,7 +132,8 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
           floor: floorLevel,
           outdoor: selectedOutdoorSpaces,
           minSize: minSize,
-          areas: selectedAreas
+          areas: selectedAreas,
+          publishedWithinDays: publishedWithin !== 'all' ? parseInt(publishedWithin, 10) : null
         },
         search_type: 'filtered'
       };
@@ -208,7 +213,7 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
     } finally {
       searchInProgressRef.current = false;
     }
-  }, [priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas]);
+  }, [priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
 
   // Trigger search when component loads with a search query
   useEffect(() => {
@@ -239,10 +244,25 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
           );
         const passesMinSize = !minSize || (listing.livingArea && listing.livingArea >= parseInt(minSize, 10));
         const passesArea = selectedAreas.length === 0 || (listing.area && selectedAreas.includes(listing.area));
+
+        let passesPublishedWithin = true;
+        if (publishedWithin && publishedWithin !== 'all' && listing.publishedDate && typeof listing.publishedDate.toDate === 'function') {
+          const days = parseInt(publishedWithin, 10);
+          if (!Number.isNaN(days) && days > 0) {
+            const now = new Date();
+            const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const cutoff = new Date(startOfToday);
+            cutoff.setDate(startOfToday.getDate() - (days - 1));
+
+            const publishedJsDate = listing.publishedDate.toDate();
+            passesPublishedWithin = publishedJsDate >= cutoff;
+          }
+        }
+
         const hasImages = listing.imageGallery && listing.imageGallery.length > 0;
         const hasCoordinates = listing.coordinates && listing.coordinates.lat && listing.coordinates.lon;
 
-        return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesMinSize && passesArea && hasImages && hasCoordinates;
+        return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesMinSize && passesArea && passesPublishedWithin && hasImages && hasCoordinates;
       });
     } else {
       // For AI search, still filter by coordinates
@@ -252,7 +272,7 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
     }
 
     setFilteredListings(result);
-  }, [listings, searchResults, useAISearch, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas]);
+  }, [listings, searchResults, useAISearch, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
 
   // Initialize map and create markers
   useEffect(() => {
