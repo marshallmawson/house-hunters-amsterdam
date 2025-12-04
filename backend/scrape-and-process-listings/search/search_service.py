@@ -1,16 +1,102 @@
 import os
+import datetime
+import statistics
+from typing import List, Dict, Any, Optional
+
 import numpy as np
 import firebase_admin
 from dotenv import load_dotenv
 from firebase_admin import credentials, firestore
 import vertexai
 from vertexai.language_models import TextEmbeddingModel
-import datetime
-import statistics
-from typing import List, Dict, Any, Optional
+
 
 def log_timestamp(message):
     print(f"[{datetime.datetime.now()}] {message}", flush=True)
+
+
+def compute_published_cutoff(published_within_days: int) -> Optional[datetime.datetime]:
+    """Return a cutoff datetime for listings published within N calendar days.
+
+    Uses calendar days including today. For example:
+    - 1 => start of today
+    - 3 => start of the day two days ago (today + previous 2 days)
+    """
+    try:
+        if not published_within_days or published_within_days <= 0:
+            return None
+
+        # Use local Europe/Amsterdam-like time (UTC+1 approximation) for day boundaries.
+        tz = datetime.timezone(datetime.timedelta(hours=1))
+        now = datetime.datetime.now(tz)
+        start_of_today = datetime.datetime(now.year, now.month, now.day, tzinfo=tz)
+        cutoff = start_of_today - datetime.timedelta(days=published_within_days - 1)
+        return cutoff
+    except Exception as e:
+        log_timestamp(f"❗️ Error computing published cutoff: {e}")
+        return None
+
+
+def listing_passes_published_date_filter(listing_data: Dict[str, Any], filters: Dict[str, Any]) -> bool:
+    """Check if a listing passes the publishedWithinDays filter, if present."""
+    try:
+        published_within = filters.get("publishedWithinDays")
+        if not published_within:
+            return True
+
+        try:
+            published_within_int = int(published_within)
+        except (TypeError, ValueError):
+            return True
+
+        cutoff = compute_published_cutoff(published_within_int)
+        if not cutoff:
+            return True
+
+        published_at = listing_data.get("publishedAt")
+
+        # Backwards compatibility: fall back to publishDate string if needed
+        if not published_at:
+            publish_str = listing_data.get("publishDate")
+            if isinstance(publish_str, str) and publish_str:
+                try:
+                    published_at = datetime.datetime.fromisoformat(publish_str)
+                except ValueError:
+                    try:
+                        tz_sep_index = max(publish_str.rfind("+"), publish_str.rfind("-"))
+                        if tz_sep_index == -1:
+                            core = publish_str
+                            tz_part = ""
+                        else:
+                            core = publish_str[:tz_sep_index]
+                            tz_part = publish_str[tz_sep_index:]
+
+                        if "." in core:
+                            date_part, frac = core.split(".", 1)
+                            frac_digits = "".join(ch for ch in frac if ch.isdigit())
+                            if len(frac_digits) > 6:
+                                frac_digits = frac_digits[:6]
+                            core_fixed = f"{date_part}.{frac_digits}"
+                        else:
+                            core_fixed = core
+
+                        fixed_str = f"{core_fixed}{tz_part}"
+                        published_at = datetime.datetime.fromisoformat(fixed_str)
+                    except Exception:
+                        published_at = None
+
+        if not isinstance(published_at, datetime.datetime):
+            return True  # If we can't determine it, don't exclude the listing
+
+        # Ensure both sides are comparable (timezone-aware). If published_at is naive, make
+        # it use the same timezone as cutoff.
+        if published_at.tzinfo is None and cutoff.tzinfo is not None:
+            published_at = published_at.replace(tzinfo=cutoff.tzinfo)
+
+        return published_at >= cutoff
+    except Exception as e:
+        log_timestamp(f"❗️ Error checking published date filter: {e}")
+        return True
 
 def is_address_query(query: str) -> bool:
     """
@@ -643,8 +729,11 @@ def passes_filters(listing_data: Dict[str, Any], filters: Dict[str, Any]) -> boo
         if 'areas' in filters and filters['areas']:
             if listing_data.get('area') not in filters['areas']:
                 return False
-        
-        
+
+        # Published date (relative days)
+        if not listing_passes_published_date_filter(listing_data, filters):
+            return False
+
         return True
         
     except Exception as e:
@@ -859,6 +948,10 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
                     listing_area = listing_data.get('area', '')
                     if not any(area in listing_area for area in filters['areas']):
                         continue
+
+                # Apply published date filter (relative days)
+                if not listing_passes_published_date_filter(listing_data, filters):
+                    continue
                 
             
             filtered_listings.append({

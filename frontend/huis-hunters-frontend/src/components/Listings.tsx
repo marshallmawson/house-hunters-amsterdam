@@ -46,6 +46,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
   const [selectedOutdoorSpaces, setSelectedOutdoorSpaces] = useState<string[]>(searchParams.get('outdoor')?.split(',').filter(Boolean) || []);
   const [minSize, setMinSize] = useState(searchParams.get('minSize') || '');
   const [selectedAreas, setSelectedAreas] = useState<string[]>(searchParams.get('areas')?.split(',').filter(Boolean) || []);
+  const [publishedWithin, setPublishedWithin] = useState(searchParams.get('publishedWithin') || 'all');
   const [isModalOpen, setIsModalOpen] = useState(!!modalListingId);
   const [showFilters, setShowFilters] = useState(false);
   const [showNeighborhoodMap, setShowNeighborhoodMap] = useState(false);
@@ -63,7 +64,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     const hasURLParams = searchParams.get('minPrice') || searchParams.get('maxPrice') || 
                          searchParams.get('bedrooms') || searchParams.get('floor') || 
                          searchParams.get('outdoor') || searchParams.get('minSize') || 
-                         searchParams.get('areas') || searchParams.get('sort') || searchParams.get('search');
+                         searchParams.get('areas') || searchParams.get('sort') || 
+                         searchParams.get('publishedWithin') || searchParams.get('search');
     
     // Only load saved preferences if no URL params (user hasn't shared a link with filters)
     if (!hasURLParams && savedPreferences) {
@@ -90,6 +92,9 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       }
       if (savedPreferences.sortOrder) {
         setSortOrder(savedPreferences.sortOrder);
+      }
+      if (savedPreferences.publishedWithin) {
+        setPublishedWithin(savedPreferences.publishedWithin);
       }
       // Note: searchQuery is not restored from saved preferences
     } else {
@@ -135,10 +140,13 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
         const querySnapshot = await getDocs(q);
         const listingsData = querySnapshot.docs
           .map(doc => {
-            const { publishDate, ...rest } = doc.data();
+            const { publishDate, publishedAt, ...rest } = doc.data();
             let finalPublishedDate;
 
-            if (typeof publishDate === 'string') {
+            if (publishedAt && typeof publishedAt.toDate === 'function') {
+              // Preferred canonical Firestore Timestamp
+              finalPublishedDate = publishedAt;
+            } else if (typeof publishDate === 'string') {
               const date = new Date(publishDate);
               finalPublishedDate = {
                 toDate: () => date,
@@ -221,6 +229,12 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     } else {
       params.delete('areas');
     }
+
+    if (publishedWithin && publishedWithin !== 'all') {
+      params.set('publishedWithin', publishedWithin);
+    } else {
+      params.delete('publishedWithin');
+    }
     
     // Handle search parameter: only preserve if it exists in URL AND searchQuery state is not empty
     // If searchQuery state is empty, don't preserve search from URL (it was likely just cleared)
@@ -234,7 +248,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     }
     
     setSearchParams(params, { replace: true });
-  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, setSearchParams, searchParams, searchQuery]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, setSearchParams, searchParams, searchQuery]);
 
   // Separate function for updating URL with search query
   const updateURLWithSearch = useCallback((query: string, overrideFilters?: {
@@ -244,6 +258,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     outdoor?: string[];
     minSize?: string;
     areas?: string[];
+    publishedWithin?: string;
   }) => {
     // Create fresh URLSearchParams (don't start with searchParams to avoid preserving old values)
     const params = new URLSearchParams();
@@ -253,7 +268,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       floorLevel,
       outdoor: selectedOutdoorSpaces,
       minSize,
-      areas: selectedAreas
+      areas: selectedAreas,
+      publishedWithin
     };
     
     // Update all params based on current values
@@ -305,6 +321,12 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     } else {
       params.delete('areas');
     }
+
+    if (filtersToUse.publishedWithin && filtersToUse.publishedWithin !== 'all') {
+      params.set('publishedWithin', filtersToUse.publishedWithin);
+    } else {
+      params.delete('publishedWithin');
+    }
     
     // Handle search parameter - explicitly add or remove
     if (query && query.trim()) {
@@ -314,7 +336,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     }
     
     setSearchParams(params, { replace: true });
-  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, setSearchParams, searchParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, setSearchParams, searchParams]);
 
   // AI Search function
   const performAISearch = useCallback(async (query: string) => {
@@ -477,7 +499,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
         floor: effectiveFloor,
         outdoor: effectiveOutdoor,
         minSize: minSize,
-        areas: effectiveAreas
+        areas: effectiveAreas,
+        publishedWithinDays: publishedWithin !== 'all' ? parseInt(publishedWithin, 10) : null
       },
       // If we have filters but no search query, use 'filtered' type (just filters, no search)
       // If we have a search query, use appropriate search type based on filters
@@ -620,7 +643,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       setIsSearching(false);
       searchInProgressRef.current = false;
     }
-  }, [priceRange.min, priceRange.max, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas]);
+  }, [priceRange.min, priceRange.max, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
 
   // Trigger search when component loads with a search query in URL
   useEffect(() => {
@@ -658,7 +681,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       performAISearch(searchQuery);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [priceRange.min, priceRange.max, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas]);
+  }, [priceRange.min, priceRange.max, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
 
   useEffect(() => {
     // Use AI search results if available, otherwise use regular listings
@@ -707,27 +730,48 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
 
     // Filtering (skip for AI search results as filters are applied server-side)
     if (!useAISearch) {
-    result = result.filter(listing => {
-      const price = listing.price || 0;
-      const passesPrice = price >= priceRange.min && price <= priceRange.max;
-      const passesBedrooms = bedrooms === 'any' || (listing.bedrooms || 0) >= parseInt(bedrooms, 10);
-      const passesFloorLevel = floorLevel === 'any' ||
-        (floorLevel === 'ground' && listing.apartmentFloor === 'Ground') ||
-        (floorLevel === 'top' && (listing.apartmentFloor === 'Upper' || listing.apartmentFloor === 'Top floor' || listing.apartmentFloor === 'Upper floor'));
-      const passesOutdoorSpace = selectedOutdoorSpaces.length === 0 || 
-        selectedOutdoorSpaces.some(space => 
-          (space === 'garden' && listing.hasGarden) ||
-          (space === 'rooftop' && listing.hasRooftopTerrace) ||
-          (space === 'balcony' && listing.hasBalcony)
-        );
-      const passesMinSize = !minSize || (listing.livingArea && listing.livingArea >= parseInt(minSize, 10));
-      const passesArea = selectedAreas.length === 0 || (listing.area && selectedAreas.includes(listing.area));
-      // Filter out listings without images
-      const hasImages = listing.imageGallery && listing.imageGallery.length > 0;
-      
+      result = result.filter(listing => {
+        const price = listing.price || 0;
+        const passesPrice = price >= priceRange.min && price <= priceRange.max;
+        const passesBedrooms = bedrooms === 'any' || (listing.bedrooms || 0) >= parseInt(bedrooms, 10);
+        const passesFloorLevel = floorLevel === 'any' ||
+          (floorLevel === 'ground' && listing.apartmentFloor === 'Ground') ||
+          (floorLevel === 'top' && (listing.apartmentFloor === 'Upper' || listing.apartmentFloor === 'Top floor' || listing.apartmentFloor === 'Upper floor'));
+        const passesOutdoorSpace = selectedOutdoorSpaces.length === 0 || 
+          selectedOutdoorSpaces.some(space => 
+            (space === 'garden' && listing.hasGarden) ||
+            (space === 'rooftop' && listing.hasRooftopTerrace) ||
+            (space === 'balcony' && listing.hasBalcony)
+          );
+        const passesMinSize = !minSize || (listing.livingArea && listing.livingArea >= parseInt(minSize, 10));
+        const passesArea = selectedAreas.length === 0 || (listing.area && selectedAreas.includes(listing.area));
 
-      return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesMinSize && passesArea && hasImages;
-    });
+        let passesPublishedWithin = true;
+        if (publishedWithin && publishedWithin !== 'all' && listing.publishedDate && typeof listing.publishedDate.toDate === 'function') {
+          const days = parseInt(publishedWithin, 10);
+          if (!Number.isNaN(days) && days > 0) {
+            const now = new Date();
+            const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const cutoff = new Date(startOfToday);
+            cutoff.setDate(startOfToday.getDate() - (days - 1));
+
+            const publishedJsDate = listing.publishedDate.toDate();
+            passesPublishedWithin = publishedJsDate >= cutoff;
+          }
+        }
+
+        // Filter out listings without images
+        const hasImages = listing.imageGallery && listing.imageGallery.length > 0;
+
+        return passesPrice &&
+          passesBedrooms &&
+          passesFloorLevel &&
+          passesOutdoorSpace &&
+          passesMinSize &&
+          passesArea &&
+          passesPublishedWithin &&
+          hasImages;
+      });
     }
 
     setFilteredListings(result);
@@ -738,7 +782,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
   // Separate useEffect to update URL parameters only when filter values change
   useEffect(() => {
     updateURLParams();
-  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, updateURLParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, updateURLParams]);
 
   // Note: Removed duplicate effect - filter changes are already handled by the effect on lines 337-344
 
@@ -755,7 +799,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
         selectedOutdoorSpaces,
         minSize,
         selectedAreas,
-        sortOrder
+        sortOrder,
+        publishedWithin
       });
     }, 2000); // Debounce 2 seconds
 
@@ -838,7 +883,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
   };
 
   return (
-    <Container style={{ position: 'relative', paddingTop: '0', marginTop: '0' }}>
+    <Container fluid="xl" style={{ position: 'relative', paddingTop: '0', marginTop: '0' }}>
       {/* Mobile Filters and Map Buttons - Floating over hero
           Only show after the initial listings load has completed to avoid
           any visible vertical "jump" as data and layout settle. */}
@@ -937,16 +982,19 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
 
       {/* Filter Section */}
       <div
-        className={`mb-4 p-4 filters-section ${showFilters ? '' : 'd-none'} d-md-block`}
+        className={`mb-4 p-5 filters-section ${showFilters ? '' : 'd-none'} d-md-block`}
         style={{ 
           backgroundColor: '#f8f9fa', 
-          borderRadius: '12px',
+          borderRadius: '16px',
           border: '1px solid #e9ecef',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-          marginTop: '-100px',
+          boxShadow: '0 4px 18px rgba(0,0,0,0.12)',
+          marginTop: '-90px',
           position: 'relative',
           zIndex: 100,
-          minHeight: '1px'
+          minHeight: '1px',
+          maxWidth: '1180px',
+          marginLeft: 'auto',
+          marginRight: 'auto'
         }}
       >
         <div className="d-flex justify-content-between align-items-center mb-3 filters-header-row">
@@ -977,9 +1025,9 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
         </div>
         <div className="filters-content-desktop">
           <Form>
-            <Row className="g-2 filters-main-row">
+            <Row className="g-2 filters-main-row align-items-end flex-nowrap">
             {/* Price Range */}
-            <Col lg={3} md={6}>
+            <Col lg={2} md={6}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Price Range</Form.Label>
                 <div style={{ padding: '0 4px' }}>
@@ -1101,7 +1149,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
             </Col>
 
             {/* Outdoor Space */}
-            <Col lg={2} md={6}>
+            <Col lg={1} md={6}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Outdoor</Form.Label>
                 <Dropdown>
@@ -1174,7 +1222,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
             </Col>
 
             {/* Floor Level */}
-            <Col lg={2} md={6}>
+            <Col lg={1} md={6}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Floor</Form.Label>
                 <Dropdown>
@@ -1230,7 +1278,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
 
 
             {/* Area */}
-            <Col lg={2} md={12}>
+            <Col lg={3} md={12}>
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Neighborhood</Form.Label>
                 <Dropdown>
@@ -1305,10 +1353,66 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
               </FormGroup>
             </Col>
 
-            {/* Clear Filters Button */}
-            <Col lg={1} md={12}>
+            {/* Published within */}
+            <Col lg={2} md={6}>
               <FormGroup>
-                <Form.Label className="fw-medium mb-2 clear-filters-label" style={{ fontSize: '0.85rem' }}>&nbsp;</Form.Label>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>Published in last</Form.Label>
+                <Dropdown>
+                  <Dropdown.Toggle
+                    variant="outline-secondary"
+                    className="custom-dropdown-toggle"
+                    style={{
+                      width: '100%',
+                      borderRadius: '8px',
+                      border: '1px solid #dee2e6',
+                      fontSize: '0.8rem',
+                      textAlign: 'left',
+                      backgroundColor: 'white',
+                      color: '#495057',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'right 0.5rem center',
+                      backgroundSize: '12px 8px',
+                      paddingRight: '1.5rem'
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {publishedWithin === 'all'
+                        ? 'Any time'
+                        : publishedWithin === '1'
+                          ? '1 day'
+                          : publishedWithin === '3'
+                            ? '3 days'
+                            : '7 days'}
+                    </span>
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu style={{ width: '100%' }}>
+                    <Dropdown.Item onClick={() => setPublishedWithin('all')} active={publishedWithin === 'all'}>
+                      Any time
+                    </Dropdown.Item>
+                    <Dropdown.Item onClick={() => setPublishedWithin('1')} active={publishedWithin === '1'}>
+                      Last 1 day
+                    </Dropdown.Item>
+                    <Dropdown.Item onClick={() => setPublishedWithin('3')} active={publishedWithin === '3'}>
+                      Last 3 days
+                    </Dropdown.Item>
+                    <Dropdown.Item onClick={() => setPublishedWithin('7')} active={publishedWithin === '7'}>
+                      Last 7 days
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown>
+              </FormGroup>
+            </Col>
+
+            {/* Clear Filters button */}
+            <Col lg={1} md={6}>
+              <FormGroup>
+                <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem', visibility: 'hidden' }}>
+                  Clear Filters
+                </Form.Label>
                 <Button 
                   variant="outline-secondary" 
                   size="sm" 
@@ -1319,21 +1423,23 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                     setSelectedOutdoorSpaces([]);
                     setMinSize('');
                     setSelectedAreas([]);
+                    setPublishedWithin('all');
                     setSearchQuery('');
                     setUseAISearch(false);
                     setSearchResults([]);
                   }}
-                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', width: '100%' }}
+                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', width: '100%', borderRadius: '8px' }}
                 >
                   Clear Filters
                 </Button>
               </FormGroup>
             </Col>
+
             </Row>
             
             {/* AI-Powered Search + Map view (desktop/tablet) */}
             <Row className="mt-3 ai-search-row align-items-end">
-              <Col lg={9} md={8} sm={12}>
+              <Col lg={8} md={8} sm={12}>
                 <FormGroup>
                   <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>
                     🔍 AI-Powered Search (optional)
@@ -1383,7 +1489,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                   </div>
                 </FormGroup>
               </Col>
-              <Col lg={3} md={4} sm={12} className="mt-2 mt-md-0 d-none d-md-flex justify-content-md-end">
+              <Col lg={4} md={4} sm={12} className="mt-2 mt-md-0 d-none d-md-flex justify-content-md-end">
                 <Button
                   className="ai-map-btn"
                   variant="primary"
@@ -1416,7 +1522,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       
       {/* Mobile Sort Bar */}
       {filteredListings.length > 0 && (
-        <div className="d-md-none mb-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginTop: '2rem', paddingTop: showFilters ? '630px' : '0', transition: 'padding-top 0.3s ease', position: 'relative', zIndex: 100 }}>
+        <div className="d-md-none mb-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginTop: '2rem', paddingTop: showFilters ? '680px' : '0', transition: 'padding-top 0.3s ease', position: 'relative', zIndex: 100 }}>
           {/* Left: Results count */}
           <div style={{
             fontSize: '0.8rem',
@@ -1466,9 +1572,9 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       
       {/* Desktop Sort and Pagination info */}
       {filteredListings.length > 0 && (
-        <Row className="mb-2 d-none d-md-flex results-bar-row">
-          <Col>
-            <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div className="mb-2 d-none d-md-flex" style={{ maxWidth: '1180px', marginLeft: 'auto', marginRight: 'auto' }}>
+          <div style={{ width: '100%' }}>
+            <div className="d-flex justify-content-between align-items-center flex-wrap gap-2" style={{ fontSize: '0.85rem' }}>
               <div className="d-flex align-items-center gap-2">
                 <div>
                   <strong>Showing {startIndex + 1}-{Math.min(endIndex, filteredListings.length)} of {filteredListings.length} listings</strong>
@@ -1503,8 +1609,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                 </Form.Control>
               </div>
             </div>
-          </Col>
-        </Row>
+          </div>
+        </div>
       )}
 
       {/* Listings */}

@@ -64,11 +64,7 @@ def search_listings():
         filters = data.get('filters', {})
         search_type = data.get('search_type', 'hybrid')
         
-        # Remove default filters that might be too restrictive
-        if filters.get('minPrice') == 450000:
-            filters.pop('minPrice', None)
-        if filters.get('maxPrice') == 750000:
-            filters.pop('maxPrice', None)
+        # Remove only truly default/empty filters that don't represent user intent
         if filters.get('bedrooms') == 'any':
             filters.pop('bedrooms', None)
         if filters.get('floor') == 'any':
@@ -123,7 +119,8 @@ def search_listings():
                 'hasBalcony': result.get('hasBalcony', False),
                 'apartmentFloor': result.get('apartmentFloor', ''),
                 'coordinates': result.get('coordinates', {}),
-                'publishedDate': result.get('publishedDate'),
+                # Prefer canonical publishedAt timestamp; fall back to legacy fields.
+                'publishedDate': result.get('publishedAt') or result.get('publishDate') or result.get('publishedDate'),
                 'scrapedAt': result.get('scrapedAt'),
                 'searchScore': result.get('hybrid_score', result.get('similarity_score', result.get('text_score', 0)))
             }

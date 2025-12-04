@@ -88,6 +88,7 @@ export interface UserPreferences {
   selectedAreas: string[];
   searchQuery?: string; // Optional - not saved to preferences
   sortOrder: string;
+  publishedWithin?: string;
 }
 
 export interface User {

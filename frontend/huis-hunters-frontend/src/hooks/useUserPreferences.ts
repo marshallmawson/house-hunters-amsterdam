@@ -11,7 +11,8 @@ const defaultPreferences: UserPreferences = {
   selectedOutdoorSpaces: [],
   minSize: '',
   selectedAreas: [],
-  sortOrder: 'date-new-old'
+  sortOrder: 'date-new-old',
+  publishedWithin: 'all'
   // searchQuery is not included in default preferences (not saved)
 };
 
@@ -49,7 +50,8 @@ export const useUserPreferences = () => {
           selectedOutdoorSpaces: outdoorSpaces,
           minSize: data.minSize || defaultPreferences.minSize,
           selectedAreas: data.selectedAreas || defaultPreferences.selectedAreas,
-          sortOrder: data.sortOrder || defaultPreferences.sortOrder
+          sortOrder: data.sortOrder || defaultPreferences.sortOrder,
+          publishedWithin: data.publishedWithin || defaultPreferences.publishedWithin
           // searchQuery is not loaded from preferences
         });
       }
@@ -65,10 +67,14 @@ export const useUserPreferences = () => {
 
     try {
       const prefDocRef = doc(db, 'users', currentUser.uid, 'searchPreferences', 'lastUsed');
-      await setDoc(prefDocRef, {
-        ...newPreferences,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
+      await setDoc(
+        prefDocRef,
+        {
+          ...newPreferences,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
       setPreferences(newPreferences);
     } catch (error) {
       console.error('Error saving preferences:', error);

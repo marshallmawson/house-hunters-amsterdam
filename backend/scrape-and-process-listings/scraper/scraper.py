@@ -1,5 +1,7 @@
-import re 
+import re
 import os
+from datetime import datetime
+
 import firebase_admin
 import requests
 from dotenv import load_dotenv
@@ -157,7 +159,46 @@ def transform_listing_data(raw_item):
     fast_view = raw_item.get('FastView', {})
     listing_description_text = raw_item.get('ListingDescription', {}).get("Description")
     urls = raw_item.get('Urls', {}).get('FriendlyUrl', {})
-    
+
+    # Original publish date string from Funda (kept for traceability)
+    publish_date_str = source_info.get('publish_date')
+
+    def parse_publish_date(publish_date: str):
+        """Parse Funda publish_date ISO string into a datetime.
+
+        Example format: '2025-11-14T19:45:03.6530000+01:00'
+        Python's fromisoformat only supports up to 6 digits of fractional
+        seconds, so we normalise the string when necessary.
+        """
+        if not isinstance(publish_date, str) or not publish_date:
+            return None
+        try:
+            return datetime.fromisoformat(publish_date)
+        except ValueError:
+            try:
+                # Trim fractional seconds to max 6 digits while preserving timezone
+                tz_sep_index = max(publish_date.rfind("+"), publish_date.rfind("-"))
+                if tz_sep_index == -1:
+                    core = publish_date
+                    tz_part = ""
+                else:
+                    core = publish_date[:tz_sep_index]
+                    tz_part = publish_date[tz_sep_index:]
+
+                if "." in core:
+                    date_part, frac = core.split(".", 1)
+                    frac_digits = "".join(ch for ch in frac if ch.isdigit())
+                    if len(frac_digits) > 6:
+                        frac_digits = frac_digits[:6]
+                    core_fixed = f"{date_part}.{frac_digits}"
+                else:
+                    core_fixed = core
+
+                fixed_str = f"{core_fixed}{tz_part}"
+                return datetime.fromisoformat(fixed_str)
+            except Exception:
+                return None
+
     # Extract the URL ID from the full URL (the actual listing ID)
     full_url = urls.get("FullUrl", "")
     url_id = None
@@ -260,7 +301,9 @@ def transform_listing_data(raw_item):
         "hasRooftopTerrace": targeting_options.get('dakterras') == 'true',
         "outdoorSpaceArea": parse_number_from_string(outdoor_space_str),
         "yearBuilt": targeting_options.get('bouwjaar'),
-        "publishDate": source_info.get('publish_date'),
+        "publishDate": publish_date_str,
+        # Canonical timestamp used for filters, sorting and display.
+        "publishedAt": parse_publish_date(publish_date_str),
         "agentName": agent_name,
         "agentUrl": agent_url,
         "vveContribution": parse_number_from_string(vve_str),
