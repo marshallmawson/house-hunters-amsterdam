@@ -261,26 +261,27 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   }, [showFloorPlanModal, selectedFloorPlanIndex, listing.floorPlans]);
 
-  // Prevent page zoom when image modal is open and user is interacting with image
+  // Prevent page zoom when image modal is open (but allow our custom handlers to work)
   useEffect(() => {
     if (showImageModal && imageModalRef.current) {
       const imageContainer = imageModalRef.current;
       
-      // Prevent page zoom on touch devices when touching the image
+      // Prevent page zoom on touch devices, but DON'T interfere with image container touches
+      // Our custom handlers on the image container will handle pinch-to-zoom
       const preventZoom = (e: TouchEvent) => {
         // Only prevent if we have 2 touches (pinch gesture)
         if (e.touches.length === 2) {
           const target = e.target as HTMLElement;
-          // Only prevent if the touch is on or inside the image container
-          if (imageContainer.contains(target) || target === imageContainer) {
+          // DON'T prevent if the touch is on the image container - let our custom handlers work
+          if (!imageContainer.contains(target) && target !== imageContainer) {
             e.preventDefault();
             e.stopPropagation();
           }
+          // If it IS on the image container, let it through to our custom handlers
         }
       };
 
       // Prevent wheel zoom (Ctrl/Cmd + wheel) everywhere except on the image container
-      // This prevents page zoom while allowing our custom handler to work on the image
       const preventWheelZoom = (e: WheelEvent) => {
         if (e.ctrlKey || e.metaKey) {
           const target = e.target as HTMLElement;
@@ -289,16 +290,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
             e.preventDefault();
             e.stopPropagation();
           }
-          // If it IS on the image container, we still want to prevent default page zoom
-          // but our React handler will handle the zoom
-          else if (imageContainer.contains(target) || target === imageContainer) {
-            e.preventDefault();
-            // Don't stop propagation so our React handler can still receive it
-          }
+          // If it IS on the image container, let our custom handler deal with it
         }
       };
 
-      // Use capture phase to catch events early
+      // Use capture phase to catch events early, but don't stop propagation for image container
       document.addEventListener('touchstart', preventZoom, { passive: false, capture: true });
       document.addEventListener('touchmove', preventZoom, { passive: false, capture: true });
       document.addEventListener('wheel', preventWheelZoom, { passive: false, capture: true });
@@ -311,26 +307,27 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   }, [showImageModal]);
 
-  // Prevent page zoom when floor plan modal is open and user is interacting with floor plan
+  // Prevent page zoom when floor plan modal is open (but allow our custom handlers to work)
   useEffect(() => {
     if (showFloorPlanModal && floorPlanModalRef.current) {
       const floorPlanContainer = floorPlanModalRef.current;
       
-      // Prevent page zoom on touch devices when touching the floor plan
+      // Prevent page zoom on touch devices, but DON'T interfere with floor plan container touches
+      // Our custom handlers on the floor plan container will handle pinch-to-zoom
       const preventZoom = (e: TouchEvent) => {
         // Only prevent if we have 2 touches (pinch gesture)
         if (e.touches.length === 2) {
           const target = e.target as HTMLElement;
-          // Only prevent if the touch is on or inside the floor plan container
-          if (floorPlanContainer.contains(target) || target === floorPlanContainer) {
+          // DON'T prevent if the touch is on the floor plan container - let our custom handlers work
+          if (!floorPlanContainer.contains(target) && target !== floorPlanContainer) {
             e.preventDefault();
             e.stopPropagation();
           }
+          // If it IS on the floor plan container, let it through to our custom handlers
         }
       };
 
       // Prevent wheel zoom (Ctrl/Cmd + wheel) everywhere except on the floor plan container
-      // This prevents page zoom while allowing our custom handler to work on the floor plan
       const preventWheelZoom = (e: WheelEvent) => {
         if (e.ctrlKey || e.metaKey) {
           const target = e.target as HTMLElement;
@@ -339,16 +336,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
             e.preventDefault();
             e.stopPropagation();
           }
-          // If it IS on the floor plan container, we still want to prevent default page zoom
-          // but our React handler will handle the zoom
-          else if (floorPlanContainer.contains(target) || target === floorPlanContainer) {
-            e.preventDefault();
-            // Don't stop propagation so our React handler can still receive it
-          }
+          // If it IS on the floor plan container, let our custom handler deal with it
         }
       };
 
-      // Use capture phase to catch events early
+      // Use capture phase to catch events early, but don't stop propagation for floor plan container
       document.addEventListener('touchstart', preventZoom, { passive: false, capture: true });
       document.addEventListener('touchmove', preventZoom, { passive: false, capture: true });
       document.addEventListener('wheel', preventWheelZoom, { passive: false, capture: true });
@@ -551,6 +543,10 @@ const ListingCard: React.FC<ListingCardProps> = ({
         }
       };
 
+      const handleTouchCancel = (e: TouchEvent) => {
+        pinchStartDistanceRef.current = null;
+      };
+
       const handleWheel = (e: WheelEvent) => {
         // Check if Ctrl/Cmd is pressed (trackpad pinch gesture)
         if (e.ctrlKey || e.metaKey) {
@@ -565,16 +561,19 @@ const ListingCard: React.FC<ListingCardProps> = ({
         }
       };
 
-      // Use native event listeners with non-passive option
-      imageContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
-      imageContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
-      imageContainer.addEventListener('touchend', handleTouchEnd, { passive: false });
+      // Use native event listeners with non-passive option and capture phase
+      // This ensures we catch events before they bubble
+      imageContainer.addEventListener('touchstart', handleTouchStart, { passive: false, capture: true });
+      imageContainer.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+      imageContainer.addEventListener('touchend', handleTouchEnd, { passive: false, capture: true });
+      imageContainer.addEventListener('touchcancel', handleTouchCancel, { passive: false, capture: true });
       imageContainer.addEventListener('wheel', handleWheel, { passive: false });
 
       return () => {
-        imageContainer.removeEventListener('touchstart', handleTouchStart);
-        imageContainer.removeEventListener('touchmove', handleTouchMove);
-        imageContainer.removeEventListener('touchend', handleTouchEnd);
+        imageContainer.removeEventListener('touchstart', handleTouchStart, { capture: true } as EventListenerOptions);
+        imageContainer.removeEventListener('touchmove', handleTouchMove, { capture: true } as EventListenerOptions);
+        imageContainer.removeEventListener('touchend', handleTouchEnd, { capture: true } as EventListenerOptions);
+        imageContainer.removeEventListener('touchcancel', handleTouchCancel, { capture: true } as EventListenerOptions);
         imageContainer.removeEventListener('wheel', handleWheel);
       };
     }
@@ -619,6 +618,10 @@ const ListingCard: React.FC<ListingCardProps> = ({
         }
       };
 
+      const handleTouchCancel = (e: TouchEvent) => {
+        floorPlanPinchStartDistanceRef.current = null;
+      };
+
       const handleWheel = (e: WheelEvent) => {
         // Check if Ctrl/Cmd is pressed (trackpad pinch gesture)
         if (e.ctrlKey || e.metaKey) {
@@ -633,16 +636,19 @@ const ListingCard: React.FC<ListingCardProps> = ({
         }
       };
 
-      // Use native event listeners with non-passive option
-      floorPlanContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
-      floorPlanContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
-      floorPlanContainer.addEventListener('touchend', handleTouchEnd, { passive: false });
+      // Use native event listeners with non-passive option and capture phase
+      // This ensures we catch events before they bubble
+      floorPlanContainer.addEventListener('touchstart', handleTouchStart, { passive: false, capture: true });
+      floorPlanContainer.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+      floorPlanContainer.addEventListener('touchend', handleTouchEnd, { passive: false, capture: true });
+      floorPlanContainer.addEventListener('touchcancel', handleTouchCancel, { passive: false, capture: true });
       floorPlanContainer.addEventListener('wheel', handleWheel, { passive: false });
 
       return () => {
-        floorPlanContainer.removeEventListener('touchstart', handleTouchStart);
-        floorPlanContainer.removeEventListener('touchmove', handleTouchMove);
-        floorPlanContainer.removeEventListener('touchend', handleTouchEnd);
+        floorPlanContainer.removeEventListener('touchstart', handleTouchStart, { capture: true } as EventListenerOptions);
+        floorPlanContainer.removeEventListener('touchmove', handleTouchMove, { capture: true } as EventListenerOptions);
+        floorPlanContainer.removeEventListener('touchend', handleTouchEnd, { capture: true } as EventListenerOptions);
+        floorPlanContainer.removeEventListener('touchcancel', handleTouchCancel, { capture: true } as EventListenerOptions);
         floorPlanContainer.removeEventListener('wheel', handleWheel);
       };
     }

@@ -17,6 +17,7 @@ const AppContent = () => {
   const location = useLocation();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
   const isHomePage = location.pathname === '/' || location.pathname.startsWith('/listings/');
+  const isMapPage = location.pathname === '/map';
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [heroImageLoaded, setHeroImageLoaded] = useState(false);
@@ -402,20 +403,22 @@ const AppContent = () => {
         />
       </Routes>
 
-      {/* Footer with Copyright */}
-      <footer
-        style={{
-          textAlign: 'center',
-          padding: '2rem 1rem',
-          marginTop: '3rem',
-          borderTop: '1px solid #e9ecef',
-          backgroundColor: '#f8f9fa',
-          color: '#6c757d',
-          fontSize: '0.875rem'
-        }}
-      >
-        © 2025 Marshall Mawson
-      </footer>
+      {/* Footer with Copyright - Hidden on map page */}
+      {!isMapPage && (
+        <footer
+          style={{
+            textAlign: 'center',
+            padding: '2rem 1rem',
+            marginTop: '3rem',
+            borderTop: '1px solid #e9ecef',
+            backgroundColor: '#f8f9fa',
+            color: '#6c757d',
+            fontSize: '0.875rem'
+          }}
+        >
+          © 2025 Marshall Mawson
+        </footer>
+      )}
     </div>
   );
 };
