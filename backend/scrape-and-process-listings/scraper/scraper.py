@@ -46,7 +46,7 @@ def fetch_and_store_listings():
 
     # 1. Prepare the input for the Apify Actor
     run_input = {
-        "startUrls": [{ "url": "https://www.funda.nl/zoeken/koop?price=%22400000-1250000%22&object_type=[%22apartment%22,%22house%22]&publication_date=%225%22&availability=[%22available%22]&sort=%22date_down%22&custom_area=%257Bhq%255Comx~H%257CLv%2560JkcHqDwhAbg%2540qcByy%2540oy%2540bJkkEwmBtu%2540_bCzhCmLlsB%2560Mfo%2540yGp%257CB_lBxgFhQ" }],
+        "startUrls": [{ "url": "https://www.funda.nl/zoeken/koop?price=%22400000-1000000%22&object_type=[%22apartment%22,%22house%22]&publication_date=%225%22&availability=[%22available%22]&sort=%22date_down%22&custom_area=%257Bhq%255Comx~H%257CLv%2560JkcHqDwhAbg%2540qcByy%2540oy%2540bJkkEwmBtu%2540_bCzhCmLlsB%2560Mfo%2540yGp%257CB_lBxgFhQ" }],
         "maxItems": 1000, #free limit is 100 anyway it seems
         "maxConcurrency": 100,
         "minConcurrency": 1,
@@ -322,7 +322,7 @@ def check_unavailable_listings():
     
     # 1. Prepare the input for the Apify Actor (unavailable listings)
     run_input = {
-        "startUrls": [{ "url": "https://www.funda.nl/zoeken/koop?price=%22400000-1250000%22&object_type=[%22apartment%22,%22house%22]&publication_date=%2230%22&availability=[%22negotiations%22,%22unavailable%22]&sort=%22date_down%22&custom_area=%257Bhq%255Comx~H%257CLv%2560JkcHqDwhAbg%2540qcByy%2540oy%2540bJkkEwmBtu%2540_bCzhCmLlsB%2560Mfo%2540yGp%257CB_lBxgFhQ" }],
+        "startUrls": [{ "url": "https://www.funda.nl/zoeken/koop?price=%22400000-1000000%22&object_type=[%22apartment%22,%22house%22]&publication_date=%2230%22&availability=[%22negotiations%22,%22unavailable%22]&sort=%22date_down%22&custom_area=%257Bhq%255Comx~H%257CLv%2560JkcHqDwhAbg%2540qcByy%2540oy%2540bJkkEwmBtu%2540_bCzhCmLlsB%2560Mfo%2540yGp%257CB_lBxgFhQ" }],
         "maxItems": 1000,
         "maxConcurrency": 100,
         "minConcurrency": 1,

@@ -106,45 +106,73 @@ except Exception as e:
 def clean_description(description):
     """
     Extracts the English portion of a listing description, if available, and removes boilerplate.
+    Returns the full English text without summarization.
     """
     if not description:
         return ""
 
     english_text = ""
-    # Descriptions often have a Dutch part then "--- English text ---" or similar.
-    # We'll try a few common separators.
+    # Descriptions often have a Dutch part then English text separated by dashes or markers.
+    # We'll try multiple separator patterns, ordered by specificity.
     separators = [
-        "**english**",
-        "english version",
-        "--- english ---",
-        "--- en ---",
+        r'-{20,}',  # Pattern like "---------------------------------------------------------"
+        r'\*\*english\*\*',
+        r'english version',
+        r'---\s*english\s*---',
+        r'---\s*en\s*---',
+        r'NEW TO THE MARKET',  # Common English section header
+        r'NEW IN THE SALE',  # Sometimes appears in English
     ]
 
     found = False
     for sep in separators:
-        if sep in description.lower():
-            # Split and take the second part
-            parts = re.split(re.escape(sep), description, flags=re.IGNORECASE)
+        # Use regex for pattern matching
+        if re.search(sep, description, flags=re.IGNORECASE):
+            # Split and take the second part (the English portion)
+            parts = re.split(sep, description, flags=re.IGNORECASE, maxsplit=1)
             if len(parts) > 1:
                 english_text = parts[1]
                 found = True
                 break
     
     if not found:
-        # If no clear separator is found, it's likely the description is either
-        # all in one language or doesn't follow the expected format.
-        # We will proceed with the entire description.
-        english_text = description
+        # If no clear separator is found, check if the description is already in English
+        # by looking for common English words/phrases that appear in property listings
+        english_indicators = [
+            r'\bNEW TO THE MARKET\b',
+            r'\bNEW IN THE SALE\b',
+            r'\bBright and Modern\b',
+            r'\bLocated on the\b',
+            r'\benergy label\b',
+            r'\bapartment of approximately\b',
+        ]
+        
+        has_english_indicators = any(
+            re.search(indicator, description, flags=re.IGNORECASE) 
+            for indicator in english_indicators
+        )
+        
+        if has_english_indicators:
+            # Likely already in English, use the whole description
+            english_text = description
+        else:
+            # Likely Dutch or mixed, use the whole description (will be translated later)
+            english_text = description
     
-    # 2. Clean the Text
-    # Remove boilerplate legal disclaimers (both English and Dutch)
+    # Clean the Text - Remove boilerplate legal disclaimers (both English and Dutch)
     boilerplate_patterns = [
         r'ASBESTOS CLAUSE.*',
         r'AGE CLAUSE.*',
         r'NEN CLAUSE.*',
         r'OWNERS DID NOT LIVE IN THE APARTMENT RECENTLY.*',
         r'This information has been compiled by us with due care.*',
-        r'Deze informatie is door ons met de nodige zorgvuldigheid samengesteld.*'
+        r'This information has been compiled with the utmost care.*',
+        r'Deze informatie is door ons met de nodige zorgvuldigheid samengesteld.*',
+        r'For information or to schedule a viewing.*',
+        r'Voor inlichtingen of het plannen van een bezichtiging.*',
+        r'We advise you to engage a professional.*',
+        r'Van toepassing zijn de NVM voorwaarden.*',
+        r'The NVM conditions apply.*',
     ]
     cleaned_text = english_text
     for pattern in boilerplate_patterns:
@@ -155,6 +183,10 @@ def clean_description(description):
 from langdetect import detect, LangDetectException
 
 def translate_text(text):
+    """
+    Translates text from Dutch to English using Hugging Face model.
+    For longer texts, splits into chunks to avoid truncation issues.
+    """
     if not text:
         return ""
     try:
@@ -164,11 +196,50 @@ def translate_text(text):
         if lang == 'en':
             return text
         
-        # Translate using Hugging Face model
-        # truncation=True handles texts longer than model's max length gracefully
-        translated = translate_model.generate(**translate_tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512))
-        translated_text = translate_tokenizer.decode(translated[0], skip_special_tokens=True)
-        return translated_text
+        # For very long texts, split into sentences and translate in chunks
+        # This helps avoid truncation issues with the model's max_length limit
+        # The model works best with ~512 tokens, so we'll split by sentences
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        
+        # If text is short enough, translate directly
+        # Rough estimate: 512 tokens ≈ 400 words ≈ 2000-3000 characters
+        if len(text) < 2500:
+            translated = translate_model.generate(**translate_tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512))
+            translated_text = translate_tokenizer.decode(translated[0], skip_special_tokens=True)
+            return translated_text
+        
+        # For longer texts, translate in chunks and combine
+        translated_parts = []
+        current_chunk = ""
+        
+        for sentence in sentences:
+            # If adding this sentence would exceed reasonable length, translate current chunk
+            if len(current_chunk) + len(sentence) > 2000:
+                if current_chunk:
+                    try:
+                        translated = translate_model.generate(**translate_tokenizer(current_chunk, return_tensors="pt", padding=True, truncation=True, max_length=512))
+                        chunk_text = translate_tokenizer.decode(translated[0], skip_special_tokens=True)
+                        translated_parts.append(chunk_text)
+                    except Exception as e:
+                        print(f"❗️ Error translating chunk: {e}")
+                        translated_parts.append(current_chunk)  # Fallback to original
+                    current_chunk = sentence
+                else:
+                    current_chunk = sentence
+            else:
+                current_chunk += " " + sentence if current_chunk else sentence
+        
+        # Translate remaining chunk
+        if current_chunk:
+            try:
+                translated = translate_model.generate(**translate_tokenizer(current_chunk, return_tensors="pt", padding=True, truncation=True, max_length=512))
+                chunk_text = translate_tokenizer.decode(translated[0], skip_special_tokens=True)
+                translated_parts.append(chunk_text)
+            except Exception as e:
+                print(f"❗️ Error translating final chunk: {e}")
+                translated_parts.append(current_chunk)  # Fallback to original
+        
+        return " ".join(translated_parts)
     except LangDetectException:
         # If language detection fails, fallback to the original text
         return text
@@ -323,13 +394,32 @@ def process_listings(limit=None, batch_size=20):
 
         raw_description = listing_data.get('description', '')
         
-        # 1. Clean the description
+        # 1. Clean the description - extracts English text if available
         cleaned_description = clean_description(raw_description)
         
-        # 2. Translate the description
-        translated_description = translate_text(cleaned_description)
+        # 2. Only translate if the cleaned description is not already in English
+        # We want the full, untruncated English text for cleanedDescription
+        # (Summarization happens later for embedding_text)
+        try:
+            lang = detect(cleaned_description) if cleaned_description else None
+            if lang == 'en':
+                # Already in English, use as-is
+                final_description = cleaned_description
+            else:
+                # Not in English, translate it
+                final_description = translate_text(cleaned_description)
+        except (LangDetectException, Exception) as e:
+            # If language detection fails, check if it looks like English
+            # by checking for common English property listing phrases
+            english_phrases = ['NEW TO THE MARKET', 'Bright and Modern', 'Located on', 'energy label']
+            looks_english = any(phrase in cleaned_description for phrase in english_phrases)
+            if looks_english:
+                final_description = cleaned_description
+            else:
+                # Try to translate, but fallback to original if translation fails
+                final_description = translate_text(cleaned_description)
         
-        listing_data['cleanedDescription'] = translated_description
+        listing_data['cleanedDescription'] = final_description
 
         # 3. Generate the embedding text (summary + features)
         embedding_text = generate_embedding_text(listing_data)
@@ -347,7 +437,7 @@ def process_listings(limit=None, batch_size=20):
 
         update_data = {
             'area': listing_area,
-            'cleanedDescription': translated_description,
+            'cleanedDescription': final_description,
             'embeddingText': embedding_text,
             'listingEmbedding': listing_embedding,
             'status': 'processed',
