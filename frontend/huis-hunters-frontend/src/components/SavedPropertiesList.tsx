@@ -307,7 +307,7 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
           }
 
           return (
-            <Col key={savedProp.id} sm={12} md={6} lg={4}>
+            <Col key={savedProp.id} sm={12} md={6} lg={4} className="mb-4">
               <div style={{ position: 'relative' }}>
                 {/* Status Dropdown - Top Left Corner Over Image */}
                 <div
