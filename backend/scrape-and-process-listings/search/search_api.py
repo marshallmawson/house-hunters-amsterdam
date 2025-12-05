@@ -260,7 +260,17 @@ def get_listing_html(listing_id):
         image_gallery = listing_data.get('imageGallery', [])
         
         # Use first image if available, otherwise default logo
-        image_url = image_gallery[0] if image_gallery and len(image_gallery) > 0 else 'https://www.huishunters.com/logo512.png'
+        # Ensure image URL is absolute (starts with http:// or https://)
+        raw_image_url = image_gallery[0] if image_gallery and len(image_gallery) > 0 else None
+        if raw_image_url:
+            # If URL is relative, make it absolute (assuming it's from funda.nl)
+            if raw_image_url.startswith('http://') or raw_image_url.startswith('https://'):
+                image_url = raw_image_url
+            else:
+                # If relative URL, prepend https:// (assuming funda.nl)
+                image_url = f'https://www.funda.nl{raw_image_url}' if raw_image_url.startswith('/') else f'https://{raw_image_url}'
+        else:
+            image_url = 'https://www.huishunters.com/logo512.png'
         
         # Build description
         description_parts = [address, f'€{price:,}']
@@ -290,7 +300,7 @@ def get_listing_html(listing_id):
         
     except Exception as e:
         logger.error(f"Error fetching listing {listing_id}: {str(e)}")
-        return render_template_string(DEFAULT_HTML_TEMPLATE), 500
+        return DEFAULT_HTML_TEMPLATE, 500, {'Content-Type': 'text/html; charset=utf-8'}
 
 # HTML template for listing pages with Open Graph meta tags
 HTML_TEMPLATE = '''<!DOCTYPE html>
