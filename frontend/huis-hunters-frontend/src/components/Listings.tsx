@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import ListingCard from './ListingCard';
 import NeighborhoodMap from './NeighborhoodMap';
@@ -54,6 +54,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
   const [allNeighborhoods, setAllNeighborhoods] = useState<string[]>([]);
   const [hasLoadedInitialListings, setHasLoadedInitialListings] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [modalListing, setModalListing] = useState<Listing | null>(null);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -142,6 +143,58 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     return Array.from(areas).sort();
   }, [listings]);
 
+  // Fetch specific listing by ID first if modalListingId is present (for faster modal opening)
+  useEffect(() => {
+    const fetchSpecificListing = async () => {
+      if (!modalListingId) return;
+      
+      try {
+        const docRef = doc(db, "listings", modalListingId);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const { publishDate, publishedAt, ...rest } = data;
+          let finalPublishedDate;
+
+          if (publishedAt && typeof publishedAt.toDate === 'function') {
+            finalPublishedDate = publishedAt;
+          } else if (typeof publishDate === 'string') {
+            const date = new Date(publishDate);
+            finalPublishedDate = {
+              toDate: () => date,
+              seconds: Math.floor(date.getTime() / 1000),
+              nanoseconds: (date.getTime() % 1000) * 1000000
+            };
+          } else {
+            finalPublishedDate = publishDate;
+          }
+
+          const listing = { id: docSnap.id, ...rest, publishedDate: finalPublishedDate } as Listing;
+          
+          // Only add if it has images and is available/processed
+          if (listing.imageGallery && listing.imageGallery.length > 0 && 
+              listing.status === 'processed' && listing.available !== false) {
+            // Set modal listing immediately so modal can open right away
+            setModalListing(listing);
+            // Also add to listings for the main grid
+            setListings(prevListings => {
+              // Check if listing already exists to avoid duplicates
+              if (prevListings.find(l => l.id === listing.id)) {
+                return prevListings;
+              }
+              return [listing, ...prevListings];
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching specific listing:', error);
+      }
+    };
+
+    fetchSpecificListing();
+  }, [modalListingId]);
+
   useEffect(() => {
     const fetchListings = async () => {
       try {
@@ -176,6 +229,9 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
             // Filter out listings without images
             return listing.imageGallery && listing.imageGallery.length > 0;
           });
+        
+        // Replace all listings (the pre-fetched listing will be included in this full set)
+        // By the time this completes, the modal should already be open from the pre-fetch
         setListings(listingsData);
       } finally {
         // Ensure we mark the initial load as complete even if the request fails,
@@ -744,6 +800,11 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     // Filtering (skip for AI search results as filters are applied server-side)
     if (!useAISearch) {
       result = result.filter(listing => {
+        // Always include the modal listing if it matches modalListingId (for direct URL access)
+        if (modalListingId && listing.id === modalListingId) {
+          return true;
+        }
+        
         const price = listing.price || 0;
         const passesPrice = price >= priceRange.min && price <= priceRange.max;
         const passesBedrooms = bedrooms === 'any' || (listing.bedrooms || 0) >= parseInt(bedrooms, 10);
@@ -790,7 +851,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     setFilteredListings(result);
     // Reset to first page when filters change
     setCurrentPage(1);
-  }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
+  }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, modalListingId]);
 
   // Separate useEffect to update URL parameters only when filter values change
   // Skip updating URL if we're on a listing detail page (modal is open) to keep URL clean
@@ -831,8 +892,16 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     setIsModalOpen(isOpen);
     if (!isOpen) {
       navigate('/');
+      setModalListing(null); // Clear modal listing when modal closes
     }
   };
+
+  // Clear modal listing when modalListingId changes or is removed
+  useEffect(() => {
+    if (!modalListingId) {
+      setModalListing(null);
+    }
+  }, [modalListingId]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredListings.length / itemsPerPage);
@@ -1678,6 +1747,19 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
         </Row>
       )}
 
+      {/* Render modal listing separately for immediate modal opening */}
+      {modalListing && modalListing.id === modalListingId && (
+        <div style={{ position: 'absolute', left: '-9999px', visibility: 'hidden' }}>
+          <ListingCard 
+            listing={modalListing} 
+            isAnyModalOpen={isModalOpen}
+            onModalToggle={handleModalToggle} 
+            forceOpen={true}
+            onRequireLogin={onRequireLogin}
+          />
+        </div>
+      )}
+
       {/* Listings */}
       {hasLoadedInitialListings && (
         <Row className="listings-grid-row">
@@ -1687,7 +1769,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                 listing={listing} 
                 isAnyModalOpen={isModalOpen}
                 onModalToggle={handleModalToggle} 
-                forceOpen={listing.id === modalListingId}
+                forceOpen={listing.id === modalListingId && !modalListing}
                 onRequireLogin={onRequireLogin}
               />
             </Col>

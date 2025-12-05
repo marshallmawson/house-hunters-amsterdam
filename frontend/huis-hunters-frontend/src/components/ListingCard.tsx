@@ -2011,7 +2011,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
           className="text-center" 
           style={{ 
             overflow: 'auto', 
-            maxHeight: '80vh', 
+            maxHeight: '85vh', 
             position: 'relative',
             touchAction: 'manipulation' // Prevent double-tap zoom and other gestures
           }}
@@ -2033,7 +2033,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
                   alt={`Photo ${selectedImageModalIndex + 1}`}
                   style={{ 
                     maxWidth: '100%', 
-                    maxHeight: '80vh', 
+                    maxHeight: 'calc(85vh - 100px)', 
                     objectFit: 'contain',
                     cursor: 'move',
                     touchAction: 'none', // Prevent default touch behaviors
