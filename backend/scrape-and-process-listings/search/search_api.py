@@ -324,6 +324,8 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
     <meta property="og:title" content="{title}" />
     <meta property="og:description" content="{description}" />
     <meta property="og:image" content="{image_url}" />
+    <meta property="og:image:secure_url" content="{image_url}" />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     
