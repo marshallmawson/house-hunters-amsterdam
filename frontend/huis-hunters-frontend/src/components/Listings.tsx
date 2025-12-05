@@ -900,8 +900,9 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     }
   };
 
-  // Clear modal listing when modalListingId changes or is removed
+  // Sync modal open state with modalListingId
   useEffect(() => {
+    setIsModalOpen(!!modalListingId);
     if (!modalListingId) {
       setModalListing(null);
     }
@@ -1774,7 +1775,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                 listing={listing} 
                 isAnyModalOpen={isModalOpen}
                 onModalToggle={handleModalToggle} 
-                forceOpen={listing.id === modalListingId && (!modalListing || listings.find(l => l.id === modalListingId) !== undefined)}
+                forceOpen={listing.id === modalListingId && !!modalListingId}
                 onRequireLogin={onRequireLogin}
               />
             </Col>
