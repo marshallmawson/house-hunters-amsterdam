@@ -48,6 +48,8 @@ export interface Listing {
 export type PropertyStatus = 
   | 'to contact' 
   | 'viewing scheduled' 
+  | 'viewed'
+  | 'not interested'
   | 'to make an offer' 
   | 'offer entered' 
   | 'offer rejected';

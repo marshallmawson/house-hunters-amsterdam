@@ -40,11 +40,27 @@ const SavedProperties: React.FC = () => {
 
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data();
+        let status = data.status;
+        
+        // Auto-update status to "viewed" if viewing date is in the past
+        if (data.viewingScheduledAt && status === 'viewing scheduled') {
+          const viewingDate = data.viewingScheduledAt.toDate ? data.viewingScheduledAt.toDate() : new Date(data.viewingScheduledAt.seconds * 1000);
+          const now = new Date();
+          if (viewingDate < now) {
+            status = 'viewed';
+            // Update in database asynchronously (don't wait)
+            updateDoc(doc(db, 'savedProperties', docSnap.id), {
+              status: 'viewed',
+              updatedAt: serverTimestamp()
+            }).catch(err => console.error('Error auto-updating status to viewed:', err));
+          }
+        }
+        
         savedProps.push({
           id: docSnap.id,
           userId: data.userId,
           listingId: data.listingId,
-          status: data.status,
+          status: status,
           addedAt: data.addedAt,
           updatedAt: data.updatedAt,
           viewingScheduledAt: data.viewingScheduledAt,
@@ -112,21 +128,28 @@ const SavedProperties: React.FC = () => {
         updatedAt: serverTimestamp()
       };
 
+      // Only update viewingScheduledAt if setting a new viewing date
+      // Otherwise, preserve the existing viewingScheduledAt
       if (newStatus === 'viewing scheduled' && viewingDate) {
         updateData.viewingScheduledAt = Timestamp.fromDate(viewingDate);
-      } else if (newStatus !== 'viewing scheduled') {
-        updateData.viewingScheduledAt = null;
       }
+      // Don't clear viewingScheduledAt when changing status - preserve it
 
       await updateDoc(doc(db, 'savedProperties', propertyId), updateData);
       
+      // Update local state
+      const updatedProperty = savedProperties.find(p => p.id === propertyId);
+      const newViewingScheduledAt = viewingDate 
+        ? {
+            seconds: Math.floor(viewingDate.getTime() / 1000),
+            nanoseconds: (viewingDate.getTime() % 1000) * 1000000,
+            toDate: () => viewingDate
+          }
+        : updatedProperty?.viewingScheduledAt; // Preserve existing if not setting new one
+      
       setSavedProperties(savedProperties.map(p => 
         p.id === propertyId 
-          ? { ...p, status: newStatus, viewingScheduledAt: viewingDate ? {
-              seconds: Math.floor(viewingDate.getTime() / 1000),
-              nanoseconds: (viewingDate.getTime() % 1000) * 1000000,
-              toDate: () => viewingDate
-            } : undefined }
+          ? { ...p, status: newStatus, viewingScheduledAt: newViewingScheduledAt }
           : p
       ));
     } catch (error) {

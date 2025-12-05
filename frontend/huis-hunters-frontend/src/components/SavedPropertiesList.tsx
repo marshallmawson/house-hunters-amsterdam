@@ -32,6 +32,8 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
   const statusOptions: PropertyStatus[] = [
     'to contact',
     'viewing scheduled',
+    'viewed',
+    'not interested',
     'to make an offer',
     'offer entered',
     'offer rejected'
@@ -67,9 +69,11 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
           const statusOrder: Record<PropertyStatus, number> = {
             'to contact': 1,
             'viewing scheduled': 2,
-            'to make an offer': 3,
-            'offer entered': 4,
-            'offer rejected': 5
+            'viewed': 3,
+            'not interested': 4,
+            'to make an offer': 5,
+            'offer entered': 6,
+            'offer rejected': 7
           };
           const statusDiff = statusOrder[a.status] - statusOrder[b.status];
           if (statusDiff !== 0) return statusDiff;
@@ -92,9 +96,11 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
           const statusOrder: Record<PropertyStatus, number> = {
             'to contact': 1,
             'viewing scheduled': 2,
-            'to make an offer': 3,
-            'offer entered': 4,
-            'offer rejected': 5
+            'viewed': 3,
+            'not interested': 4,
+            'to make an offer': 5,
+            'offer entered': 6,
+            'offer rejected': 7
           };
           const statusDiff = statusOrder[a.status] - statusOrder[b.status];
           if (statusDiff !== 0) return statusDiff;
@@ -387,8 +393,8 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
                   isAnyModalOpen={isAnyModalOpen}
                   onModalToggle={setIsAnyModalOpen}
                   onUnsave={onUnsave}
-                  viewingScheduledAt={savedProp.status === 'viewing scheduled' && savedProp.viewingScheduledAt ? savedProp.viewingScheduledAt : undefined}
-                  onAddToGoogleCalendar={savedProp.status === 'viewing scheduled' && savedProp.viewingScheduledAt ? () => handleAddToGoogleCalendar(savedProp) : undefined}
+                  viewingScheduledAt={savedProp.viewingScheduledAt}
+                  onAddToGoogleCalendar={savedProp.viewingScheduledAt ? () => handleAddToGoogleCalendar(savedProp) : undefined}
                   note={savedProp.note}
                   onNoteChange={(noteText) => onNoteChange(savedProp.id, noteText)}
                   isNoteEditing={editingNoteId === savedProp.id}
@@ -420,11 +426,25 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
                 <Form.Select
                   value={selectedProperty.status}
                   onChange={(e) => {
-                    setSelectedProperty({ ...selectedProperty, status: e.target.value as PropertyStatus });
-                    if (e.target.value !== 'viewing scheduled') {
-                      setViewingDate('');
-                      setViewingTime('');
+                    const newStatus = e.target.value as PropertyStatus;
+                    setSelectedProperty({ ...selectedProperty, status: newStatus });
+                    if (newStatus === 'viewing scheduled') {
+                      // If switching back to viewing scheduled, restore existing date if available
+                      // selectedProperty still has the original viewingScheduledAt from when modal opened
+                      if (selectedProperty.viewingScheduledAt && !viewingDate) {
+                        const date = selectedProperty.viewingScheduledAt.toDate();
+                        setViewingDate(date.toISOString().split('T')[0]);
+                        setViewingTime(date.toTimeString().split(' ')[0].slice(0, 5));
+                      } else if (!selectedProperty.viewingScheduledAt && !viewingDate) {
+                        // Clear if no existing date
+                        setViewingDate('');
+                        setViewingTime('');
+                      }
+                      // If viewingDate is already set, keep it
                     }
+                    // When changing away from viewing scheduled, the form fields remain
+                    // but won't be used in handleStatusSubmit unless status is viewing scheduled
+                    // The actual viewingScheduledAt will be preserved by handleStatusChange
                   }}
                 >
                   {statusOptions.map(status => (

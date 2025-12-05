@@ -1162,39 +1162,48 @@ const ListingCard: React.FC<ListingCardProps> = ({
           </small>
         </div>
         
-        {/* Viewing Scheduled Section - Inside Card */}
-        {viewingScheduledAt && onAddToGoogleCalendar && (
-          <div 
-            style={{ 
-              borderTop: '1px solid #dee2e6',
-              backgroundColor: '#f8f9fa',
-              padding: '1rem',
-              marginTop: '1rem'
-            }}
-          >
-            <div className="mb-2">
-              <small style={{ fontSize: '0.85rem', color: '#495057' }}>
-                <strong>Viewing scheduled:</strong>{' '}
-                {viewingScheduledAt.toDate().toLocaleString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: false
-                }).replace(/,/g, '')}
-              </small>
-            </div>
-            <Button
-              variant="outline-primary"
-              size="sm"
-              onClick={onAddToGoogleCalendar}
-              style={{ fontSize: '0.85rem' }}
+        {/* Viewing Scheduled/Viewed Section - Inside Card */}
+        {viewingScheduledAt && (() => {
+          const viewingDate = viewingScheduledAt.toDate();
+          const now = new Date();
+          const isPast = viewingDate < now;
+          const label = isPast ? 'Viewed:' : 'Viewing scheduled:';
+          
+          return (
+            <div 
+              style={{ 
+                borderTop: '1px solid #dee2e6',
+                backgroundColor: '#f8f9fa',
+                padding: '1rem',
+                marginTop: '1rem'
+              }}
             >
-              📅 Add to Google Calendar
-            </Button>
-          </div>
-        )}
+              <div className="mb-2">
+                <small style={{ fontSize: '0.85rem', color: '#495057' }}>
+                  <strong>{label}</strong>{' '}
+                  {viewingDate.toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                  }).replace(/,/g, '')}
+                </small>
+              </div>
+              {onAddToGoogleCalendar && !isPast && (
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  onClick={onAddToGoogleCalendar}
+                  style={{ fontSize: '0.85rem' }}
+                >
+                  📅 Add to Google Calendar
+                </Button>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Personal Note Section - Inside Card */}
         {onNoteChange && (
