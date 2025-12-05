@@ -21,6 +21,7 @@ const AppContent = () => {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [heroImageLoaded, setHeroImageLoaded] = useState(false);
 
+
   const handleLogout = async () => {
     await logout();
     navigate('/');

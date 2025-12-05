@@ -6,6 +6,12 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { BrowserRouter } from 'react-router-dom';
 
+// Ensure page can scroll on mobile - run once on load
+document.documentElement.style.overflowY = 'scroll';
+document.documentElement.style.height = '100%';
+document.body.style.minHeight = '100%';
+document.body.style.overflowY = 'visible';
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );

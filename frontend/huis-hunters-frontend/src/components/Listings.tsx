@@ -882,6 +882,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     return items;
   };
 
+
   return (
     <Container fluid="xl" style={{ position: 'relative', paddingTop: '0', marginTop: '0' }}>
       {/* Mobile Filters and Map Buttons - Floating over hero
@@ -987,7 +988,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
           backgroundColor: '#f8f9fa', 
           borderRadius: '16px',
           border: '1px solid #e9ecef',
-          boxShadow: '0 4px 18px rgba(0,0,0,0.12)',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
           marginTop: '-90px',
           position: 'relative',
           zIndex: 100,

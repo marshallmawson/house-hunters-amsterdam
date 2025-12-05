@@ -4,8 +4,11 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Listing } from '../types';
 import { loadGoogleMapsAPI } from '../config/maps';
-import { Button } from 'react-bootstrap';
+import { Button, Form, FormGroup, Row, Col, Dropdown } from 'react-bootstrap';
+import Slider from 'rc-slider';
+import 'rc-slider/assets/index.css';
 import MapListingCard from './MapListingCard';
+import { parseKMLNeighborhoods } from '../utils/neighborhoodParser';
 
 interface MapViewProps {
   // Optional callback to trigger the global login required prompt
@@ -18,6 +21,7 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
   const markersRef = useRef<{ marker: google.maps.Marker; listingId: string }[]>([]);
   const lastMarkerClickTimeRef = useRef<number>(0);
   const pendingListingRef = useRef<Listing | null>(null);
+  const isUpdatingFromURLRef = useRef(false);
   const [listings, setListings] = useState<Listing[]>([]);
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [searchParams] = useSearchParams();
@@ -26,6 +30,8 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
   const [mapsError, setMapsError] = useState(false);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   // AI Search state
   const [searchQuery] = useState(searchParams.get('search') || '');
@@ -34,17 +40,166 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
   const hasPerformedInitialSearch = useRef(false);
   const searchInProgressRef = useRef(false);
 
-  // Filter state from URL
-  const [priceRange] = useState({
+  // Filter state from URL - make reactive to URL changes
+  const [priceRange, setPriceRange] = useState({
     min: parseInt(searchParams.get('minPrice') || '400000', 10),
     max: parseInt(searchParams.get('maxPrice') || '1250000', 10)
   });
-  const [bedrooms] = useState(searchParams.get('bedrooms') || '1+');
-  const [floorLevel] = useState(searchParams.get('floor') || 'any');
-  const [selectedOutdoorSpaces] = useState<string[]>(searchParams.get('outdoor')?.split(',').filter(Boolean) || []);
-  const [minSize] = useState(searchParams.get('minSize') || '');
-  const [selectedAreas] = useState<string[]>(searchParams.get('areas')?.split(',').filter(Boolean) || []);
-  const [publishedWithin] = useState(searchParams.get('publishedWithin') || 'all');
+  const [bedrooms, setBedrooms] = useState(searchParams.get('bedrooms') || '1+');
+  const [floorLevel, setFloorLevel] = useState(searchParams.get('floor') || 'any');
+  const [selectedOutdoorSpaces, setSelectedOutdoorSpaces] = useState<string[]>(searchParams.get('outdoor')?.split(',').filter(Boolean) || []);
+  const [minSize, setMinSize] = useState(searchParams.get('minSize') || '');
+  const [selectedAreas, setSelectedAreas] = useState<string[]>(searchParams.get('areas')?.split(',').filter(Boolean) || []);
+  const [publishedWithin, setPublishedWithin] = useState(searchParams.get('publishedWithin') || 'all');
+  
+  // Neighborhoods list
+  const [allNeighborhoods, setAllNeighborhoods] = useState<string[]>([]);
+  
+  // Refs to track current filter values for comparison
+  const priceRangeRef = useRef(priceRange);
+  const bedroomsRef = useRef(bedrooms);
+  const floorLevelRef = useRef(floorLevel);
+  const selectedOutdoorSpacesRef = useRef(selectedOutdoorSpaces);
+  const minSizeRef = useRef(minSize);
+  const selectedAreasRef = useRef(selectedAreas);
+  const publishedWithinRef = useRef(publishedWithin);
+  
+  // Update refs when state changes
+  useEffect(() => {
+    priceRangeRef.current = priceRange;
+    bedroomsRef.current = bedrooms;
+    floorLevelRef.current = floorLevel;
+    selectedOutdoorSpacesRef.current = selectedOutdoorSpaces;
+    minSizeRef.current = minSize;
+    selectedAreasRef.current = selectedAreas;
+    publishedWithinRef.current = publishedWithin;
+  }, [priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
+
+  // Load neighborhoods
+  useEffect(() => {
+    const loadNeighborhoods = async () => {
+      try {
+        const response = await fetch('/neighborhoods.kml');
+        const kmlContent = await response.text();
+        const parsedNeighborhoods = parseKMLNeighborhoods(kmlContent);
+        const neighborhoodNames = parsedNeighborhoods.map(n => n.name).sort();
+        setAllNeighborhoods(neighborhoodNames);
+      } catch (error) {
+        console.error('Failed to load neighborhoods:', error);
+      }
+    };
+    loadNeighborhoods();
+  }, []);
+
+  // Update filters when URL params change (but not if we're updating from user input)
+  useEffect(() => {
+    if (isUpdatingFromURLRef.current) {
+      isUpdatingFromURLRef.current = false;
+      return;
+    }
+    
+    const urlPriceMin = parseInt(searchParams.get('minPrice') || '400000', 10);
+    const urlPriceMax = parseInt(searchParams.get('maxPrice') || '1250000', 10);
+    const urlBedrooms = searchParams.get('bedrooms') || '1+';
+    const urlFloorLevel = searchParams.get('floor') || 'any';
+    const urlOutdoor = searchParams.get('outdoor')?.split(',').filter(Boolean) || [];
+    const urlMinSize = searchParams.get('minSize') || '';
+    const urlAreas = searchParams.get('areas')?.split(',').filter(Boolean) || [];
+    const urlPublishedWithin = searchParams.get('publishedWithin') || 'all';
+    
+    // Only update if values actually changed (compare with current state via refs)
+    if (priceRangeRef.current.min !== urlPriceMin || priceRangeRef.current.max !== urlPriceMax) {
+      setPriceRange({ min: urlPriceMin, max: urlPriceMax });
+    }
+    if (bedroomsRef.current !== urlBedrooms) {
+      setBedrooms(urlBedrooms);
+    }
+    if (floorLevelRef.current !== urlFloorLevel) {
+      setFloorLevel(urlFloorLevel);
+    }
+    if (JSON.stringify([...selectedOutdoorSpacesRef.current].sort()) !== JSON.stringify([...urlOutdoor].sort())) {
+      setSelectedOutdoorSpaces(urlOutdoor);
+    }
+    if (minSizeRef.current !== urlMinSize) {
+      setMinSize(urlMinSize);
+    }
+    if (JSON.stringify([...selectedAreasRef.current].sort()) !== JSON.stringify([...urlAreas].sort())) {
+      setSelectedAreas(urlAreas);
+    }
+    if (publishedWithinRef.current !== urlPublishedWithin) {
+      setPublishedWithin(urlPublishedWithin);
+    }
+  }, [searchParams]); // Only depend on searchParams, not on filter states
+
+
+  // Function to update URL with current filters
+  const updateURLWithFilters = useCallback(() => {
+    const params = new URLSearchParams(searchParams);
+    
+    if (priceRange.min !== 400000) {
+      params.set('minPrice', priceRange.min.toString());
+    } else {
+      params.delete('minPrice');
+    }
+    
+    if (priceRange.max !== 1250000) {
+      params.set('maxPrice', priceRange.max.toString());
+    } else {
+      params.delete('maxPrice');
+    }
+    
+    if (bedrooms !== '1+') {
+      params.set('bedrooms', bedrooms);
+    } else {
+      params.delete('bedrooms');
+    }
+    
+    if (floorLevel !== 'any') {
+      params.set('floor', floorLevel);
+    } else {
+      params.delete('floor');
+    }
+    
+    if (selectedOutdoorSpaces.length > 0) {
+      params.set('outdoor', selectedOutdoorSpaces.join(','));
+    } else {
+      params.delete('outdoor');
+    }
+    
+    if (minSize) {
+      params.set('minSize', minSize);
+    } else {
+      params.delete('minSize');
+    }
+    
+    if (selectedAreas.length > 0) {
+      params.set('areas', selectedAreas.join(','));
+    } else {
+      params.delete('areas');
+    }
+    
+    if (publishedWithin !== 'all') {
+      params.set('publishedWithin', publishedWithin);
+    } else {
+      params.delete('publishedWithin');
+    }
+    
+    navigate(`/map?${params.toString()}`, { replace: true });
+  }, [priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, searchParams, navigate]);
+
+  // Update URL when filters change (debounced)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      isUpdatingFromURLRef.current = true; // Mark that we're updating from user input
+      updateURLWithFilters();
+      // Reset flag after navigation completes (give it time for URL to update)
+      setTimeout(() => {
+        isUpdatingFromURLRef.current = false;
+      }, 100);
+    }, 500); // Debounce 500ms
+
+    return () => clearTimeout(timeoutId);
+  }, [priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, updateURLWithFilters]);
 
   // Load Google Maps API
   useEffect(() => {
@@ -570,21 +725,488 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
         </div>
       )}
 
-      {/* Listing count badge */}
-      {mapsLoaded && filteredListings.length > 0 && (
+      {/* Listing count badge and Filters button */}
+      {mapsLoaded && (
         <div style={{
           position: 'absolute',
           top: '20px',
           right: '20px',
           zIndex: 1000,
-          backgroundColor: 'white',
-          padding: '0.5rem 1rem',
-          borderRadius: '8px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-          fontSize: '0.9rem',
-          fontWeight: '600'
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: '0.75rem'
         }}>
-          {filteredListings.length} {filteredListings.length === 1 ? 'property' : 'properties'}
+          {filteredListings.length > 0 && (
+            <div style={{
+              backgroundColor: 'white',
+              padding: '0.5rem 1rem',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+              fontSize: '0.9rem',
+              fontWeight: '600'
+            }}>
+              {filteredListings.length} {filteredListings.length === 1 ? 'property' : 'properties'}
+            </div>
+          )}
+          <Button 
+            onClick={() => setShowFilters(!showFilters)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.5rem 1rem',
+              borderRadius: '8px',
+              fontSize: '0.9rem',
+              fontWeight: '600',
+              border: 'none',
+              color: '#495057',
+              backgroundColor: '#ffffff',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}>
+              🔍 Filters
+              {(() => {
+                const activeCount = [
+                  bedrooms !== '1+',
+                  priceRange.min !== 400000 || priceRange.max !== 1250000,
+                  floorLevel !== 'any',
+                  selectedOutdoorSpaces.length > 0,
+                  minSize !== '',
+                  selectedAreas.length > 0,
+                  publishedWithin !== 'all'
+                ].filter(Boolean).length;
+                return activeCount > 0 && (
+                  <span style={{
+                    backgroundColor: '#4a90e2',
+                    color: 'white',
+                    borderRadius: '10px',
+                    padding: '0.15rem 0.35rem',
+                    fontSize: '0.7rem',
+                    fontWeight: '700',
+                    minWidth: '1.1rem',
+                    textAlign: 'center',
+                    flexShrink: 0
+                  }}>
+                    {activeCount}
+                  </span>
+                );
+              })()}
+            </span>
+          </Button>
+        </div>
+      )}
+
+      {/* Filter Overlay Backdrop */}
+      {showFilters && (
+        <div
+          onClick={() => {
+            setShowFilters(false);
+            setOpenDropdown(null);
+          }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1000,
+            backgroundColor: 'transparent'
+          }}
+        />
+      )}
+
+      {/* Filter Overlay */}
+      {showFilters && (
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            top: filteredListings.length > 0 ? '120px' : '80px',
+            right: '20px',
+            zIndex: 1001,
+            backgroundColor: 'white',
+            padding: '0.75rem',
+            borderRadius: '8px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            maxHeight: 'calc(100vh - 140px)',
+            overflowY: 'auto',
+            minWidth: '280px',
+            maxWidth: '320px'
+          }}>
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <h6 className="text-muted fw-semibold mb-0" style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Filters
+            </h6>
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              onClick={() => {
+                setShowFilters(false);
+                setOpenDropdown(null);
+              }}
+              style={{
+                borderRadius: '6px',
+                padding: '0.25rem 0.5rem',
+                fontSize: '0.75rem',
+                fontWeight: '600',
+                border: 'none',
+                backgroundColor: 'transparent'
+              }}
+            >
+              <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>×</span>
+            </Button>
+          </div>
+          <Form>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {/* Price Range */}
+              <FormGroup>
+                <Form.Label className="fw-medium mb-1" style={{ fontSize: '0.75rem' }}>Price Range</Form.Label>
+                  <div style={{ padding: '0 4px' }}>
+                    <Slider
+                      range
+                      min={400000}
+                      max={1250000}
+                      step={25000}
+                      value={[priceRange.min, priceRange.max]}
+                      onChange={(values: number | number[]) => {
+                        if (Array.isArray(values) && values.length === 2) {
+                          setPriceRange({ min: values[0], max: values[1] });
+                        }
+                      }}
+                      allowCross={false}
+                    />
+                  </div>
+                  <div className="d-flex justify-content-between mt-1">
+                    <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                      {priceRange.min >= 1000000 
+                        ? `€${(priceRange.min/1000000).toFixed(3)}M` 
+                        : `€${(priceRange.min/1000).toFixed(0)}k`
+                      }
+                    </small>
+                    <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                      {priceRange.max >= 1000000 
+                        ? `€${(priceRange.max/1000000).toFixed(3)}M` 
+                        : `€${(priceRange.max/1000).toFixed(0)}k`
+                      }
+                    </small>
+                  </div>
+                </FormGroup>
+
+              {/* Bedrooms */}
+              <FormGroup>
+                <Form.Label className="fw-medium mb-1" style={{ fontSize: '0.75rem' }}>Beds</Form.Label>
+                  <Dropdown
+                    show={openDropdown === 'bedrooms'}
+                    onToggle={(isOpen) => setOpenDropdown(isOpen ? 'bedrooms' : null)}
+                  >
+                    <Dropdown.Toggle 
+                      variant="outline-secondary" 
+                      className="custom-dropdown-toggle"
+                      style={{ 
+                        width: '100%',
+                        borderRadius: '6px',
+                        border: '1px solid #dee2e6',
+                        fontSize: '0.75rem',
+                        textAlign: 'left',
+                        backgroundColor: 'white',
+                        color: '#495057',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 0.5rem center',
+                        backgroundSize: '12px 8px',
+                        paddingRight: '1.5rem',
+                        padding: '0.35rem 0.5rem'
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {bedrooms === 'any' ? 'Any' : bedrooms}
+                      </span>
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu style={{ width: '100%' }}>
+                      <Dropdown.Item onClick={() => { setBedrooms('any'); setOpenDropdown(null); }} active={bedrooms === 'any'}>Any</Dropdown.Item>
+                      <Dropdown.Item onClick={() => { setBedrooms('1+'); setOpenDropdown(null); }} active={bedrooms === '1+'}>1+</Dropdown.Item>
+                      <Dropdown.Item onClick={() => { setBedrooms('2+'); setOpenDropdown(null); }} active={bedrooms === '2+'}>2+</Dropdown.Item>
+                      <Dropdown.Item onClick={() => { setBedrooms('3+'); setOpenDropdown(null); }} active={bedrooms === '3+'}>3+</Dropdown.Item>
+                      <Dropdown.Item onClick={() => { setBedrooms('4+'); setOpenDropdown(null); }} active={bedrooms === '4+'}>4+</Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown>
+                </FormGroup>
+
+              {/* Min Size */}
+              <FormGroup>
+                <Form.Label className="fw-medium mb-1" style={{ fontSize: '0.75rem' }}>Min size</Form.Label>
+                  <Form.Control 
+                    type="number"
+                    placeholder="Any m²"
+                    value={minSize}
+                    onChange={e => setMinSize(e.target.value)}
+                  style={{ 
+                    borderRadius: '6px',
+                    border: '1px solid #dee2e6',
+                    fontSize: '0.75rem',
+                    padding: '0.35rem 0.5rem'
+                  }}
+                  />
+                </FormGroup>
+
+              {/* Outdoor Space */}
+              <FormGroup>
+                <Form.Label className="fw-medium mb-1" style={{ fontSize: '0.75rem' }}>Outdoor</Form.Label>
+                  <Dropdown
+                    show={openDropdown === 'outdoor'}
+                    onToggle={(isOpen) => setOpenDropdown(isOpen ? 'outdoor' : null)}
+                  >
+                    <Dropdown.Toggle 
+                      variant="outline-secondary" 
+                      className="custom-dropdown-toggle"
+                      style={{ 
+                        width: '100%',
+                        borderRadius: '6px',
+                        border: '1px solid #dee2e6',
+                        fontSize: '0.75rem',
+                        textAlign: 'left',
+                        backgroundColor: 'white',
+                        color: '#495057',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 0.5rem center',
+                        backgroundSize: '12px 8px',
+                        paddingRight: '1.5rem',
+                        padding: '0.35rem 0.5rem'
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedOutdoorSpaces.length === 0 
+                          ? 'Any' 
+                          : selectedOutdoorSpaces.length === 1 
+                            ? (selectedOutdoorSpaces[0] === 'garden' ? 'Garden' : selectedOutdoorSpaces[0] === 'rooftop' ? 'Rooftop' : 'Balcony')
+                            : `Multiple (${selectedOutdoorSpaces.length})`
+                        }
+                      </span>
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu style={{ width: '100%', maxHeight: '300px', overflowY: 'auto' }}>
+                      {['garden', 'rooftop', 'balcony'].map(space => {
+                        const displayName = space === 'garden' ? 'Garden' : space === 'rooftop' ? 'Rooftop' : 'Balcony';
+                        return (
+                          <Dropdown.ItemText key={space}>
+                            <Form.Check
+                              type="checkbox"
+                              id={`map-outdoor-${space}`}
+                              label={displayName}
+                              checked={selectedOutdoorSpaces.includes(space)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedOutdoorSpaces([...selectedOutdoorSpaces, space]);
+                                } else {
+                                  setSelectedOutdoorSpaces(selectedOutdoorSpaces.filter(s => s !== space));
+                                }
+                              }}
+                            />
+                          </Dropdown.ItemText>
+                        );
+                      })}
+                      {selectedOutdoorSpaces.length > 0 && (
+                        <>
+                          <Dropdown.Divider />
+                          <Dropdown.Item onClick={() => { setSelectedOutdoorSpaces([]); setOpenDropdown(null); }} className="text-danger">
+                            Clear All
+                          </Dropdown.Item>
+                        </>
+                      )}
+                    </Dropdown.Menu>
+                  </Dropdown>
+                </FormGroup>
+
+              {/* Floor Level */}
+              <FormGroup>
+                <Form.Label className="fw-medium mb-1" style={{ fontSize: '0.75rem' }}>Floor</Form.Label>
+                  <Dropdown
+                    show={openDropdown === 'floor'}
+                    onToggle={(isOpen) => setOpenDropdown(isOpen ? 'floor' : null)}
+                  >
+                    <Dropdown.Toggle 
+                      variant="outline-secondary" 
+                      className="custom-dropdown-toggle"
+                      style={{ 
+                        width: '100%',
+                        borderRadius: '6px',
+                        border: '1px solid #dee2e6',
+                        fontSize: '0.75rem',
+                        textAlign: 'left',
+                        backgroundColor: 'white',
+                        color: '#495057',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 0.5rem center',
+                        backgroundSize: '12px 8px',
+                        paddingRight: '1.5rem',
+                        padding: '0.35rem 0.5rem'
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {floorLevel === 'any' ? 'Any' : floorLevel === 'top' ? 'Upper' : 'Ground'}
+                      </span>
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu style={{ width: '100%' }}>
+                      <Dropdown.Item onClick={() => { setFloorLevel('any'); setOpenDropdown(null); }} active={floorLevel === 'any'}>Any</Dropdown.Item>
+                      <Dropdown.Item onClick={() => { setFloorLevel('top'); setOpenDropdown(null); }} active={floorLevel === 'top'}>Upper</Dropdown.Item>
+                      <Dropdown.Item onClick={() => { setFloorLevel('ground'); setOpenDropdown(null); }} active={floorLevel === 'ground'}>Ground</Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown>
+                </FormGroup>
+
+              {/* Area */}
+              <FormGroup>
+                <Form.Label className="fw-medium mb-1" style={{ fontSize: '0.75rem' }}>Neighborhood</Form.Label>
+                  <Dropdown
+                    show={openDropdown === 'neighborhood'}
+                    onToggle={(isOpen) => setOpenDropdown(isOpen ? 'neighborhood' : null)}
+                  >
+                    <Dropdown.Toggle 
+                      variant="outline-secondary" 
+                      className="custom-dropdown-toggle"
+                      style={{ 
+                        width: '100%',
+                        borderRadius: '6px',
+                        border: '1px solid #dee2e6',
+                        fontSize: '0.75rem',
+                        textAlign: 'left',
+                        backgroundColor: 'white',
+                        color: '#495057',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 0.5rem center',
+                        backgroundSize: '12px 8px',
+                        paddingRight: '1.5rem',
+                        padding: '0.35rem 0.5rem'
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedAreas.length === 0 
+                          ? 'Any' 
+                          : selectedAreas.length === 1 
+                            ? (selectedAreas[0].length > 20 ? selectedAreas[0].substring(0, 17) + '...' : selectedAreas[0])
+                            : `Multiple (${selectedAreas.length})`
+                        }
+                      </span>
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu style={{ width: '100%', maxHeight: '300px', overflowY: 'auto' }}>
+                      {allNeighborhoods.map(area => (
+                        <Dropdown.ItemText key={area}>
+                          <Form.Check
+                            type="checkbox"
+                            id={`map-neighborhood-${area}`}
+                            label={area}
+                            checked={selectedAreas.includes(area)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAreas([...selectedAreas, area]);
+                              } else {
+                                setSelectedAreas(selectedAreas.filter(a => a !== area));
+                              }
+                            }}
+                          />
+                        </Dropdown.ItemText>
+                      ))}
+                      {selectedAreas.length > 0 && (
+                        <>
+                          <Dropdown.Divider />
+                          <Dropdown.Item onClick={() => { setSelectedAreas([]); setOpenDropdown(null); }} className="text-danger">
+                            Clear All
+                          </Dropdown.Item>
+                        </>
+                      )}
+                    </Dropdown.Menu>
+                  </Dropdown>
+                </FormGroup>
+
+              {/* Published within */}
+              <FormGroup>
+                <Form.Label className="fw-medium mb-1" style={{ fontSize: '0.75rem' }}>Published in last</Form.Label>
+                  <Dropdown
+                    show={openDropdown === 'published'}
+                    onToggle={(isOpen) => setOpenDropdown(isOpen ? 'published' : null)}
+                  >
+                    <Dropdown.Toggle
+                      variant="outline-secondary"
+                      className="custom-dropdown-toggle"
+                      style={{
+                        width: '100%',
+                        borderRadius: '8px',
+                        border: '1px solid #dee2e6',
+                        fontSize: '0.8rem',
+                        textAlign: 'left',
+                        backgroundColor: 'white',
+                        color: '#495057',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 0.5rem center',
+                        backgroundSize: '12px 8px',
+                        paddingRight: '1.5rem'
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {publishedWithin === 'all'
+                          ? 'Any time'
+                          : publishedWithin === '1'
+                            ? '1 day'
+                            : publishedWithin === '3'
+                              ? '3 days'
+                              : '7 days'}
+                      </span>
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu style={{ width: '100%' }}>
+                      <Dropdown.Item onClick={() => { setPublishedWithin('all'); setOpenDropdown(null); }} active={publishedWithin === 'all'}>
+                        Any time
+                      </Dropdown.Item>
+                      <Dropdown.Item onClick={() => { setPublishedWithin('1'); setOpenDropdown(null); }} active={publishedWithin === '1'}>
+                        Last 1 day
+                      </Dropdown.Item>
+                      <Dropdown.Item onClick={() => { setPublishedWithin('3'); setOpenDropdown(null); }} active={publishedWithin === '3'}>
+                        Last 3 days
+                      </Dropdown.Item>
+                      <Dropdown.Item onClick={() => { setPublishedWithin('7'); setOpenDropdown(null); }} active={publishedWithin === '7'}>
+                        Last 7 days
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown>
+                </FormGroup>
+
+              {/* Close button */}
+              <FormGroup>
+                <Button 
+                  variant="outline-secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    setShowFilters(false);
+                    setOpenDropdown(null);
+                  }}
+                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', width: '100%', borderRadius: '8px', marginTop: '0.25rem' }}
+                >
+                  Close
+                </Button>
+              </FormGroup>
+            </div>
+          </Form>
         </div>
       )}
 
