@@ -147,6 +147,15 @@ const ListingCard: React.FC<ListingCardProps> = ({
     if (forceOpen && !hasHandledForceOpen.current) {
       handleShowModal(clickedImageIndex.current);
       hasHandledForceOpen.current = true;
+    } else if (!forceOpen && showModal && hasHandledForceOpen.current) {
+      // Close modal when forceOpen becomes false (e.g., when URL changes back)
+      // Just close the modal state without triggering navigation (navigation is handled by parent)
+      setShowModal(false);
+      setIsModalDescriptionExpanded(false);
+      setIsManualNavigation(false);
+      setShowGridView(false);
+      hasHandledForceOpen.current = false;
+      resetMetaTags();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceOpen]);
@@ -550,8 +559,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
   };
 
   const handleHideModal = () => {
+    // First, close the modal state immediately
     setShowModal(false);
-    onModalToggle(false);
     setIsModalDescriptionExpanded(false);
     setIsManualNavigation(false);
     setShowGridView(false);
@@ -560,11 +569,16 @@ const ListingCard: React.FC<ListingCardProps> = ({
     // Reset meta tags to default when closing modal
     resetMetaTags();
     
-    // Only navigate back if routing is enabled and we navigated from a listings route
-    if (!disableRouting && location.pathname !== '/saved-properties') {
+    // Notify parent component to handle navigation and state cleanup
+    // The parent's handleModalToggle will handle navigation when routing is enabled
+    onModalToggle(false);
+    
+    // Only navigate back if routing is disabled (for cases like map view)
+    // When routing is enabled, let handleModalToggle in parent handle navigation
+    if (disableRouting && location.pathname !== '/saved-properties' && location.pathname.startsWith('/listings/')) {
       // Restore original search parameters (including search query) when navigating back
-      // Use the stored original params instead of current params (which might be missing search)
-      navigate(`/${originalSearchParamsRef.current}`);
+      const targetPath = originalSearchParamsRef.current ? `/${originalSearchParamsRef.current}` : '/';
+      navigate(targetPath);
     }
   };
 

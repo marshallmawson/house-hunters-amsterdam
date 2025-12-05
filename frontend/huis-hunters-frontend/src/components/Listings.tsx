@@ -891,8 +891,12 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
   const handleModalToggle = (isOpen: boolean) => {
     setIsModalOpen(isOpen);
     if (!isOpen) {
-      navigate('/');
-      setModalListing(null); // Clear modal listing when modal closes
+      // Clear modal listing first, then navigate
+      setModalListing(null);
+      // Use setTimeout to ensure state updates complete before navigation
+      setTimeout(() => {
+        navigate('/');
+      }, 0);
     }
   };
 
@@ -1748,7 +1752,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       )}
 
       {/* Render modal listing separately for immediate modal opening */}
-      {modalListing && modalListing.id === modalListingId && (
+      {/* Only render if the listing is not yet in the main listings array to avoid double rendering */}
+      {modalListing && modalListing.id === modalListingId && !listings.find(l => l.id === modalListingId) && (
         <div style={{ position: 'absolute', left: '-9999px', visibility: 'hidden' }}>
           <ListingCard 
             listing={modalListing} 
@@ -1769,7 +1774,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                 listing={listing} 
                 isAnyModalOpen={isModalOpen}
                 onModalToggle={handleModalToggle} 
-                forceOpen={listing.id === modalListingId && !modalListing}
+                forceOpen={listing.id === modalListingId && (!modalListing || listings.find(l => l.id === modalListingId) !== undefined)}
                 onRequireLogin={onRequireLogin}
               />
             </Col>
