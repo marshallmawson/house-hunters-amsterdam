@@ -1171,7 +1171,9 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
                             ? '1 day'
                             : publishedWithin === '3'
                               ? '3 days'
-                              : '7 days'}
+                              : publishedWithin === '7'
+                                ? '7 days'
+                                : '14 days'}
                       </span>
                     </Dropdown.Toggle>
                     <Dropdown.Menu style={{ width: '100%' }}>
@@ -1186,6 +1188,9 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
                       </Dropdown.Item>
                       <Dropdown.Item onClick={() => { setPublishedWithin('7'); setOpenDropdown(null); }} active={publishedWithin === '7'}>
                         Last 7 days
+                      </Dropdown.Item>
+                      <Dropdown.Item onClick={() => { setPublishedWithin('14'); setOpenDropdown(null); }} active={publishedWithin === '14'}>
+                        Last 14 days
                       </Dropdown.Item>
                     </Dropdown.Menu>
                   </Dropdown>
