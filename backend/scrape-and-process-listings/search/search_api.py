@@ -235,6 +235,7 @@ def get_listing_html(listing_id):
     This endpoint is called by nginx when a social media crawler requests a listing URL.
     """
     try:
+        logger.info(f"Received request for listing {listing_id} from user agent: {request.headers.get('User-Agent', 'Unknown')}")
         import firebase_admin
         from firebase_admin import credentials, firestore
         if not firebase_admin._apps:
@@ -246,6 +247,7 @@ def get_listing_html(listing_id):
         listing_doc = listing_ref.get()
         
         if not listing_doc.exists:
+            logger.warning(f"Listing {listing_id} not found in Firestore")
             # Return default HTML if listing not found
             return DEFAULT_HTML_TEMPLATE, 404, {'Content-Type': 'text/html; charset=utf-8'}
         
@@ -259,17 +261,22 @@ def get_listing_html(listing_id):
         living_area = listing_data.get('livingArea', 0)
         image_gallery = listing_data.get('imageGallery', [])
         
+        logger.info(f"Listing {listing_id}: address={address}, imageGallery length={len(image_gallery) if image_gallery else 0}")
+        
         # Use first image if available, otherwise default logo
         # Ensure image URL is absolute (starts with http:// or https://)
         raw_image_url = image_gallery[0] if image_gallery and len(image_gallery) > 0 else None
         if raw_image_url:
+            logger.info(f"Raw image URL: {raw_image_url}")
             # If URL is relative, make it absolute (assuming it's from funda.nl)
             if raw_image_url.startswith('http://') or raw_image_url.startswith('https://'):
                 image_url = raw_image_url
             else:
                 # If relative URL, prepend https:// (assuming funda.nl)
                 image_url = f'https://www.funda.nl{raw_image_url}' if raw_image_url.startswith('/') else f'https://{raw_image_url}'
+            logger.info(f"Final image URL: {image_url}")
         else:
+            logger.warning(f"No image found for listing {listing_id}, using default logo")
             image_url = 'https://www.huishunters.com/logo512.png'
         
         # Build description
