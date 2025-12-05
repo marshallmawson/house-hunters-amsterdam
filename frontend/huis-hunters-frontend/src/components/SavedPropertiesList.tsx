@@ -134,23 +134,95 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
   const handleAddToGoogleCalendar = (property: SavedProperty & { listing?: any }) => {
     if (!property.viewingScheduledAt || !property.listing) return;
 
+    const listing = property.listing;
     const date = property.viewingScheduledAt.toDate();
-    const endDate = new Date(date.getTime() + 60 * 60000); // 1 hour duration
+    const endDate = new Date(date.getTime() + 30 * 60000); // 30 minutes duration
     
-    const title = encodeURIComponent(`Property Viewing: ${property.listing.address}`);
-    const description = encodeURIComponent(
-      `Viewing scheduled for ${property.listing.address}.\n` +
-      `Price: €${property.listing.price?.toLocaleString()}\n` +
-      (property.listing.url ? `More info: ${property.listing.url}` : '')
-    );
-    const location = encodeURIComponent(property.listing.address);
+    // Build outdoor space string
+    const getOutdoorSpaceString = (listing: any) => {
+      const outdoorSpaces = [];
+      if (listing.hasGarden) outdoorSpaces.push('Garden');
+      if (listing.hasRooftopTerrace) outdoorSpaces.push('Rooftop Terrace');
+      if (listing.hasBalcony) outdoorSpaces.push('Balcony');
+      if (outdoorSpaces.length === 0) return null;
+      const area = listing.outdoorSpaceArea ? ` (${listing.outdoorSpaceArea} m²)` : '';
+      return `${outdoorSpaces.join(' + ')}${area}`;
+    };
+    
+    const outdoorSpaceString = getOutdoorSpaceString(listing);
+    
+    // Build details section
+    const details: string[] = [];
+    if (listing.livingArea) details.push(`Living Area: ${listing.livingArea} m²`);
+    if (listing.energyLabel) details.push(`Energy Label: ${listing.energyLabel}`);
+    if (listing.bedrooms) details.push(`Bedrooms: ${listing.bedrooms}`);
+    if (listing.bathrooms) details.push(`Bathrooms: ${listing.bathrooms}`);
+    if (outdoorSpaceString) details.push(`Outdoor Space: ${outdoorSpaceString}`);
+    
+    // Build property info section
+    const propertyInfo: string[] = [];
+    if (listing.apartmentFloor) {
+      const floorText = typeof listing.apartmentFloor === 'number'
+        ? `Floor ${listing.apartmentFloor}`
+        : listing.apartmentFloor.toLowerCase().includes('floor')
+        ? listing.apartmentFloor
+        : `${listing.apartmentFloor} floor`;
+      propertyInfo.push(`Floor: ${floorText}`);
+    }
+    if (listing.numberOfStories && listing.numberOfStories >= 2) {
+      propertyInfo.push(`Stories: ${listing.numberOfStories}`);
+    }
+    if (listing.yearBuilt) {
+      propertyInfo.push(`Year Built: ${listing.yearBuilt}`);
+    }
+    if (listing.vveContribution) {
+      propertyInfo.push(`VVE Contribution: €${listing.vveContribution}/mo`);
+    }
+    
+    // Build description with bulleted lists
+    let description = `Viewing scheduled for ${listing.address}\n\n`;
+    description += `Price: €${listing.price?.toLocaleString()}\n\n`;
+    
+    if (details.length > 0) {
+      description += `Details:\n`;
+      details.forEach(detail => {
+        description += `• ${detail}\n`;
+      });
+      description += `\n`;
+    }
+    
+    if (propertyInfo.length > 0) {
+      description += `Property Info:\n`;
+      propertyInfo.forEach(info => {
+        description += `• ${info}\n`;
+      });
+      description += `\n`;
+    }
+    
+    if (listing.neighborhood) {
+      description += `Neighborhood: ${listing.neighborhood}\n`;
+    }
+    
+    if (listing.agentName) {
+      description += `Agent: ${listing.agentName}\n`;
+    }
+    
+    if (listing.url) {
+      description += `\nMore info: ${listing.url}`;
+    }
+    
+    // Build title with area if available
+    const areaText = listing.area ? ` (${listing.area})` : '';
+    const title = encodeURIComponent(`Viewing: ${listing.address}${areaText}`);
+    const encodedDescription = encodeURIComponent(description);
+    const location = encodeURIComponent(`${listing.address}, Amsterdam, NL`);
     
     // Format dates as YYYYMMDDTHHMMSSZ
     const formatDate = (d: Date) => {
       return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     };
     
-    const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatDate(date)}/${formatDate(endDate)}&details=${description}&location=${location}`;
+    const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatDate(date)}/${formatDate(endDate)}&details=${encodedDescription}&location=${location}`;
     
     window.open(googleCalendarUrl, '_blank');
   };

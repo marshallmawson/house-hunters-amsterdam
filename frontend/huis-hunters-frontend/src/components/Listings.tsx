@@ -52,10 +52,22 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
   const [showNeighborhoodMap, setShowNeighborhoodMap] = useState(false);
   const [allNeighborhoods, setAllNeighborhoods] = useState<string[]>([]);
   const [hasLoadedInitialListings, setHasLoadedInitialListings] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
+  
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // Bootstrap's md breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Load saved preferences on mount if logged in and no URL params
   useEffect(() => {
@@ -890,7 +902,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
           any visible vertical "jump" as data and layout settle. */}
       {hasLoadedInitialListings && (
         <div className="mobile-filters-button d-md-none">
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <div className="mobile-buttons-container" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             <Button 
               onClick={() => {
                 setShowFilters(!showFilters);
@@ -910,8 +922,11 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                 backdropFilter: 'blur(10px)',
                 minWidth: '140px',
                 whiteSpace: 'nowrap',
-                flexShrink: 0
+                flexShrink: 0,
+                height: 'auto',
+                lineHeight: '1.2'
               }}
+              className="mobile-filters-btn"
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}>
                 🔍 Filters
@@ -1449,7 +1464,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                   <div className="d-flex gap-2">
                     <Form.Control
                       type="text"
-                      placeholder="Describe your ideal home (e.g. 'renovated with garden')"
+                      placeholder={isMobile ? "Search anything…" : "Describe your ideal home (e.g. 'renovated with garden')"}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyPress={(e) => {

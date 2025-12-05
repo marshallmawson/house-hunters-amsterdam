@@ -440,6 +440,19 @@ html {
     pointer-events: auto;
   }
   
+  /* Make Filters button same height as Map button on mobile */
+  .mobile-filters-button .mobile-buttons-container {
+    align-items: stretch !important;
+  }
+  
+  .mobile-filters-button .mobile-filters-btn {
+    height: 100% !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+  
   /* Show filters section on mobile when opened */
   .filters-section {
     position: absolute !important;
