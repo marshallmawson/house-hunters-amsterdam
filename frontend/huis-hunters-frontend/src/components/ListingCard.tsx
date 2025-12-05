@@ -80,6 +80,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const [isMobile, setIsMobile] = useState(false);
   const [floorPlanZoom, setFloorPlanZoom] = useState(1);
   const [imageZoom, setImageZoom] = useState(1);
+  const [imagePanX, setImagePanX] = useState(0);
+  const [imagePanY, setImagePanY] = useState(0);
   const [isManualNavigation, setIsManualNavigation] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [savedPropertyId, setSavedPropertyId] = useState<string | null>(null);
@@ -101,6 +103,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const pinchStartZoomRef = useRef<number>(1);
   const floorPlanPinchStartDistanceRef = useRef<number | null>(null);
   const floorPlanPinchStartZoomRef = useRef<number>(1);
+  const imageDragStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -201,6 +204,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
             : listing.imageGallery.length - 1;
           setSelectedImageModalIndex(prevIndex);
           setImageZoom(1); // Reset zoom when navigating
+          setImagePanX(0); // Reset pan when navigating
+          setImagePanY(0);
         }
         // Right arrow or 'd' key - next image
         else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
@@ -211,6 +216,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
             : 0;
           setSelectedImageModalIndex(nextIndex);
           setImageZoom(1); // Reset zoom when navigating
+          setImagePanX(0); // Reset pan when navigating
+          setImagePanY(0);
         }
         // Escape key - close modal
         else if (e.key === 'Escape') {
@@ -479,6 +486,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const handleGridImageClick = (index: number) => {
     setSelectedImageModalIndex(index);
     setImageZoom(1); // Reset zoom when opening image
+    setImagePanX(0); // Reset pan position
+    setImagePanY(0); // Reset pan position
     setShowImageModal(true);
   };
 
@@ -497,11 +506,27 @@ const ListingCard: React.FC<ListingCardProps> = ({
   };
 
   const handleImageZoomIn = () => {
-    setImageZoom(prev => Math.min(prev + 0.5, 3)); // Max zoom 3x
+    setImageZoom(prev => {
+      const newZoom = Math.min(prev + 0.5, 3);
+      // Reset pan if zooming out to 1x or less
+      if (newZoom <= 1) {
+        setImagePanX(0);
+        setImagePanY(0);
+      }
+      return newZoom;
+    });
   };
 
   const handleImageZoomOut = () => {
-    setImageZoom(prev => Math.max(prev - 0.5, 0.5)); // Min zoom 0.5x
+    setImageZoom(prev => {
+      const newZoom = Math.max(prev - 0.5, 0.5);
+      // Reset pan if zooming out to 1x or less
+      if (newZoom <= 1) {
+        setImagePanX(0);
+        setImagePanY(0);
+      }
+      return newZoom;
+    });
   };
 
   // Calculate distance between two touch points
@@ -511,29 +536,59 @@ const ListingCard: React.FC<ListingCardProps> = ({
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  // Setup native touch event listeners for pinch zoom (non-passive)
+  // Setup native touch event listeners for pinch zoom and pan (non-passive)
   useEffect(() => {
     if (showImageModal && imageModalRef.current) {
       const imageContainer = imageModalRef.current;
       
       const handleTouchStart = (e: TouchEvent) => {
         if (e.touches.length === 2) {
+          // Pinch gesture - start zoom
           const distance = getTouchDistance(e.touches[0], e.touches[1]);
           pinchStartDistanceRef.current = distance;
           pinchStartZoomRef.current = imageZoom;
-          e.preventDefault(); // Prevent default pinch behavior
-          e.stopPropagation(); // Stop event bubbling
+          imageDragStartRef.current = null; // Clear drag when pinching
+          e.preventDefault();
+          e.stopPropagation();
+        } else if (e.touches.length === 1 && imageZoom > 1) {
+          // Single touch - start pan when zoomed in
+          const touch = e.touches[0];
+          imageDragStartRef.current = {
+            x: touch.clientX,
+            y: touch.clientY,
+            panX: imagePanX,
+            panY: imagePanY
+          };
+          e.preventDefault();
+          e.stopPropagation();
         }
       };
 
       const handleTouchMove = (e: TouchEvent) => {
         if (e.touches.length === 2 && pinchStartDistanceRef.current !== null) {
+          // Pinch gesture - zoom
           const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
           const scale = currentDistance / pinchStartDistanceRef.current;
           const newZoom = Math.max(0.5, Math.min(3, pinchStartZoomRef.current * scale));
           setImageZoom(newZoom);
-          e.preventDefault(); // Prevent default pinch behavior
-          e.stopPropagation(); // Stop event bubbling
+          e.preventDefault();
+          e.stopPropagation();
+        } else if (e.touches.length === 1 && imageDragStartRef.current !== null && imageZoom > 1) {
+          // Single touch - pan when zoomed in
+          const touch = e.touches[0];
+          const deltaX = touch.clientX - imageDragStartRef.current.x;
+          const deltaY = touch.clientY - imageDragStartRef.current.y;
+          
+          // Calculate new pan position with bounds
+          // Allow panning up to half the zoomed image size beyond the viewport
+          const maxPan = (imageZoom - 1) * 300; // Adjust based on zoom level
+          const newPanX = Math.max(-maxPan, Math.min(maxPan, imageDragStartRef.current.panX + deltaX));
+          const newPanY = Math.max(-maxPan, Math.min(maxPan, imageDragStartRef.current.panY + deltaY));
+          
+          setImagePanX(newPanX);
+          setImagePanY(newPanY);
+          e.preventDefault();
+          e.stopPropagation();
         }
       };
 
@@ -541,10 +596,47 @@ const ListingCard: React.FC<ListingCardProps> = ({
         if (e.touches.length < 2) {
           pinchStartDistanceRef.current = null;
         }
+        if (e.touches.length === 0) {
+          imageDragStartRef.current = null;
+        }
       };
 
       const handleTouchCancel = (e: TouchEvent) => {
         pinchStartDistanceRef.current = null;
+        imageDragStartRef.current = null;
+      };
+
+      // Mouse events for desktop panning
+      const handleMouseDown = (e: MouseEvent) => {
+        if (imageZoom > 1 && e.button === 0) { // Left mouse button
+          imageDragStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            panX: imagePanX,
+            panY: imagePanY
+          };
+          e.preventDefault();
+        }
+      };
+
+      const handleMouseMove = (e: MouseEvent) => {
+        if (imageDragStartRef.current !== null && imageZoom > 1) {
+          const deltaX = e.clientX - imageDragStartRef.current.x;
+          const deltaY = e.clientY - imageDragStartRef.current.y;
+          
+          // Allow panning up to half the zoomed image size beyond the viewport
+          const maxPan = (imageZoom - 1) * 300;
+          const newPanX = Math.max(-maxPan, Math.min(maxPan, imageDragStartRef.current.panX + deltaX));
+          const newPanY = Math.max(-maxPan, Math.min(maxPan, imageDragStartRef.current.panY + deltaY));
+          
+          setImagePanX(newPanX);
+          setImagePanY(newPanY);
+          e.preventDefault();
+        }
+      };
+
+      const handleMouseUp = () => {
+        imageDragStartRef.current = null;
       };
 
       const handleWheel = (e: WheelEvent) => {
@@ -554,19 +646,27 @@ const ListingCard: React.FC<ListingCardProps> = ({
           e.stopPropagation();
           
           // Calculate zoom delta from wheel delta
-          // Negative deltaY means zoom in, positive means zoom out
-          const zoomDelta = -e.deltaY * 0.01; // Adjust sensitivity
+          const zoomDelta = -e.deltaY * 0.01;
           const newZoom = Math.max(0.5, Math.min(3, imageZoom + zoomDelta));
           setImageZoom(newZoom);
+          
+          // Reset pan when zooming out to 1x
+          if (newZoom <= 1) {
+            setImagePanX(0);
+            setImagePanY(0);
+          }
         }
       };
 
       // Use native event listeners with non-passive option and capture phase
-      // This ensures we catch events before they bubble
       imageContainer.addEventListener('touchstart', handleTouchStart, { passive: false, capture: true });
       imageContainer.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
       imageContainer.addEventListener('touchend', handleTouchEnd, { passive: false, capture: true });
       imageContainer.addEventListener('touchcancel', handleTouchCancel, { passive: false, capture: true });
+      imageContainer.addEventListener('mousedown', handleMouseDown, { passive: false });
+      imageContainer.addEventListener('mousemove', handleMouseMove, { passive: false });
+      imageContainer.addEventListener('mouseup', handleMouseUp);
+      imageContainer.addEventListener('mouseleave', handleMouseUp); // Reset on mouse leave
       imageContainer.addEventListener('wheel', handleWheel, { passive: false });
 
       return () => {
@@ -574,10 +674,14 @@ const ListingCard: React.FC<ListingCardProps> = ({
         imageContainer.removeEventListener('touchmove', handleTouchMove, { capture: true } as EventListenerOptions);
         imageContainer.removeEventListener('touchend', handleTouchEnd, { capture: true } as EventListenerOptions);
         imageContainer.removeEventListener('touchcancel', handleTouchCancel, { capture: true } as EventListenerOptions);
+        imageContainer.removeEventListener('mousedown', handleMouseDown);
+        imageContainer.removeEventListener('mousemove', handleMouseMove);
+        imageContainer.removeEventListener('mouseup', handleMouseUp);
+        imageContainer.removeEventListener('mouseleave', handleMouseUp);
         imageContainer.removeEventListener('wheel', handleWheel);
       };
     }
-  }, [showImageModal, imageZoom]);
+  }, [showImageModal, imageZoom, imagePanX, imagePanY]);
 
   // Calculate distance between two touch points for floor plans
   const getFloorPlanTouchDistance = (touch1: Touch, touch2: Touch): number => {
@@ -1701,10 +1805,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
               <div 
                 ref={imageModalRef}
                 style={{ 
-                  transform: `scale(${imageZoom})`, 
+                  transform: `translate(${imagePanX}px, ${imagePanY}px) scale(${imageZoom})`, 
                   transformOrigin: 'center', 
-                  transition: pinchStartDistanceRef.current === null ? 'transform 0.2s ease' : 'none',
-                  touchAction: 'none' // Prevent all default touch behaviors on the image container
+                  transition: (pinchStartDistanceRef.current === null && imageDragStartRef.current === null) ? 'transform 0.2s ease' : 'none',
+                  touchAction: 'none', // Prevent all default touch behaviors on the image container
+                  cursor: imageZoom > 1 ? 'move' : 'default'
                 }}
               >
                 <img
@@ -1737,6 +1842,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
                       const prevIndex = selectedImageModalIndex > 0 ? selectedImageModalIndex - 1 : (listing.imageGallery?.length || 1) - 1;
                       setSelectedImageModalIndex(prevIndex);
                       setImageZoom(1);
+                      setImagePanX(0);
+                      setImagePanY(0);
                     }}
                     style={{
                       position: 'absolute',
@@ -1772,6 +1879,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
                       const nextIndex = selectedImageModalIndex < maxIndex ? selectedImageModalIndex + 1 : 0;
                       setSelectedImageModalIndex(nextIndex);
                       setImageZoom(1);
+                      setImagePanX(0);
+                      setImagePanY(0);
                     }}
                     style={{
                       position: 'absolute',
