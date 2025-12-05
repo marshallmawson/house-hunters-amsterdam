@@ -7,7 +7,7 @@ import { Container, Row, Col, Form, FormGroup, Pagination, Button, Dropdown } fr
 import { Listing } from '../types';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
-import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 import { parseKMLNeighborhoods } from '../utils/neighborhoodParser';
 import { extractFiltersFromQuery } from '../utils/queryFilterExtractor';
@@ -23,6 +23,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { id: modalListingId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { preferences: savedPreferences, loading: preferencesLoading, savePreferences } = useUserPreferences();
   const preferencesLoadedRef = useRef(false);
 
@@ -792,9 +793,16 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
   }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
 
   // Separate useEffect to update URL parameters only when filter values change
+  // Skip updating URL if we're on a listing detail page (modal is open) to keep URL clean
   useEffect(() => {
+    // Don't update URL params when viewing a listing detail page (path like /listings/123456)
+    // Check pathname to see if we're on a specific listing page (has ID in path)
+    const isListingDetailPage = location.pathname.match(/^\/listings\/[^/]+$/);
+    if (modalListingId || isListingDetailPage) {
+      return;
+    }
     updateURLParams();
-  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, updateURLParams]);
+  }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, updateURLParams, modalListingId, location.pathname]);
 
   // Note: Removed duplicate effect - filter changes are already handled by the effect on lines 337-344
 

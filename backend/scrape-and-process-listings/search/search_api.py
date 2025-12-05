@@ -228,6 +228,125 @@ def get_search_suggestions():
     
     return jsonify({"suggestions": suggestions})
 
+@app.route('/listings/<listing_id>', methods=['GET'])
+def get_listing_html(listing_id):
+    """
+    Serve HTML with Open Graph meta tags for social media crawlers.
+    This endpoint is called by nginx when a social media crawler requests a listing URL.
+    """
+    try:
+        import firebase_admin
+        from firebase_admin import credentials, firestore
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app()
+        db = firestore.client()
+        
+        # Fetch listing from Firestore
+        listing_ref = db.collection('listings').document(listing_id)
+        listing_doc = listing_ref.get()
+        
+        if not listing_doc.exists:
+            # Return default HTML if listing not found
+            return DEFAULT_HTML_TEMPLATE, 404, {'Content-Type': 'text/html; charset=utf-8'}
+        
+        listing_data = listing_doc.to_dict()
+        
+        # Extract listing information
+        address = listing_data.get('address', 'Property Listing')
+        price = listing_data.get('price', 0)
+        bedrooms = listing_data.get('bedrooms', 0)
+        bathrooms = listing_data.get('bathrooms', 0)
+        living_area = listing_data.get('livingArea', 0)
+        image_gallery = listing_data.get('imageGallery', [])
+        
+        # Use first image if available, otherwise default logo
+        image_url = image_gallery[0] if image_gallery and len(image_gallery) > 0 else 'https://www.huishunters.com/logo512.png'
+        
+        # Build description
+        description_parts = [address, f'€{price:,}']
+        if bedrooms:
+            description_parts.append(f'{bedrooms} bedrooms')
+        if bathrooms:
+            description_parts.append(f'{bathrooms} bathrooms')
+        if living_area:
+            description_parts.append(f'{living_area} m²')
+        description = ' - '.join(description_parts)
+        
+        # Build title
+        title = f'{address} - €{price:,}'
+        
+        # Build URL
+        listing_url = f'https://www.huishunters.com/listings/{listing_id}'
+        
+        # Render HTML with meta tags
+        html = HTML_TEMPLATE.format(
+            title=title,
+            description=description,
+            image_url=image_url,
+            listing_url=listing_url
+        )
+        
+        return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+        
+    except Exception as e:
+        logger.error(f"Error fetching listing {listing_id}: {str(e)}")
+        return render_template_string(DEFAULT_HTML_TEMPLATE), 500
+
+# HTML template for listing pages with Open Graph meta tags
+HTML_TEMPLATE = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content="{description}" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="{listing_url}" />
+    <meta property="og:title" content="{title}" />
+    <meta property="og:description" content="{description}" />
+    <meta property="og:image" content="{image_url}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="{listing_url}" />
+    <meta name="twitter:title" content="{title}" />
+    <meta name="twitter:description" content="{description}" />
+    <meta name="twitter:image" content="{image_url}" />
+    
+    <!-- Redirect to actual page -->
+    <script>
+        window.location.href = "{listing_url}";
+    </script>
+    <noscript>
+        <meta http-equiv="refresh" content="0; url={listing_url}" />
+    </noscript>
+</head>
+<body>
+    <p>Redirecting to <a href="{listing_url}">{title}</a>...</p>
+</body>
+</html>'''
+
+DEFAULT_HTML_TEMPLATE = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Huis Hunters - AI-Powered Amsterdam Home Search</title>
+    <meta name="description" content="Find your perfect Amsterdam house with smart filters and AI-powered search." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.huishunters.com/" />
+    <meta property="og:title" content="Huis Hunters - AI-Powered Amsterdam Home Search" />
+    <meta property="og:description" content="Find your perfect Amsterdam house with smart filters and AI-powered search." />
+    <meta property="og:image" content="https://www.huishunters.com/logo512.png" />
+</head>
+<body>
+    <p>Huis Hunters - AI-Powered Amsterdam Home Search</p>
+</body>
+</html>'''
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port, debug=False)

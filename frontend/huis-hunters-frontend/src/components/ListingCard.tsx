@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Carousel, Modal, Button, Row, Col, Form, Toast } from 'react-bootstrap';
+import { Card, Carousel, Modal, Button, Row, Col, Form, Toast, Dropdown } from 'react-bootstrap';
 import { Listing } from '../types';
 import BedIcon from './icons/BedIcon';
 import BathIcon from './icons/BathIcon';
@@ -90,6 +90,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const [showGridView, setShowGridView] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [showShareMenu, setShowShareMenu] = useState(false);
   const hasHandledForceOpen = useRef(false);
   const clickedImageIndex = useRef(0);
   const originalSearchParamsRef = useRef<string>(''); // Store original search params when opening modal
@@ -149,6 +150,28 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceOpen]);
+
+  // Update meta tags when component mounts with a listing ID in URL (for direct navigation)
+  useEffect(() => {
+    if (location.pathname.startsWith('/listings/') && location.pathname.includes(listing.id)) {
+      const listingUrl = getListingUrl();
+      const listingImage = listing.imageGallery && listing.imageGallery.length > 0 
+        ? listing.imageGallery[0] 
+        : 'https://www.huishunters.com/logo512.png';
+      const listingTitle = `${listing.address} - €${listing.price?.toLocaleString()}`;
+      const listingDescription = `${listing.address} - €${listing.price?.toLocaleString()}${listing.bedrooms ? `, ${listing.bedrooms} bedrooms` : ''}${listing.livingArea ? `, ${listing.livingArea} m²` : ''}`;
+      
+      updateMetaTags(listingImage, listingTitle, listingDescription, listingUrl);
+    }
+    
+    // Reset meta tags when navigating away from listing page
+    return () => {
+      if (!location.pathname.startsWith('/listings/')) {
+        resetMetaTags();
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, listing.id]);
 
   // Detect mobile screen size
   useEffect(() => {
@@ -450,21 +473,79 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   };
 
+  // Function to update meta tags for social sharing
+  const updateMetaTags = (imageUrl: string, title: string, description: string, url: string) => {
+    // Update or create Open Graph meta tags
+    const updateMetaTag = (property: string, content: string) => {
+      let meta = document.querySelector(`meta[property="${property}"]`);
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('property', property);
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute('content', content);
+    };
+
+    // Update or create Twitter Card meta tags
+    const updateTwitterMetaTag = (name: string, content: string) => {
+      let meta = document.querySelector(`meta[name="${name}"]`);
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('name', name);
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute('content', content);
+    };
+
+    updateMetaTag('og:type', 'website');
+    updateMetaTag('og:url', url);
+    updateMetaTag('og:title', title);
+    updateMetaTag('og:description', description);
+    updateMetaTag('og:image', imageUrl);
+    updateMetaTag('og:image:width', '1200');
+    updateMetaTag('og:image:height', '630');
+
+    updateTwitterMetaTag('twitter:card', 'summary_large_image');
+    updateTwitterMetaTag('twitter:url', url);
+    updateTwitterMetaTag('twitter:title', title);
+    updateTwitterMetaTag('twitter:description', description);
+    updateTwitterMetaTag('twitter:image', imageUrl);
+  };
+
+  // Function to reset meta tags to default
+  const resetMetaTags = () => {
+    const defaultImage = 'https://www.huishunters.com/logo512.png';
+    const defaultTitle = 'Huis Hunters - AI-Powered Amsterdam Home Search';
+    const defaultDescription = 'Find your perfect Amsterdam house with smart filters and AI-powered search.';
+    const defaultUrl = 'https://www.huishunters.com/';
+    
+    updateMetaTags(defaultImage, defaultTitle, defaultDescription, defaultUrl);
+  };
+
   const handleShowModal = (imageIndex: number = 0) => {
     clickedImageIndex.current = imageIndex;
     setSelectedImageIndex(imageIndex);
     setShowModal(true);
     onModalToggle(true);
     setIsManualNavigation(false);
+    
+    // Update meta tags for social sharing with listing image
+    const listingUrl = getListingUrl();
+    const listingImage = listing.imageGallery && listing.imageGallery.length > 0 
+      ? listing.imageGallery[0] 
+      : 'https://www.huishunters.com/logo512.png';
+    const listingTitle = `${listing.address} - €${listing.price?.toLocaleString()}`;
+    const listingDescription = `${listing.address} - €${listing.price?.toLocaleString()}${listing.bedrooms ? `, ${listing.bedrooms} bedrooms` : ''}${listing.livingArea ? `, ${listing.livingArea} m²` : ''}`;
+    
+    updateMetaTags(listingImage, listingTitle, listingDescription, listingUrl);
+    
     // Only navigate if routing is enabled and we're not on the saved properties page
     if (!disableRouting && location.pathname !== '/saved-properties') {
       // Store original search params (including search query) before navigation
       // Use location.search to get the actual URL query string, not searchParams which might be missing params
       originalSearchParamsRef.current = location.search;
-      // Preserve all current search parameters when navigating to listing
-      // If location.search exists, use it; otherwise construct from searchParams
-      const paramsString = location.search ? location.search.substring(1) : searchParams.toString();
-      navigate(`/listings/${listing.id}${paramsString ? `?${paramsString}` : ''}`);
+      // Navigate to clean URL without filter params for easy sharing
+      navigate(`/listings/${listing.id}`);
     }
   };
 
@@ -475,12 +556,67 @@ const ListingCard: React.FC<ListingCardProps> = ({
     setIsManualNavigation(false);
     setShowGridView(false);
     hasHandledForceOpen.current = false;
+    
+    // Reset meta tags to default when closing modal
+    resetMetaTags();
+    
     // Only navigate back if routing is enabled and we navigated from a listings route
     if (!disableRouting && location.pathname !== '/saved-properties') {
       // Restore original search parameters (including search query) when navigating back
       // Use the stored original params instead of current params (which might be missing search)
       navigate(`/${originalSearchParamsRef.current}`);
     }
+  };
+
+  const getListingUrl = () => {
+    return `https://www.huishunters.com/listings/${listing.id}`;
+  };
+
+  const handleCopyURL = async () => {
+    try {
+      const url = getListingUrl();
+      await navigator.clipboard.writeText(url);
+      setToastMessage('URL copied to clipboard!');
+      setShowToast(true);
+      setShowShareMenu(false);
+    } catch (error) {
+      console.error('Failed to copy URL:', error);
+      setToastMessage('Failed to copy URL');
+      setShowToast(true);
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    const url = getListingUrl();
+    const message = `Check out this property: ${listing.address} - €${listing.price?.toLocaleString()} ${url}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+    setShowShareMenu(false);
+  };
+
+  const handleShareGmail = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const url = getListingUrl();
+    const subject = `Property Listing: ${listing.address}`;
+    const body = `Check out this property:\n\n${listing.address}\nPrice: €${listing.price?.toLocaleString()}\n${listing.bedrooms ? `${listing.bedrooms} bedrooms` : ''}${listing.bathrooms ? `, ${listing.bathrooms} bathrooms` : ''}${listing.livingArea ? `, ${listing.livingArea} m²` : ''}\n\nView listing: ${url}`;
+    // Use Gmail's web compose URL to open in browser instead of native mail app
+    // Using compose action URL format to ensure it opens in browser
+    const gmailUrl = `https://mail.google.com/mail/u/0/?view=cm&fs=1&tf=cm&to=&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    
+    // Create a temporary anchor element and click it programmatically
+    // This approach sometimes works better than window.open for bypassing system handlers
+    const link = document.createElement('a');
+    link.href = gmailUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setShowShareMenu(false);
   };
 
   const handleGridImageClick = (index: number) => {
@@ -1152,9 +1288,89 @@ const ListingCard: React.FC<ListingCardProps> = ({
 
     <Modal show={showModal} onHide={handleHideModal} size="lg" centered>
         <Modal.Header closeButton>
-          <div ref={modalHeaderRef} style={{ width: '100%', paddingRight: '2rem' }}>
+          <div ref={modalHeaderRef} style={{ width: '100%', paddingRight: '2rem', position: 'relative' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem', gap: '0.5rem' }}>
-              <Modal.Title style={{ flex: '1 1 auto', minWidth: '0', wordBreak: 'break-word', paddingRight: '0.5rem', fontSize: isMobile ? '0.95rem' : '1.3rem' }}>{listing.address}</Modal.Title>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1 1 auto', minWidth: 0 }}>
+                <Modal.Title style={{ margin: 0, fontSize: isMobile ? '0.95rem' : '1.3rem', wordBreak: 'break-word', lineHeight: '1.3', flex: '0 1 auto' }}>{listing.address}</Modal.Title>
+                {/* Share Button - Next to address */}
+                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                  <Dropdown show={showShareMenu} onToggle={setShowShareMenu}>
+                    <Dropdown.Toggle
+                      variant="link"
+                      className="share-dropdown-toggle"
+                      style={{
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        padding: '0.25rem',
+                        color: '#6c757d',
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s ease',
+                        flexShrink: 0,
+                        position: 'relative'
+                      }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#f8f9fa';
+                      e.currentTarget.style.color = '#495057';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = '#6c757d';
+                    }}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ display: 'block' }}
+                    >
+                      <circle cx="18" cy="5" r="3" />
+                      <circle cx="6" cy="12" r="3" />
+                      <circle cx="18" cy="19" r="3" />
+                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                    </svg>
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu align="start">
+                    <Dropdown.Item onClick={handleCopyURL}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                        </svg>
+                        Copy URL
+                      </div>
+                    </Dropdown.Item>
+                    <Dropdown.Item onClick={handleShareWhatsApp}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                        </svg>
+                        Share on WhatsApp
+                      </div>
+                    </Dropdown.Item>
+                    <Dropdown.Item onClick={handleShareGmail}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+                        </svg>
+                        Share on Gmail
+                      </div>
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                  </Dropdown>
+                </div>
+              </div>
               <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
                 €{listing.price?.toLocaleString()}
               </span>

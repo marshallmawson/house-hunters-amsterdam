@@ -908,3 +908,8 @@ html {
   }
 }
 
+/* Hide Bootstrap dropdown caret for share button */
+.share-dropdown-toggle::after {
+  display: none !important;
+}
+
