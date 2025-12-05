@@ -1429,8 +1429,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
               </FormGroup>
             </Col>
 
-            {/* Clear Filters button */}
-            <Col lg={1} md={6} className="clear-filters-col">
+            {/* Clear Filters button - hidden on mobile */}
+            <Col lg={1} md={6} className="clear-filters-col d-none d-md-block">
               <FormGroup>
                 <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem', visibility: 'hidden' }}>
                   Clear Filters
@@ -1535,6 +1535,27 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                     <circle cx="12" cy="10" r="3" />
                   </svg>
                   View all on map
+                </Button>
+              </Col>
+            </Row>
+
+            {/* Mobile: Close Filters button - shown only on mobile after search */}
+            <Row className="d-md-none mt-3">
+              <Col>
+                <Button 
+                  variant="outline-secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    setShowFilters(false);
+                  }}
+                  style={{ 
+                    fontSize: '0.75rem', 
+                    padding: '0.25rem 0.5rem', 
+                    width: '100%', 
+                    borderRadius: '8px' 
+                  }}
+                >
+                  Close Filters
                 </Button>
               </Col>
             </Row>
