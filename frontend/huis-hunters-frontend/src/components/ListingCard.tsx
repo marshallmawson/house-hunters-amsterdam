@@ -74,9 +74,12 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [showFloorPlanModal, setShowFloorPlanModal] = useState(false);
   const [selectedFloorPlanIndex, setSelectedFloorPlanIndex] = useState(0);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImageModalIndex, setSelectedImageModalIndex] = useState(0);
   const [isModalDescriptionExpanded, setIsModalDescriptionExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [floorPlanZoom, setFloorPlanZoom] = useState(1);
+  const [imageZoom, setImageZoom] = useState(1);
   const [isManualNavigation, setIsManualNavigation] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [savedPropertyId, setSavedPropertyId] = useState<string | null>(null);
@@ -92,6 +95,12 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const wasGridViewRef = useRef(false);
   const carouselContainerRef = useRef<HTMLDivElement>(null);
   const modalHeaderRef = useRef<HTMLDivElement>(null);
+  const imageModalRef = useRef<HTMLDivElement>(null);
+  const floorPlanModalRef = useRef<HTMLDivElement>(null);
+  const pinchStartDistanceRef = useRef<number | null>(null);
+  const pinchStartZoomRef = useRef<number>(1);
+  const floorPlanPinchStartDistanceRef = useRef<number | null>(null);
+  const floorPlanPinchStartZoomRef = useRef<number>(1);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -179,6 +188,178 @@ const ListingCard: React.FC<ListingCardProps> = ({
     // Update the ref to track current state
     wasGridViewRef.current = showGridView;
   }, [showGridView, showModal]);
+
+  // Handle keyboard navigation for image modal
+  useEffect(() => {
+    if (showImageModal && listing.imageGallery) {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        // Left arrow or 'a' key - previous image
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+          e.preventDefault();
+          const prevIndex = selectedImageModalIndex > 0 
+            ? selectedImageModalIndex - 1 
+            : listing.imageGallery.length - 1;
+          setSelectedImageModalIndex(prevIndex);
+          setImageZoom(1); // Reset zoom when navigating
+        }
+        // Right arrow or 'd' key - next image
+        else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+          e.preventDefault();
+          const maxIndex = listing.imageGallery.length - 1;
+          const nextIndex = selectedImageModalIndex < maxIndex 
+            ? selectedImageModalIndex + 1 
+            : 0;
+          setSelectedImageModalIndex(nextIndex);
+          setImageZoom(1); // Reset zoom when navigating
+        }
+        // Escape key - close modal
+        else if (e.key === 'Escape') {
+          setShowImageModal(false);
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [showImageModal, selectedImageModalIndex, listing.imageGallery]);
+
+  // Handle keyboard navigation for floor plan modal
+  useEffect(() => {
+    if (showFloorPlanModal && listing.floorPlans && listing.floorPlans.length > 0) {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        // Left arrow or 'a' key - previous floor plan
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+          e.preventDefault();
+          const prevIndex = selectedFloorPlanIndex > 0 
+            ? selectedFloorPlanIndex - 1 
+            : listing.floorPlans!.length - 1;
+          setSelectedFloorPlanIndex(prevIndex);
+          setFloorPlanZoom(1); // Reset zoom when navigating
+        }
+        // Right arrow or 'd' key - next floor plan
+        else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+          e.preventDefault();
+          const maxIndex = listing.floorPlans!.length - 1;
+          const nextIndex = selectedFloorPlanIndex < maxIndex 
+            ? selectedFloorPlanIndex + 1 
+            : 0;
+          setSelectedFloorPlanIndex(nextIndex);
+          setFloorPlanZoom(1); // Reset zoom when navigating
+        }
+        // Escape key - close modal
+        else if (e.key === 'Escape') {
+          setShowFloorPlanModal(false);
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [showFloorPlanModal, selectedFloorPlanIndex, listing.floorPlans]);
+
+  // Prevent page zoom when image modal is open and user is interacting with image
+  useEffect(() => {
+    if (showImageModal && imageModalRef.current) {
+      const imageContainer = imageModalRef.current;
+      
+      // Prevent page zoom on touch devices when touching the image
+      const preventZoom = (e: TouchEvent) => {
+        // Only prevent if we have 2 touches (pinch gesture)
+        if (e.touches.length === 2) {
+          const target = e.target as HTMLElement;
+          // Only prevent if the touch is on or inside the image container
+          if (imageContainer.contains(target) || target === imageContainer) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+      };
+
+      // Prevent wheel zoom (Ctrl/Cmd + wheel) everywhere except on the image container
+      // This prevents page zoom while allowing our custom handler to work on the image
+      const preventWheelZoom = (e: WheelEvent) => {
+        if (e.ctrlKey || e.metaKey) {
+          const target = e.target as HTMLElement;
+          // Don't prevent if the event is on the image container - let our handler deal with it
+          if (!imageContainer.contains(target) && target !== imageContainer) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          // If it IS on the image container, we still want to prevent default page zoom
+          // but our React handler will handle the zoom
+          else if (imageContainer.contains(target) || target === imageContainer) {
+            e.preventDefault();
+            // Don't stop propagation so our React handler can still receive it
+          }
+        }
+      };
+
+      // Use capture phase to catch events early
+      document.addEventListener('touchstart', preventZoom, { passive: false, capture: true });
+      document.addEventListener('touchmove', preventZoom, { passive: false, capture: true });
+      document.addEventListener('wheel', preventWheelZoom, { passive: false, capture: true });
+
+      return () => {
+        document.removeEventListener('touchstart', preventZoom, { capture: true } as EventListenerOptions);
+        document.removeEventListener('touchmove', preventZoom, { capture: true } as EventListenerOptions);
+        document.removeEventListener('wheel', preventWheelZoom, { capture: true } as EventListenerOptions);
+      };
+    }
+  }, [showImageModal]);
+
+  // Prevent page zoom when floor plan modal is open and user is interacting with floor plan
+  useEffect(() => {
+    if (showFloorPlanModal && floorPlanModalRef.current) {
+      const floorPlanContainer = floorPlanModalRef.current;
+      
+      // Prevent page zoom on touch devices when touching the floor plan
+      const preventZoom = (e: TouchEvent) => {
+        // Only prevent if we have 2 touches (pinch gesture)
+        if (e.touches.length === 2) {
+          const target = e.target as HTMLElement;
+          // Only prevent if the touch is on or inside the floor plan container
+          if (floorPlanContainer.contains(target) || target === floorPlanContainer) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+      };
+
+      // Prevent wheel zoom (Ctrl/Cmd + wheel) everywhere except on the floor plan container
+      // This prevents page zoom while allowing our custom handler to work on the floor plan
+      const preventWheelZoom = (e: WheelEvent) => {
+        if (e.ctrlKey || e.metaKey) {
+          const target = e.target as HTMLElement;
+          // Don't prevent if the event is on the floor plan container - let our handler deal with it
+          if (!floorPlanContainer.contains(target) && target !== floorPlanContainer) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          // If it IS on the floor plan container, we still want to prevent default page zoom
+          // but our React handler will handle the zoom
+          else if (floorPlanContainer.contains(target) || target === floorPlanContainer) {
+            e.preventDefault();
+            // Don't stop propagation so our React handler can still receive it
+          }
+        }
+      };
+
+      // Use capture phase to catch events early
+      document.addEventListener('touchstart', preventZoom, { passive: false, capture: true });
+      document.addEventListener('touchmove', preventZoom, { passive: false, capture: true });
+      document.addEventListener('wheel', preventWheelZoom, { passive: false, capture: true });
+
+      return () => {
+        document.removeEventListener('touchstart', preventZoom, { capture: true } as EventListenerOptions);
+        document.removeEventListener('touchmove', preventZoom, { capture: true } as EventListenerOptions);
+        document.removeEventListener('wheel', preventWheelZoom, { capture: true } as EventListenerOptions);
+      };
+    }
+  }, [showFloorPlanModal]);
 
   // Check if property is saved
   useEffect(() => {
@@ -304,9 +485,9 @@ const ListingCard: React.FC<ListingCardProps> = ({
   };
 
   const handleGridImageClick = (index: number) => {
-    setSelectedImageIndex(index);
-    setShowGridView(false);
-    // The useEffect hook will handle scrolling to top when showGridView changes
+    setSelectedImageModalIndex(index);
+    setImageZoom(1); // Reset zoom when opening image
+    setShowImageModal(true);
   };
 
   const handleFloorPlanClick = (index: number) => {
@@ -321,6 +502,130 @@ const ListingCard: React.FC<ListingCardProps> = ({
 
   const handleZoomOut = () => {
     setFloorPlanZoom(prev => Math.max(prev - 0.5, 0.5)); // Min zoom 0.5x
+  };
+
+  const handleImageZoomIn = () => {
+    setImageZoom(prev => Math.min(prev + 0.5, 3)); // Max zoom 3x
+  };
+
+  const handleImageZoomOut = () => {
+    setImageZoom(prev => Math.max(prev - 0.5, 0.5)); // Min zoom 0.5x
+  };
+
+  // Calculate distance between two touch points
+  const getTouchDistance = (touch1: React.Touch, touch2: React.Touch): number => {
+    const dx = touch2.clientX - touch1.clientX;
+    const dy = touch2.clientY - touch1.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // Handle touch start for pinch zoom
+  const handleImageTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const distance = getTouchDistance(e.touches[0], e.touches[1]);
+      pinchStartDistanceRef.current = distance;
+      pinchStartZoomRef.current = imageZoom;
+      e.preventDefault(); // Prevent default pinch behavior
+      e.stopPropagation(); // Stop event bubbling
+      return false;
+    }
+  };
+
+  // Handle touch move for pinch zoom
+  const handleImageTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchStartDistanceRef.current !== null) {
+      const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
+      const scale = currentDistance / pinchStartDistanceRef.current;
+      const newZoom = Math.max(0.5, Math.min(3, pinchStartZoomRef.current * scale));
+      setImageZoom(newZoom);
+      e.preventDefault(); // Prevent default pinch behavior
+      e.stopPropagation(); // Stop event bubbling
+      return false;
+    }
+  };
+
+  // Handle touch end for pinch zoom
+  const handleImageTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) {
+      pinchStartDistanceRef.current = null;
+    }
+    if (e.touches.length === 0) {
+      e.preventDefault(); // Prevent default behavior
+      e.stopPropagation(); // Stop event bubbling
+    }
+  };
+
+  // Handle wheel (trackpad pinch) for zoom
+  const handleImageWheel = (e: React.WheelEvent) => {
+    // Check if Ctrl/Cmd is pressed (trackpad pinch gesture)
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Calculate zoom delta from wheel delta
+      // Negative deltaY means zoom in, positive means zoom out
+      const zoomDelta = -e.deltaY * 0.01; // Adjust sensitivity
+      const newZoom = Math.max(0.5, Math.min(3, imageZoom + zoomDelta));
+      setImageZoom(newZoom);
+    }
+  };
+
+  // Calculate distance between two touch points for floor plans
+  const getFloorPlanTouchDistance = (touch1: React.Touch, touch2: React.Touch): number => {
+    const dx = touch2.clientX - touch1.clientX;
+    const dy = touch2.clientY - touch1.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // Handle touch start for floor plan pinch zoom
+  const handleFloorPlanTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const distance = getFloorPlanTouchDistance(e.touches[0], e.touches[1]);
+      floorPlanPinchStartDistanceRef.current = distance;
+      floorPlanPinchStartZoomRef.current = floorPlanZoom;
+      e.preventDefault(); // Prevent default pinch behavior
+      e.stopPropagation(); // Stop event bubbling
+      return false;
+    }
+  };
+
+  // Handle touch move for floor plan pinch zoom
+  const handleFloorPlanTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && floorPlanPinchStartDistanceRef.current !== null) {
+      const currentDistance = getFloorPlanTouchDistance(e.touches[0], e.touches[1]);
+      const scale = currentDistance / floorPlanPinchStartDistanceRef.current;
+      const newZoom = Math.max(0.5, Math.min(3, floorPlanPinchStartZoomRef.current * scale));
+      setFloorPlanZoom(newZoom);
+      e.preventDefault(); // Prevent default pinch behavior
+      e.stopPropagation(); // Stop event bubbling
+      return false;
+    }
+  };
+
+  // Handle touch end for floor plan pinch zoom
+  const handleFloorPlanTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) {
+      floorPlanPinchStartDistanceRef.current = null;
+    }
+    if (e.touches.length === 0) {
+      e.preventDefault(); // Prevent default behavior
+      e.stopPropagation(); // Stop event bubbling
+    }
+  };
+
+  // Handle wheel (trackpad pinch) for floor plan zoom
+  const handleFloorPlanWheel = (e: React.WheelEvent) => {
+    // Check if Ctrl/Cmd is pressed (trackpad pinch gesture)
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Calculate zoom delta from wheel delta
+      // Negative deltaY means zoom in, positive means zoom out
+      const zoomDelta = -e.deltaY * 0.01; // Adjust sensitivity
+      const newZoom = Math.max(0.5, Math.min(3, floorPlanZoom + zoomDelta));
+      setFloorPlanZoom(newZoom);
+    }
   };
 
 
@@ -780,7 +1085,9 @@ const ListingCard: React.FC<ListingCardProps> = ({
                         borderRadius: '4px',
                         transition: 'transform 0.2s ease, box-shadow 0.2s ease'
                       }}
-                      onClick={() => handleGridImageClick(index)}
+                      onClick={() => {
+                        handleGridImageClick(index);
+                      }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'scale(1.02)';
                         e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
@@ -817,7 +1124,14 @@ const ListingCard: React.FC<ListingCardProps> = ({
                       alt={`Slide ${index}`}
                       style={{ 
                         height: '450px',
-                        objectFit: 'cover'
+                        objectFit: 'cover',
+                        cursor: 'pointer'
+                      }}
+                      onClick={(e) => {
+                        // Only open if clicking directly on the image, not on carousel controls
+                        if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'IMG') {
+                          handleGridImageClick(index);
+                        }
                       }}
                       onLoad={(e) => {
                         const img = e.target as HTMLImageElement;
@@ -1333,18 +1647,255 @@ const ListingCard: React.FC<ListingCardProps> = ({
         </Modal.Body>
       </Modal>
 
+      {/* Image Modal */}
+      <Modal 
+        show={showImageModal} 
+        onHide={() => setShowImageModal(false)} 
+        size="xl" 
+        centered
+        style={{ touchAction: 'manipulation' }}
+      >
+        <Modal.Header closeButton>
+          <Modal.Title style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+            Photo {selectedImageModalIndex + 1}
+            {listing.imageGallery && listing.imageGallery.length > 1 && ` of ${listing.imageGallery.length}`}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body 
+          className="text-center" 
+          style={{ 
+            overflow: 'auto', 
+            maxHeight: '80vh', 
+            position: 'relative',
+            touchAction: 'manipulation' // Prevent double-tap zoom and other gestures
+          }}
+        >
+          {listing.imageGallery && listing.imageGallery[selectedImageModalIndex] && (
+            <>
+              <div 
+                ref={imageModalRef}
+                style={{ 
+                  transform: `scale(${imageZoom})`, 
+                  transformOrigin: 'center', 
+                  transition: pinchStartDistanceRef.current === null ? 'transform 0.2s ease' : 'none',
+                  touchAction: 'none' // Prevent all default touch behaviors on the image container
+                }}
+                onTouchStart={handleImageTouchStart}
+                onTouchMove={handleImageTouchMove}
+                onTouchEnd={handleImageTouchEnd}
+                onWheel={handleImageWheel}
+              >
+                <img
+                  src={listing.imageGallery[selectedImageModalIndex]}
+                  alt={`Photo ${selectedImageModalIndex + 1}`}
+                  style={{ 
+                    maxWidth: '100%', 
+                    maxHeight: '80vh', 
+                    objectFit: 'contain',
+                    cursor: 'move',
+                    touchAction: 'none', // Prevent default touch behaviors
+                    userSelect: 'none' // Prevent text selection
+                  }}
+                  draggable={false}
+                  onLoad={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    if (img.naturalHeight > img.naturalWidth) {
+                      img.style.objectFit = 'contain';
+                      img.style.backgroundColor = 'white';
+                    }
+                  }}
+                />
+              </div>
+              
+              {/* Carousel navigation for multiple images */}
+              {listing.imageGallery && listing.imageGallery.length > 1 && (
+                <>
+                  <button
+                    onClick={() => {
+                      const prevIndex = selectedImageModalIndex > 0 ? selectedImageModalIndex - 1 : (listing.imageGallery?.length || 1) - 1;
+                      setSelectedImageModalIndex(prevIndex);
+                      setImageZoom(1);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: '20px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                      border: '1px solid rgba(0, 0, 0, 0.2)',
+                      borderRadius: '4px',
+                      width: '40px',
+                      height: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      fontSize: '1.5rem',
+                      color: '#212529',
+                      zIndex: 10,
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+                    }}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    onClick={() => {
+                      const maxIndex = (listing.imageGallery?.length || 1) - 1;
+                      const nextIndex = selectedImageModalIndex < maxIndex ? selectedImageModalIndex + 1 : 0;
+                      setSelectedImageModalIndex(nextIndex);
+                      setImageZoom(1);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '20px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                      border: '1px solid rgba(0, 0, 0, 0.2)',
+                      borderRadius: '4px',
+                      width: '40px',
+                      height: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      fontSize: '1.5rem',
+                      color: '#212529',
+                      zIndex: 10,
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+                    }}
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+              
+              {/* Zoom controls in bottom right (map-style) */}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '20px',
+                  right: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                  zIndex: 10
+                }}
+              >
+                <button
+                  onClick={handleImageZoomIn}
+                  disabled={imageZoom >= 3}
+                  style={{
+                    backgroundColor: 'white',
+                    border: '1px solid rgba(0, 0, 0, 0.2)',
+                    borderRadius: '4px 4px 0 0',
+                    width: '36px',
+                    height: '36px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: imageZoom >= 3 ? 'not-allowed' : 'pointer',
+                    fontSize: '1.2rem',
+                    fontWeight: 'bold',
+                    color: imageZoom >= 3 ? '#ccc' : '#212529',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                    opacity: imageZoom >= 3 ? 0.5 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (imageZoom < 3) {
+                      e.currentTarget.style.backgroundColor = '#f8f9fa';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (imageZoom < 3) {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }
+                  }}
+                >
+                  +
+                </button>
+                <button
+                  onClick={handleImageZoomOut}
+                  disabled={imageZoom <= 0.5}
+                  style={{
+                    backgroundColor: 'white',
+                    border: '1px solid rgba(0, 0, 0, 0.2)',
+                    borderRadius: '0 0 4px 4px',
+                    width: '36px',
+                    height: '36px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: imageZoom <= 0.5 ? 'not-allowed' : 'pointer',
+                    fontSize: '1.2rem',
+                    fontWeight: 'bold',
+                    color: imageZoom <= 0.5 ? '#ccc' : '#212529',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                    opacity: imageZoom <= 0.5 ? 0.5 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (imageZoom > 0.5) {
+                      e.currentTarget.style.backgroundColor = '#f8f9fa';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (imageZoom > 0.5) {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }
+                  }}
+                >
+                  −
+                </button>
+              </div>
+            </>
+          )}
+        </Modal.Body>
+      </Modal>
+
       {/* Floor Plan Modal */}
       <Modal show={showFloorPlanModal} onHide={() => setShowFloorPlanModal(false)} size="xl" centered>
         <Modal.Header closeButton>
-          <Modal.Title>
+          <Modal.Title style={{ fontSize: '0.9rem', fontWeight: '500' }}>
             Floor Plan {selectedFloorPlanIndex + 1}
             {listing.floorPlans && listing.floorPlans.length > 1 && ` of ${listing.floorPlans.length}`}
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body className="text-center" style={{ overflow: 'auto', maxHeight: '80vh', position: 'relative' }}>
+        <Modal.Body 
+          className="text-center" 
+          style={{ 
+            overflow: 'auto', 
+            maxHeight: '80vh', 
+            position: 'relative',
+            touchAction: 'manipulation' // Prevent double-tap zoom and other gestures
+          }}
+        >
           {listing.floorPlans && listing.floorPlans[selectedFloorPlanIndex] && (
             <>
-              <div style={{ transform: `scale(${floorPlanZoom})`, transformOrigin: 'center', transition: 'transform 0.2s ease' }}>
+              <div 
+                ref={floorPlanModalRef}
+                style={{ 
+                  transform: `scale(${floorPlanZoom})`, 
+                  transformOrigin: 'center', 
+                  transition: floorPlanPinchStartDistanceRef.current === null ? 'transform 0.2s ease' : 'none',
+                  touchAction: 'none' // Prevent all default touch behaviors on the floor plan container
+                }}
+                onTouchStart={handleFloorPlanTouchStart}
+                onTouchMove={handleFloorPlanTouchMove}
+                onTouchEnd={handleFloorPlanTouchEnd}
+                onWheel={handleFloorPlanWheel}
+              >
                 <img
                   src={listing.floorPlans[selectedFloorPlanIndex]}
                   alt={`Floor Plan ${selectedFloorPlanIndex + 1}`}
@@ -1352,7 +1903,9 @@ const ListingCard: React.FC<ListingCardProps> = ({
                     maxWidth: '100%', 
                     maxHeight: '80vh', 
                     objectFit: 'contain',
-                    cursor: 'move'
+                    cursor: 'move',
+                    touchAction: 'none', // Prevent default touch behaviors
+                    userSelect: 'none' // Prevent text selection
                   }}
                   draggable={false}
                 />
