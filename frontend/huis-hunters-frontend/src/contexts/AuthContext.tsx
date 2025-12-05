@@ -7,7 +7,9 @@ import {
   onAuthStateChanged,
   updatePassword,
   sendPasswordResetEmail,
-  updateProfile
+  updateProfile,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -20,7 +22,7 @@ interface AuthContextType {
   signup: (email: string, password: string, name: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  changePassword: (newPassword: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 }
 
@@ -82,8 +84,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserData(null);
   };
 
-  const changePassword = async (newPassword: string) => {
-    if (!currentUser) throw new Error('No user logged in');
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    if (!currentUser || !currentUser.email) throw new Error('No user logged in');
+    
+    // Re-authenticate the user with their current password
+    const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+    await reauthenticateWithCredential(currentUser, credential);
+    
+    // Now update the password
     await updatePassword(currentUser, newPassword);
   };
 

@@ -13,6 +13,7 @@ import ListingCard from './ListingCard';
 import { useAuth } from '../contexts/AuthContext';
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useNavigate } from 'react-router-dom';
 
 interface MapListingCardProps {
   listing: Listing;
@@ -44,7 +45,9 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
   const [savedPropertyId, setSavedPropertyId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [toastHasLink, setToastHasLink] = useState(false);
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const outdoorSpaceString = getOutdoorSpaceString(listing);
   const publishedDate = listing.publishedDate ? listing.publishedDate.toDate() : null;
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -185,6 +188,7 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
         setIsSaved(false);
         setSavedPropertyId(null);
         setToastMessage('Removed from Saved Properties');
+        setToastHasLink(false);
         setShowToast(true);
       } else {
         const savedPropertyRef = doc(collection(db, 'savedProperties'));
@@ -198,6 +202,7 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
         setIsSaved(true);
         setSavedPropertyId(savedPropertyRef.id);
         setToastMessage('Added to Saved Properties');
+        setToastHasLink(true);
         setShowToast(true);
       }
     } catch (error) {
@@ -810,7 +815,29 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
           }}
         >
           <Toast.Body style={{ color: 'white', fontWeight: '500', fontSize: '0.9rem', padding: '0.75rem 1rem' }}>
-            {toastMessage}
+            {toastHasLink ? (
+              <>
+                Added to{' '}
+                <a
+                  href="/saved-properties"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/saved-properties');
+                    setShowToast(false);
+                  }}
+                  style={{
+                    color: 'white',
+                    textDecoration: 'underline',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Saved Properties
+                </a>
+              </>
+            ) : (
+              toastMessage
+            )}
           </Toast.Body>
         </Toast>
       </div>

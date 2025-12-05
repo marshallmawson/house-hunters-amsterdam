@@ -6,16 +6,19 @@ import { useNavigate } from 'react-router-dom';
 const ProfilePage: React.FC = () => {
   const { currentUser, userData, changePassword } = useAuth();
   const navigate = useNavigate();
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Note: Firebase Auth doesn't require current password to change password
-  // if the user is already authenticated. We'll just verify the new password.
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!currentPassword) {
+      return setError('Please enter your current password');
+    }
 
     if (newPassword !== confirmPassword) {
       return setError('New passwords do not match');
@@ -25,16 +28,26 @@ const ProfilePage: React.FC = () => {
       return setError('Password must be at least 6 characters');
     }
 
+    if (currentPassword === newPassword) {
+      return setError('New password must be different from your current password');
+    }
+
     try {
       setError('');
       setSuccess('');
       setLoading(true);
-      await changePassword(newPassword);
+      await changePassword(currentPassword, newPassword);
       setSuccess('Password changed successfully!');
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: any) {
-      setError(err.message || 'Failed to change password');
+      // Handle specific Firebase auth errors
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError('Current password is incorrect');
+      } else {
+        setError(err.message || 'Failed to change password');
+      }
     } finally {
       setLoading(false);
     }
@@ -148,6 +161,31 @@ const ProfilePage: React.FC = () => {
               Change Password
             </h5>
             <Form onSubmit={handlePasswordChange}>
+              <Form.Group className="mb-3">
+                <Form.Label style={{ 
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  fontWeight: '600',
+                  fontSize: '0.9rem',
+                  marginBottom: '0.5rem',
+                  color: '#495057'
+                }}>
+                  Current Password
+                </Form.Label>
+                <Form.Control
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                  placeholder="Enter your current password"
+                  style={{ 
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    borderRadius: '6px',
+                    border: '1px solid #ced4da',
+                    padding: '0.5rem 0.75rem'
+                  }}
+                />
+              </Form.Group>
+
               <Form.Group className="mb-3">
                 <Form.Label style={{ 
                   fontFamily: 'system-ui, -apple-system, sans-serif',

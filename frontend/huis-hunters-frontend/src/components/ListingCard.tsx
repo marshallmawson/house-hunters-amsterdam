@@ -90,6 +90,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const [showGridView, setShowGridView] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [toastHasLink, setToastHasLink] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const hasHandledForceOpen = useRef(false);
   const clickedImageIndex = useRef(0);
@@ -443,6 +444,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
           setIsSaved(false);
           setSavedPropertyId(null);
           setToastMessage('Removed from Saved Properties');
+          setToastHasLink(false);
           setShowToast(true);
         }
       } else {
@@ -458,6 +460,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
         setIsSaved(true);
         setSavedPropertyId(savedPropertyRef.id);
         setToastMessage('Added to Saved Properties');
+        setToastHasLink(true);
         setShowToast(true);
       }
     } catch (error) {
@@ -474,8 +477,9 @@ const ListingCard: React.FC<ListingCardProps> = ({
       setIsSaved(false);
       setSavedPropertyId(null);
       setShowUnsaveConfirm(false);
-      setToastMessage('Removed from Saved Properties');
-      setShowToast(true);
+          setToastMessage('Removed from Saved Properties');
+          setToastHasLink(false);
+          setShowToast(true);
     } catch (error) {
       console.error('Error unsaving property:', error);
       alert('Failed to unsave property');
@@ -591,11 +595,13 @@ const ListingCard: React.FC<ListingCardProps> = ({
       const url = getListingUrl();
       await navigator.clipboard.writeText(url);
       setToastMessage('URL copied to clipboard!');
+      setToastHasLink(false);
       setShowToast(true);
       setShowShareMenu(false);
     } catch (error) {
       console.error('Failed to copy URL:', error);
       setToastMessage('Failed to copy URL');
+      setToastHasLink(false);
       setShowToast(true);
     }
   };
@@ -2476,7 +2482,29 @@ const ListingCard: React.FC<ListingCardProps> = ({
           }}
         >
           <Toast.Body style={{ color: 'white', fontWeight: '500', fontSize: '0.9rem', padding: '0.75rem 1rem' }}>
-            {toastMessage}
+            {toastHasLink ? (
+              <>
+                Added to{' '}
+                <a
+                  href="/saved-properties"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/saved-properties');
+                    setShowToast(false);
+                  }}
+                  style={{
+                    color: 'white',
+                    textDecoration: 'underline',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Saved Properties
+                </a>
+              </>
+            ) : (
+              toastMessage
+            )}
           </Toast.Body>
         </Toast>
       </div>
