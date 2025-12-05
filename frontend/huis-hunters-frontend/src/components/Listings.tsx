@@ -765,7 +765,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
             const now = new Date();
             const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const cutoff = new Date(startOfToday);
-            cutoff.setDate(startOfToday.getDate() - (days - 1));
+            cutoff.setDate(startOfToday.getDate() - days);
 
             const publishedJsDate = listing.publishedDate.toDate();
             passesPublishedWithin = publishedJsDate >= cutoff;

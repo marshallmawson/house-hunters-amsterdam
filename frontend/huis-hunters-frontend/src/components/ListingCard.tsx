@@ -513,120 +513,140 @@ const ListingCard: React.FC<ListingCardProps> = ({
   };
 
   // Calculate distance between two touch points
-  const getTouchDistance = (touch1: React.Touch, touch2: React.Touch): number => {
+  const getTouchDistance = (touch1: Touch, touch2: Touch): number => {
     const dx = touch2.clientX - touch1.clientX;
     const dy = touch2.clientY - touch1.clientY;
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  // Handle touch start for pinch zoom
-  const handleImageTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      const distance = getTouchDistance(e.touches[0], e.touches[1]);
-      pinchStartDistanceRef.current = distance;
-      pinchStartZoomRef.current = imageZoom;
-      e.preventDefault(); // Prevent default pinch behavior
-      e.stopPropagation(); // Stop event bubbling
-      return false;
-    }
-  };
-
-  // Handle touch move for pinch zoom
-  const handleImageTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 2 && pinchStartDistanceRef.current !== null) {
-      const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
-      const scale = currentDistance / pinchStartDistanceRef.current;
-      const newZoom = Math.max(0.5, Math.min(3, pinchStartZoomRef.current * scale));
-      setImageZoom(newZoom);
-      e.preventDefault(); // Prevent default pinch behavior
-      e.stopPropagation(); // Stop event bubbling
-      return false;
-    }
-  };
-
-  // Handle touch end for pinch zoom
-  const handleImageTouchEnd = (e: React.TouchEvent) => {
-    if (e.touches.length < 2) {
-      pinchStartDistanceRef.current = null;
-    }
-    if (e.touches.length === 0) {
-      e.preventDefault(); // Prevent default behavior
-      e.stopPropagation(); // Stop event bubbling
-    }
-  };
-
-  // Handle wheel (trackpad pinch) for zoom
-  const handleImageWheel = (e: React.WheelEvent) => {
-    // Check if Ctrl/Cmd is pressed (trackpad pinch gesture)
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      e.stopPropagation();
+  // Setup native touch event listeners for pinch zoom (non-passive)
+  useEffect(() => {
+    if (showImageModal && imageModalRef.current) {
+      const imageContainer = imageModalRef.current;
       
-      // Calculate zoom delta from wheel delta
-      // Negative deltaY means zoom in, positive means zoom out
-      const zoomDelta = -e.deltaY * 0.01; // Adjust sensitivity
-      const newZoom = Math.max(0.5, Math.min(3, imageZoom + zoomDelta));
-      setImageZoom(newZoom);
+      const handleTouchStart = (e: TouchEvent) => {
+        if (e.touches.length === 2) {
+          const distance = getTouchDistance(e.touches[0], e.touches[1]);
+          pinchStartDistanceRef.current = distance;
+          pinchStartZoomRef.current = imageZoom;
+          e.preventDefault(); // Prevent default pinch behavior
+          e.stopPropagation(); // Stop event bubbling
+        }
+      };
+
+      const handleTouchMove = (e: TouchEvent) => {
+        if (e.touches.length === 2 && pinchStartDistanceRef.current !== null) {
+          const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
+          const scale = currentDistance / pinchStartDistanceRef.current;
+          const newZoom = Math.max(0.5, Math.min(3, pinchStartZoomRef.current * scale));
+          setImageZoom(newZoom);
+          e.preventDefault(); // Prevent default pinch behavior
+          e.stopPropagation(); // Stop event bubbling
+        }
+      };
+
+      const handleTouchEnd = (e: TouchEvent) => {
+        if (e.touches.length < 2) {
+          pinchStartDistanceRef.current = null;
+        }
+      };
+
+      const handleWheel = (e: WheelEvent) => {
+        // Check if Ctrl/Cmd is pressed (trackpad pinch gesture)
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Calculate zoom delta from wheel delta
+          // Negative deltaY means zoom in, positive means zoom out
+          const zoomDelta = -e.deltaY * 0.01; // Adjust sensitivity
+          const newZoom = Math.max(0.5, Math.min(3, imageZoom + zoomDelta));
+          setImageZoom(newZoom);
+        }
+      };
+
+      // Use native event listeners with non-passive option
+      imageContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
+      imageContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
+      imageContainer.addEventListener('touchend', handleTouchEnd, { passive: false });
+      imageContainer.addEventListener('wheel', handleWheel, { passive: false });
+
+      return () => {
+        imageContainer.removeEventListener('touchstart', handleTouchStart);
+        imageContainer.removeEventListener('touchmove', handleTouchMove);
+        imageContainer.removeEventListener('touchend', handleTouchEnd);
+        imageContainer.removeEventListener('wheel', handleWheel);
+      };
     }
-  };
+  }, [showImageModal, imageZoom]);
 
   // Calculate distance between two touch points for floor plans
-  const getFloorPlanTouchDistance = (touch1: React.Touch, touch2: React.Touch): number => {
+  const getFloorPlanTouchDistance = (touch1: Touch, touch2: Touch): number => {
     const dx = touch2.clientX - touch1.clientX;
     const dy = touch2.clientY - touch1.clientY;
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  // Handle touch start for floor plan pinch zoom
-  const handleFloorPlanTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      const distance = getFloorPlanTouchDistance(e.touches[0], e.touches[1]);
-      floorPlanPinchStartDistanceRef.current = distance;
-      floorPlanPinchStartZoomRef.current = floorPlanZoom;
-      e.preventDefault(); // Prevent default pinch behavior
-      e.stopPropagation(); // Stop event bubbling
-      return false;
-    }
-  };
-
-  // Handle touch move for floor plan pinch zoom
-  const handleFloorPlanTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 2 && floorPlanPinchStartDistanceRef.current !== null) {
-      const currentDistance = getFloorPlanTouchDistance(e.touches[0], e.touches[1]);
-      const scale = currentDistance / floorPlanPinchStartDistanceRef.current;
-      const newZoom = Math.max(0.5, Math.min(3, floorPlanPinchStartZoomRef.current * scale));
-      setFloorPlanZoom(newZoom);
-      e.preventDefault(); // Prevent default pinch behavior
-      e.stopPropagation(); // Stop event bubbling
-      return false;
-    }
-  };
-
-  // Handle touch end for floor plan pinch zoom
-  const handleFloorPlanTouchEnd = (e: React.TouchEvent) => {
-    if (e.touches.length < 2) {
-      floorPlanPinchStartDistanceRef.current = null;
-    }
-    if (e.touches.length === 0) {
-      e.preventDefault(); // Prevent default behavior
-      e.stopPropagation(); // Stop event bubbling
-    }
-  };
-
-  // Handle wheel (trackpad pinch) for floor plan zoom
-  const handleFloorPlanWheel = (e: React.WheelEvent) => {
-    // Check if Ctrl/Cmd is pressed (trackpad pinch gesture)
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      e.stopPropagation();
+  // Setup native touch event listeners for floor plan pinch zoom (non-passive)
+  useEffect(() => {
+    if (showFloorPlanModal && floorPlanModalRef.current) {
+      const floorPlanContainer = floorPlanModalRef.current;
       
-      // Calculate zoom delta from wheel delta
-      // Negative deltaY means zoom in, positive means zoom out
-      const zoomDelta = -e.deltaY * 0.01; // Adjust sensitivity
-      const newZoom = Math.max(0.5, Math.min(3, floorPlanZoom + zoomDelta));
-      setFloorPlanZoom(newZoom);
+      const handleTouchStart = (e: TouchEvent) => {
+        if (e.touches.length === 2) {
+          const distance = getFloorPlanTouchDistance(e.touches[0], e.touches[1]);
+          floorPlanPinchStartDistanceRef.current = distance;
+          floorPlanPinchStartZoomRef.current = floorPlanZoom;
+          e.preventDefault(); // Prevent default pinch behavior
+          e.stopPropagation(); // Stop event bubbling
+        }
+      };
+
+      const handleTouchMove = (e: TouchEvent) => {
+        if (e.touches.length === 2 && floorPlanPinchStartDistanceRef.current !== null) {
+          const currentDistance = getFloorPlanTouchDistance(e.touches[0], e.touches[1]);
+          const scale = currentDistance / floorPlanPinchStartDistanceRef.current;
+          const newZoom = Math.max(0.5, Math.min(3, floorPlanPinchStartZoomRef.current * scale));
+          setFloorPlanZoom(newZoom);
+          e.preventDefault(); // Prevent default pinch behavior
+          e.stopPropagation(); // Stop event bubbling
+        }
+      };
+
+      const handleTouchEnd = (e: TouchEvent) => {
+        if (e.touches.length < 2) {
+          floorPlanPinchStartDistanceRef.current = null;
+        }
+      };
+
+      const handleWheel = (e: WheelEvent) => {
+        // Check if Ctrl/Cmd is pressed (trackpad pinch gesture)
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Calculate zoom delta from wheel delta
+          // Negative deltaY means zoom in, positive means zoom out
+          const zoomDelta = -e.deltaY * 0.01; // Adjust sensitivity
+          const newZoom = Math.max(0.5, Math.min(3, floorPlanZoom + zoomDelta));
+          setFloorPlanZoom(newZoom);
+        }
+      };
+
+      // Use native event listeners with non-passive option
+      floorPlanContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
+      floorPlanContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
+      floorPlanContainer.addEventListener('touchend', handleTouchEnd, { passive: false });
+      floorPlanContainer.addEventListener('wheel', handleWheel, { passive: false });
+
+      return () => {
+        floorPlanContainer.removeEventListener('touchstart', handleTouchStart);
+        floorPlanContainer.removeEventListener('touchmove', handleTouchMove);
+        floorPlanContainer.removeEventListener('touchend', handleTouchEnd);
+        floorPlanContainer.removeEventListener('wheel', handleWheel);
+      };
     }
-  };
+  }, [showFloorPlanModal, floorPlanZoom]);
 
 
   const handleCarouselSelect = (selectedIndex: number | null) => {
@@ -1680,10 +1700,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
                   transition: pinchStartDistanceRef.current === null ? 'transform 0.2s ease' : 'none',
                   touchAction: 'none' // Prevent all default touch behaviors on the image container
                 }}
-                onTouchStart={handleImageTouchStart}
-                onTouchMove={handleImageTouchMove}
-                onTouchEnd={handleImageTouchEnd}
-                onWheel={handleImageWheel}
               >
                 <img
                   src={listing.imageGallery[selectedImageModalIndex]}
@@ -1891,10 +1907,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
                   transition: floorPlanPinchStartDistanceRef.current === null ? 'transform 0.2s ease' : 'none',
                   touchAction: 'none' // Prevent all default touch behaviors on the floor plan container
                 }}
-                onTouchStart={handleFloorPlanTouchStart}
-                onTouchMove={handleFloorPlanTouchMove}
-                onTouchEnd={handleFloorPlanTouchEnd}
-                onWheel={handleFloorPlanWheel}
               >
                 <img
                   src={listing.floorPlans[selectedFloorPlanIndex]}

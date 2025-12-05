@@ -19,8 +19,8 @@ def compute_published_cutoff(published_within_days: int) -> Optional[datetime.da
     """Return a cutoff datetime for listings published within N calendar days.
 
     Uses calendar days including today. For example:
-    - 1 => start of today
-    - 3 => start of the day two days ago (today + previous 2 days)
+    - 1 => start of yesterday (today + yesterday = 2 calendar days)
+    - 3 => start of 3 days ago (today + 3 previous days = 4 calendar days)
     """
     try:
         if not published_within_days or published_within_days <= 0:
@@ -30,7 +30,7 @@ def compute_published_cutoff(published_within_days: int) -> Optional[datetime.da
         tz = datetime.timezone(datetime.timedelta(hours=1))
         now = datetime.datetime.now(tz)
         start_of_today = datetime.datetime(now.year, now.month, now.day, tzinfo=tz)
-        cutoff = start_of_today - datetime.timedelta(days=published_within_days - 1)
+        cutoff = start_of_today - datetime.timedelta(days=published_within_days)
         return cutoff
     except Exception as e:
         log_timestamp(f"❗️ Error computing published cutoff: {e}")
