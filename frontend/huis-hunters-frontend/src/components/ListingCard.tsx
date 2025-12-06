@@ -39,6 +39,7 @@ interface ListingCardProps {
   isNoteEditing?: boolean;
   onNoteEditStart?: () => void;
   onNoteEditCancel?: () => void;
+  isNew?: boolean;
 }
 
 const getOutdoorSpaceString = (listing: Listing) => {
@@ -67,7 +68,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
   onNoteChange,
   isNoteEditing,
   onNoteEditStart,
-  onNoteEditCancel
+  onNoteEditCancel,
+  isNew
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -949,6 +951,27 @@ const ListingCard: React.FC<ListingCardProps> = ({
             </Carousel.Item>
           ))}
         </Carousel>
+        {/* New Badge - Top Left Corner */}
+        {isNew && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '10px',
+              left: '10px',
+              backgroundColor: 'rgba(40, 167, 69, 0.7)',
+              color: 'white',
+              fontSize: '0.7rem',
+              fontWeight: '600',
+              padding: '0.25rem 0.5rem',
+              borderRadius: '4px',
+              zIndex: 5,
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            New
+          </div>
+        )}
         {/* Heart Save Button - Top Right Corner (always visible, prompts login when needed) */}
         <button
           onClick={(e) => {

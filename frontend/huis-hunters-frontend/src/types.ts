@@ -43,6 +43,11 @@ export interface Listing {
   searchScore?: number;
   available?: boolean;
   pricePerSquareMeter?: number;
+  processedAt?: {
+    seconds: number;
+    nanoseconds: number;
+    toDate: () => Date;
+  };
 }
 
 export type PropertyStatus = 

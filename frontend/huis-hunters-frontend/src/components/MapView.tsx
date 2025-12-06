@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -357,7 +357,8 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
             yearBuilt: result.yearBuilt,
             neighborhood: result.neighborhood,
             area: result.area,
-            searchScore: result.searchScore
+            searchScore: result.searchScore,
+            processedAt: result.processedAt
           };
         });
 
@@ -430,6 +431,46 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
 
     setFilteredListings(result);
   }, [listings, searchResults, useAISearch, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
+
+  // Calculate max processedAt date from all listings (both regular and search results)
+  const maxProcessedAtDate = useMemo(() => {
+    const allListings = useAISearch ? searchResults : listings;
+    if (allListings.length === 0) return null;
+
+    let maxDate: Date | null = null;
+
+    allListings.forEach(listing => {
+      if (listing.processedAt && typeof listing.processedAt.toDate === 'function') {
+        const processedDate = listing.processedAt.toDate();
+        if (!maxDate || processedDate > maxDate) {
+          maxDate = processedDate;
+        }
+      }
+    });
+
+    return maxDate;
+  }, [listings, searchResults, useAISearch]);
+
+  // Helper function to normalize date to day level (remove time component)
+  const normalizeToDay = (date: Date): Date => {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  };
+
+  // Helper function to check if a listing should show the "New" badge
+  const isListingNew = useCallback((listing: Listing): boolean => {
+    if (!maxProcessedAtDate || !listing.processedAt) return false;
+
+    try {
+      const listingProcessedDate = listing.processedAt.toDate();
+      const normalizedListingDate = normalizeToDay(listingProcessedDate);
+      const normalizedMaxDate = normalizeToDay(maxProcessedAtDate);
+
+      return normalizedListingDate.getTime() === normalizedMaxDate.getTime();
+    } catch (error) {
+      console.error('Error checking if listing is new:', error);
+      return false;
+    }
+  }, [maxProcessedAtDate]);
 
   // Initialize map and create markers
   useEffect(() => {
@@ -1227,6 +1268,7 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
             const timeSinceClick = Date.now() - lastMarkerClickTimeRef.current;
             return timeSinceClick < 500 || pendingListingRef.current !== null;
           }}
+          isNew={isListingNew(selectedListing)}
         />
       )}
     </div>

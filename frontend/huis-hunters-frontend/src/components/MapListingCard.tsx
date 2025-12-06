@@ -24,6 +24,7 @@ interface MapListingCardProps {
   onRequireLogin?: () => void;
   // Function to check if a marker was just clicked (to prevent backdrop from closing)
   wasMarkerJustClicked?: () => boolean;
+  isNew?: boolean;
 }
 
 const getOutdoorSpaceString = (listing: Listing) => {
@@ -38,7 +39,7 @@ const getOutdoorSpaceString = (listing: Listing) => {
   return `${outdoorSpaces.join(' + ')}${area}`;
 };
 
-const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onModalToggle, isAnyModalOpen, onRequireLogin, wasMarkerJustClicked }) => {
+const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onModalToggle, isAnyModalOpen, onRequireLogin, wasMarkerJustClicked, isNew }) => {
   const [showFullModal, setShowFullModal] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [isSaved, setIsSaved] = useState(false);
@@ -610,6 +611,27 @@ const MapListingCard: React.FC<MapListingCardProps> = ({ listing, onClose, onMod
                 </Carousel.Item>
               ))}
             </Carousel>
+            {/* New Badge - To the right of close button */}
+            {isNew && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '10px',
+                  left: '48px',
+                  backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                  color: 'white',
+                  fontSize: '0.7rem',
+                  fontWeight: '600',
+                  padding: '0.25rem 0.5rem',
+                  borderRadius: '4px',
+                  zIndex: 5,
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                New
+              </div>
+            )}
           </div>
         )}
 

@@ -653,7 +653,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
           yearBuilt: result.yearBuilt,
           neighborhood: result.neighborhood,
           area: result.area,
-          searchScore: result.searchScore
+          searchScore: result.searchScore,
+          processedAt: result.processedAt
         };
       });
 
@@ -852,6 +853,46 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     // Reset to first page when filters change
     setCurrentPage(1);
   }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, modalListingId]);
+
+  // Calculate max processedAt date from all listings (both regular and search results)
+  const maxProcessedAtDate = useMemo(() => {
+    const allListings = useAISearch ? searchResults : listings;
+    if (allListings.length === 0) return null;
+
+    let maxDate: Date | null = null;
+
+    allListings.forEach(listing => {
+      if (listing.processedAt && typeof listing.processedAt.toDate === 'function') {
+        const processedDate = listing.processedAt.toDate();
+        if (!maxDate || processedDate > maxDate) {
+          maxDate = processedDate;
+        }
+      }
+    });
+
+    return maxDate;
+  }, [listings, searchResults, useAISearch]);
+
+  // Helper function to normalize date to day level (remove time component)
+  const normalizeToDay = (date: Date): Date => {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  };
+
+  // Helper function to check if a listing should show the "New" badge
+  const isListingNew = useCallback((listing: Listing): boolean => {
+    if (!maxProcessedAtDate || !listing.processedAt) return false;
+
+    try {
+      const listingProcessedDate = listing.processedAt.toDate();
+      const normalizedListingDate = normalizeToDay(listingProcessedDate);
+      const normalizedMaxDate = normalizeToDay(maxProcessedAtDate);
+
+      return normalizedListingDate.getTime() === normalizedMaxDate.getTime();
+    } catch (error) {
+      console.error('Error checking if listing is new:', error);
+      return false;
+    }
+  }, [maxProcessedAtDate]);
 
   // Separate useEffect to update URL parameters only when filter values change
   // Skip updating URL if we're on a listing detail page (modal is open) to keep URL clean
@@ -1762,6 +1803,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
             onModalToggle={handleModalToggle} 
             forceOpen={true}
             onRequireLogin={onRequireLogin}
+            isNew={isListingNew(modalListing)}
           />
         </div>
       )}
@@ -1777,6 +1819,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                 onModalToggle={handleModalToggle} 
                 forceOpen={listing.id === modalListingId && !!modalListingId}
                 onRequireLogin={onRequireLogin}
+                isNew={isListingNew(listing)}
               />
             </Col>
           ))}
