@@ -250,7 +250,14 @@ def transform_listing_data(raw_item):
     photos_info = raw_item.get("Media", {}).get("Photos", {})
     photo_items = photos_info.get("Items", [])
     photo_base_url = photos_info.get("MediaBaseUrl", "")
-    gallery = [photo_base_url.replace("{id}", p.get("Id")) for p in photo_items[:50]]
+    
+    # Only create gallery URLs if we have a valid base URL
+    gallery = []
+    if photo_base_url and photo_base_url.strip() and "{id}" in photo_base_url:
+        gallery = [photo_base_url.replace("{id}", p.get("Id")) for p in photo_items[:50] if p.get("Id")]
+        # Filter out any invalid URLs (empty strings, malformed URLs)
+        gallery = [url for url in gallery if url and url.strip() and (url.startswith('http://') or url.startswith('https://'))]
+    
     main_image = gallery[0] if gallery else None
 
     floor_plans_raw = raw_item.get("Media", {}).get("LegacyFloorPlan", {}).get("Items", [])

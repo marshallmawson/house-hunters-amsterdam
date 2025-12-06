@@ -260,23 +260,55 @@ def get_listing_html(listing_id):
         bathrooms = listing_data.get('bathrooms', 0)
         living_area = listing_data.get('livingArea', 0)
         image_gallery = listing_data.get('imageGallery', [])
+        main_image = listing_data.get('mainImage')
         
-        logger.info(f"Listing {listing_id}: address={address}, imageGallery length={len(image_gallery) if image_gallery else 0}")
+        logger.info(f"Listing {listing_id}: address={address}, imageGallery length={len(image_gallery) if image_gallery else 0}, mainImage={bool(main_image)}")
         
-        # Use first image if available, otherwise default logo
-        # Ensure image URL is absolute (starts with http:// or https://)
-        raw_image_url = image_gallery[0] if image_gallery and len(image_gallery) > 0 else None
-        if raw_image_url:
-            logger.info(f"Raw image URL: {raw_image_url}")
-            # If URL is relative, make it absolute (assuming it's from funda.nl)
-            if raw_image_url.startswith('http://') or raw_image_url.startswith('https://'):
-                image_url = raw_image_url
-            else:
-                # If relative URL, prepend https:// (assuming funda.nl)
-                image_url = f'https://www.funda.nl{raw_image_url}' if raw_image_url.startswith('/') else f'https://{raw_image_url}'
-            logger.info(f"Final image URL: {image_url}")
+        # Helper function to validate and normalize a single image URL
+        def validate_image_url(img_url):
+            if not img_url or not isinstance(img_url, str) or not img_url.strip():
+                return None
+            img_url = img_url.strip()
+            if img_url.startswith('http://') or img_url.startswith('https://'):
+                # Valid absolute URL - ensure it has a proper domain
+                if len(img_url) > 10 and '.' in img_url.split('://', 1)[-1].split('/')[0]:
+                    return img_url
+            elif img_url.startswith('/'):
+                # Relative URL - make it absolute
+                return f'https://www.funda.nl{img_url}'
+            elif '.' in img_url and '/' in img_url and not img_url.startswith('{'):
+                # Looks like a partial URL with path - might be valid
+                if not img_url.startswith('//'):
+                    return f'https://{img_url}'
+                else:
+                    return f'https:{img_url}'
+            return None
+        
+        # Filter and validate image URLs - remove empty, None, or invalid URLs
+        valid_image_urls = []
+        if image_gallery:
+            for img_url in image_gallery:
+                validated_url = validate_image_url(img_url)
+                if validated_url:
+                    valid_image_urls.append(validated_url)
+        
+        # If no valid URLs from gallery, try mainImage as fallback
+        if not valid_image_urls and main_image:
+            validated_url = validate_image_url(main_image)
+            if validated_url:
+                valid_image_urls.append(validated_url)
+        
+        logger.info(f"Valid image URLs found: {len(valid_image_urls)}")
+        
+        # Use first valid image if available, otherwise default logo
+        if valid_image_urls:
+            image_url = valid_image_urls[0]
+            logger.info(f"Using image URL: {image_url}")
+            # Log all image URLs for debugging
+            logger.info(f"All image URLs in gallery: {image_gallery[:3] if image_gallery else 'None'}")  # Log first 3
         else:
-            logger.warning(f"No image found for listing {listing_id}, using default logo")
+            logger.warning(f"No valid image found for listing {listing_id}, using default logo")
+            logger.warning(f"Raw imageGallery was: {image_gallery[:3] if image_gallery else 'None'}")
             image_url = 'https://www.huishunters.com/logo512.png'
         
         # Build description
