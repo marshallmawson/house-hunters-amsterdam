@@ -1339,7 +1339,41 @@ const ListingCard: React.FC<ListingCardProps> = ({
     </Card>
 
     <Modal show={showModal} onHide={handleHideModal} size="lg" centered>
-        <Modal.Header closeButton>
+        <Modal.Header style={{ position: 'relative' }}>
+          {/* Close button - Top right corner of modal header (matching MapListingCard style) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleHideModal();
+            }}
+            style={{
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              backgroundColor: 'rgba(0,0,0,0.6)',
+              border: 'none',
+              borderRadius: '50%',
+              width: '24px',
+              height: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              zIndex: 10,
+              color: 'white',
+              fontSize: '16px',
+              lineHeight: '1',
+              padding: 0
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.8)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.6)';
+            }}
+          >
+            ×
+          </button>
           <div ref={modalHeaderRef} style={{ width: '100%', paddingRight: '2rem', position: 'relative' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem', gap: '0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1 1 auto', minWidth: 0 }}>
@@ -1860,7 +1894,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
 
               {/* Agent Info */}
               <div style={{ 
-                marginBottom: '0.5rem',
+                marginBottom: '1.5rem',
                 fontSize: '0.85rem',
                 color: '#495057'
               }}>

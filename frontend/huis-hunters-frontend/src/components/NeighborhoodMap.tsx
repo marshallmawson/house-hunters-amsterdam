@@ -197,7 +197,7 @@ const NeighborhoodMap: React.FC<NeighborhoodMapProps> = ({
           </div>
         ) : (
           <>
-            <Row className="mb-3">
+            <Row className="mb-2">
               <Col>
                 <div className="d-flex justify-content-between align-items-center">
                   <div>
@@ -206,12 +206,15 @@ const NeighborhoodMap: React.FC<NeighborhoodMapProps> = ({
                       Selected: {selectedNeighborhoods.length} of {allNeighborhoodNames.length}
                     </small>
                   </div>
-                  <div>
+                  <div className="d-flex flex-column flex-md-row gap-2">
                     <Button 
                       variant="outline-secondary" 
                       size="sm" 
                       onClick={handleClearAll}
-                      className="me-2"
+                      style={{ 
+                        minWidth: '90px',
+                        padding: '0.375rem 0.75rem'
+                      }}
                     >
                       Clear All
                     </Button>
@@ -219,6 +222,10 @@ const NeighborhoodMap: React.FC<NeighborhoodMapProps> = ({
                       variant="outline-primary" 
                       size="sm" 
                       onClick={handleSelectAll}
+                      style={{ 
+                        minWidth: '90px',
+                        padding: '0.375rem 0.75rem'
+                      }}
                     >
                       Select All
                     </Button>
@@ -230,7 +237,7 @@ const NeighborhoodMap: React.FC<NeighborhoodMapProps> = ({
             <div 
               ref={mapRef} 
               style={{ 
-                height: '500px', 
+                height: '350px', 
                 width: '100%',
                 borderRadius: '8px',
                 border: '1px solid #dee2e6'
@@ -238,9 +245,9 @@ const NeighborhoodMap: React.FC<NeighborhoodMapProps> = ({
             />
             
             {selectedNeighborhoods.length > 0 && (
-              <div className="mt-3">
-                <h6>Selected Neighborhoods:</h6>
-                <div className="d-flex flex-wrap gap-1">
+              <div className="mt-2">
+                <h6 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>Selected Neighborhoods:</h6>
+                <div className="d-flex flex-wrap gap-1" style={{ maxHeight: '80px', overflowY: 'auto' }}>
                   {selectedNeighborhoods.map(neighborhood => (
                     <span 
                       key={neighborhood}

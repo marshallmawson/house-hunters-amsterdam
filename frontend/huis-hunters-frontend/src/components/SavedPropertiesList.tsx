@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { SavedProperty, PropertyStatus } from '../types';
 import ListingCard from './ListingCard';
-import { Container, Row, Col, Form, Dropdown, Button, Badge, Modal, FormGroup } from 'react-bootstrap';
+import { Container, Row, Col, Dropdown, Button, Badge, Modal, FormGroup, Form } from 'react-bootstrap';
 
 interface SavedPropertiesListProps {
   savedProperties: (SavedProperty & { listing?: any })[];
@@ -18,9 +18,6 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
   onNoteChange,
   loading
 }) => {
-  const [statusFilter, setStatusFilter] = useState<PropertyStatus | 'all'>('all');
-  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'unavailable'>('all');
-  const [sortBy, setSortBy] = useState<'date-added-new' | 'date-added-old' | 'status-date' | 'price'>('date-added-new');
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<SavedProperty | null>(null);
   const [viewingDate, setViewingDate] = useState('');
@@ -39,82 +36,79 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
     'offer rejected'
   ];
 
-  const filteredAndSorted = useMemo(() => {
-    let filtered = [...savedProperties];
+  const { availableProperties, unavailableProperties } = useMemo(() => {
+    // Separate available and unavailable properties
+    const available = savedProperties.filter(sp => sp.listing?.available !== false);
+    const unavailable = savedProperties.filter(sp => sp.listing?.available === false);
 
-    // Filter by status
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(sp => sp.status === statusFilter);
-    }
+    // Define status order: to make an offer, viewing scheduled, offer entered, to contact, then any other status
+    const getStatusOrder = (status: PropertyStatus): number => {
+      switch (status) {
+        case 'to make an offer':
+          return 1;
+        case 'viewing scheduled':
+          return 2;
+        case 'offer entered':
+          return 3;
+        case 'to contact':
+          return 4;
+        default:
+          return 5; // All other statuses (viewed, not interested, offer rejected)
+      }
+    };
 
-    // Filter by availability
-    if (availabilityFilter === 'available') {
-      filtered = filtered.filter(sp => sp.listing?.available !== false);
-    } else if (availabilityFilter === 'unavailable') {
-      filtered = filtered.filter(sp => sp.listing?.available === false);
-    }
+    // Helper to get sort date (viewing date if available, otherwise listing date)
+    const getSortDate = (sp: SavedProperty & { listing?: any }): number | null => {
+      // Prefer viewing date if available
+      if (sp.viewingScheduledAt?.seconds) {
+        return sp.viewingScheduledAt.seconds;
+      }
+      // Otherwise use listing date
+      if (sp.listing?.publishedDate?.seconds) {
+        return sp.listing.publishedDate.seconds;
+      }
+      return null;
+    };
 
-    // Separate available and unavailable
-    const available = filtered.filter(sp => sp.listing?.available !== false);
-    const unavailable = filtered.filter(sp => sp.listing?.available === false);
-
-    // Sort available properties
+    // Sort available properties: by status first, then by viewing date DESC (if available), otherwise listing date DESC
     available.sort((a, b) => {
-      switch (sortBy) {
-        case 'date-added-new':
-          return b.addedAt.seconds - a.addedAt.seconds;
-        case 'date-added-old':
-          return a.addedAt.seconds - b.addedAt.seconds;
-        case 'status-date':
-          const statusOrder: Record<PropertyStatus, number> = {
-            'to contact': 1,
-            'viewing scheduled': 2,
-            'viewed': 3,
-            'not interested': 4,
-            'to make an offer': 5,
-            'offer entered': 6,
-            'offer rejected': 7
-          };
-          const statusDiff = statusOrder[a.status] - statusOrder[b.status];
-          if (statusDiff !== 0) return statusDiff;
-          return b.addedAt.seconds - a.addedAt.seconds;
-        case 'price':
-          return (a.listing?.price || 0) - (b.listing?.price || 0);
-        default:
-          return 0;
+      // First sort by status
+      const statusDiff = getStatusOrder(a.status) - getStatusOrder(b.status);
+      if (statusDiff !== 0) return statusDiff;
+
+      const aDate = getSortDate(a);
+      const bDate = getSortDate(b);
+
+      // If both have dates, sort DESC
+      if (aDate && bDate) {
+        return bDate - aDate;
       }
+      // If one has date and other doesn't, prioritize the one with date
+      if (aDate && !bDate) return -1;
+      if (!aDate && bDate) return 1;
+
+      // Fallback to added date DESC if neither has viewing or listing date
+      return b.addedAt.seconds - a.addedAt.seconds;
     });
 
-    // Sort unavailable properties
+    // Sort unavailable properties: by listing date DESC only
     unavailable.sort((a, b) => {
-      switch (sortBy) {
-        case 'date-added-new':
-          return b.addedAt.seconds - a.addedAt.seconds;
-        case 'date-added-old':
-          return a.addedAt.seconds - b.addedAt.seconds;
-        case 'status-date':
-          const statusOrder: Record<PropertyStatus, number> = {
-            'to contact': 1,
-            'viewing scheduled': 2,
-            'viewed': 3,
-            'not interested': 4,
-            'to make an offer': 5,
-            'offer entered': 6,
-            'offer rejected': 7
-          };
-          const statusDiff = statusOrder[a.status] - statusOrder[b.status];
-          if (statusDiff !== 0) return statusDiff;
-          return b.addedAt.seconds - a.addedAt.seconds;
-        case 'price':
-          return (a.listing?.price || 0) - (b.listing?.price || 0);
-        default:
-          return 0;
+      const aListingDate = a.listing?.publishedDate?.seconds;
+      const bListingDate = b.listing?.publishedDate?.seconds;
+
+      if (aListingDate && bListingDate) {
+        return bListingDate - aListingDate;
       }
+      // If one has listing date and other doesn't, prioritize the one with date
+      if (aListingDate && !bListingDate) return -1;
+      if (!aListingDate && bListingDate) return 1;
+
+      // Fallback to added date DESC if neither has listing date
+      return b.addedAt.seconds - a.addedAt.seconds;
     });
 
-    // Return available first, then unavailable
-    return [...available, ...unavailable];
-  }, [savedProperties, statusFilter, availabilityFilter, sortBy]);
+    return { availableProperties: available, unavailableProperties: unavailable };
+  }, [savedProperties]);
 
 
   const handleStatusSubmit = () => {
@@ -246,172 +240,168 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
     );
   }
 
-  return (
-    <Container>
-      {/* Filters and Sort */}
-      <Row className="mb-4">
-        <Col md={4}>
-          <Form.Label><strong>Filter by Status:</strong></Form.Label>
-          <Form.Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PropertyStatus | 'all')}>
-            <option value="all">All Statuses</option>
-            {statusOptions.map(status => (
-              <option key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</option>
-            ))}
-          </Form.Select>
-        </Col>
-        <Col md={4}>
-          <Form.Label><strong>Filter by Availability:</strong></Form.Label>
-          <Form.Select value={availabilityFilter} onChange={(e) => setAvailabilityFilter(e.target.value as any)}>
-            <option value="all">All</option>
-            <option value="available">Available</option>
-            <option value="unavailable">Unavailable</option>
-          </Form.Select>
-        </Col>
-        <Col md={4}>
-          <Form.Label><strong>Sort by:</strong></Form.Label>
-          <Form.Select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
-            <option value="date-added-new">Date Added (Newest)</option>
-            <option value="date-added-old">Date Added (Oldest)</option>
-            <option value="status-date">Status + Date Added</option>
-            <option value="price">Price (Low to High)</option>
-          </Form.Select>
-        </Col>
-      </Row>
-
-      {/* Results count */}
-      <div className="mb-3">
-        <strong>Showing {filteredAndSorted.length} of {savedProperties.length} saved properties</strong>
-      </div>
-
-      {/* Properties List */}
-      <Row>
-        {filteredAndSorted.map(savedProp => {
-          if (!savedProp.listing) {
-            return (
-              <Col key={savedProp.id} sm={12} md={6} lg={4}>
-                <div className="card mb-3">
-                  <div className="card-body">
-                    <h6>Property {savedProp.listingId}</h6>
-                    <p className="text-muted">Listing data not available</p>
-                    <Badge bg="secondary" className="me-2">{savedProp.status}</Badge>
-                    {savedProp.listing?.available === false && (
-                      <Badge bg="danger">Unavailable</Badge>
-                    )}
-                    <div className="mt-2">
-                      <Button
-                        variant="outline-danger"
-                        size="sm"
-                        onClick={() => onUnsave(savedProp.id)}
-                      >
-                        Unsave
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </Col>
-            );
-          }
-
-          return (
-            <Col key={savedProp.id} sm={12} md={6} lg={4} className="mb-4">
-              <div style={{ position: 'relative' }}>
-                {/* Status Dropdown - Top Left Corner Over Image */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '10px',
-                    left: '10px',
-                    zIndex: 6
-                  }}
+  // Helper function to render a property card
+  const renderPropertyCard = (savedProp: SavedProperty & { listing?: any }) => {
+    if (!savedProp.listing) {
+      return (
+        <Col key={savedProp.id} sm={12} md={6} lg={4}>
+          <div className="card mb-3">
+            <div className="card-body">
+              <h6>Property {savedProp.listingId}</h6>
+              <p className="text-muted">Listing data not available</p>
+              <Badge bg="secondary" className="me-2">{savedProp.status}</Badge>
+              {savedProp.listing?.available === false && (
+                <Badge bg="danger">Unavailable</Badge>
+              )}
+              <div className="mt-2">
+                <Button
+                  variant="outline-danger"
+                  size="sm"
+                  onClick={() => onUnsave(savedProp.id)}
                 >
-                  <Dropdown>
-                    <Dropdown.Toggle
-                      variant="light"
-                      size="sm"
-                      style={{
-                        backgroundColor: 'white',
-                        border: '1px solid #dee2e6',
-                        borderRadius: '6px',
-                        fontSize: '0.85rem',
-                        fontWeight: '500',
-                        padding: '0.35rem 0.75rem',
-                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-                        minWidth: '140px',
-                        color: '#495057'
-                      }}
-                    >
-                      {savedProp.status.charAt(0).toUpperCase() + savedProp.status.slice(1)}
-                    </Dropdown.Toggle>
-                    <Dropdown.Menu>
-                      {statusOptions.map(status => (
-                        <Dropdown.Item
-                          key={status}
-                          onClick={() => {
-                            const newProp = { ...savedProp, status };
-                            setSelectedProperty(newProp);
-                            if (status === 'viewing scheduled') {
-                              // If already has viewing scheduled date, populate it
-                              if (savedProp.viewingScheduledAt) {
-                                const date = savedProp.viewingScheduledAt.toDate();
-                                setViewingDate(date.toISOString().split('T')[0]);
-                                setViewingTime(date.toTimeString().split(' ')[0].slice(0, 5));
-                              } else {
-                                setViewingDate('');
-                                setViewingTime('');
-                              }
-                              setShowStatusModal(true);
-                            } else {
-                              onStatusChange(savedProp.id, status);
-                            }
-                          }}
-                        >
-                          {status.charAt(0).toUpperCase() + status.slice(1)}
-                        </Dropdown.Item>
-                      ))}
-                    </Dropdown.Menu>
-                  </Dropdown>
-                </div>
-                
-                {/* Unavailable Badge - Top Right Corner Over Image */}
-                {savedProp.listing.available === false && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '10px',
-                      right: '10px',
-                      zIndex: 6
+                  Unsave
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Col>
+      );
+    }
+
+    return (
+      <Col key={savedProp.id} sm={12} md={6} lg={4} className="mb-4">
+        <div style={{ position: 'relative' }}>
+          {/* Status Dropdown - Top Left Corner Over Image */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '10px',
+              left: '10px',
+              zIndex: 6
+            }}
+          >
+            <Dropdown>
+              <Dropdown.Toggle
+                variant="light"
+                size="sm"
+                style={{
+                  backgroundColor: 'white',
+                  border: '1px solid #dee2e6',
+                  borderRadius: '6px',
+                  fontSize: '0.85rem',
+                  fontWeight: '500',
+                  padding: '0.35rem 0.75rem',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                  minWidth: '140px',
+                  color: '#495057'
+                }}
+              >
+                {savedProp.status.charAt(0).toUpperCase() + savedProp.status.slice(1)}
+              </Dropdown.Toggle>
+              <Dropdown.Menu>
+                {statusOptions.map(status => (
+                  <Dropdown.Item
+                    key={status}
+                    onClick={() => {
+                      const newProp = { ...savedProp, status };
+                      setSelectedProperty(newProp);
+                      if (status === 'viewing scheduled') {
+                        // If already has viewing scheduled date, populate it
+                        if (savedProp.viewingScheduledAt) {
+                          const date = savedProp.viewingScheduledAt.toDate();
+                          setViewingDate(date.toISOString().split('T')[0]);
+                          setViewingTime(date.toTimeString().split(' ')[0].slice(0, 5));
+                        } else {
+                          setViewingDate('');
+                          setViewingTime('');
+                        }
+                        setShowStatusModal(true);
+                      } else {
+                        onStatusChange(savedProp.id, status);
+                      }
                     }}
                   >
-                    <Badge bg="danger" style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}>
-                      Unavailable
-                    </Badge>
-                  </div>
-                )}
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Menu>
+            </Dropdown>
+          </div>
+          
+          {/* Unavailable Badge - Top Right Corner Over Image */}
+          {savedProp.listing.available === false && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                zIndex: 6
+              }}
+            >
+              <Badge bg="danger" style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}>
+                Unavailable
+              </Badge>
+            </div>
+          )}
 
-                <ListingCard
-                  listing={savedProp.listing}
-                  isAnyModalOpen={isAnyModalOpen}
-                  onModalToggle={setIsAnyModalOpen}
-                  onUnsave={onUnsave}
-                  viewingScheduledAt={savedProp.viewingScheduledAt}
-                  onAddToGoogleCalendar={savedProp.viewingScheduledAt ? () => handleAddToGoogleCalendar(savedProp) : undefined}
-                  note={savedProp.note}
-                  onNoteChange={(noteText) => onNoteChange(savedProp.id, noteText)}
-                  isNoteEditing={editingNoteId === savedProp.id}
-                  onNoteEditStart={() => {
-                    setEditingNoteId(savedProp.id);
-                    setNoteText(savedProp.note || '');
-                  }}
-                  onNoteEditCancel={() => {
-                    setEditingNoteId(null);
-                    setNoteText('');
-                  }}
-                />
-              </div>
-            </Col>
-          );
-        })}
-      </Row>
+          <ListingCard
+            listing={savedProp.listing}
+            isAnyModalOpen={isAnyModalOpen}
+            onModalToggle={setIsAnyModalOpen}
+            onUnsave={onUnsave}
+            viewingScheduledAt={savedProp.viewingScheduledAt}
+            onAddToGoogleCalendar={savedProp.viewingScheduledAt ? () => handleAddToGoogleCalendar(savedProp) : undefined}
+            note={savedProp.note}
+            onNoteChange={(noteText) => onNoteChange(savedProp.id, noteText)}
+            isNoteEditing={editingNoteId === savedProp.id}
+            onNoteEditStart={() => {
+              setEditingNoteId(savedProp.id);
+              setNoteText(savedProp.note || '');
+            }}
+            onNoteEditCancel={() => {
+              setEditingNoteId(null);
+              setNoteText('');
+            }}
+          />
+        </div>
+      </Col>
+    );
+  };
+
+  return (
+    <Container>
+      {/* Available Properties List */}
+      {availableProperties.length > 0 && (
+        <Row>
+          {availableProperties.map(savedProp => renderPropertyCard(savedProp))}
+        </Row>
+      )}
+
+      {/* Separator */}
+      {availableProperties.length > 0 && unavailableProperties.length > 0 && (
+        <div style={{ 
+          marginTop: '3rem', 
+          marginBottom: '2rem',
+          borderTop: '2px solid #dee2e6',
+          paddingTop: '1.5rem'
+        }}>
+          <h4 style={{ 
+            color: '#6c757d',
+            fontSize: '1.25rem',
+            fontWeight: '500',
+            marginBottom: '1rem'
+          }}>
+            Unavailable Listings
+          </h4>
+        </div>
+      )}
+
+      {/* Unavailable Properties List */}
+      {unavailableProperties.length > 0 && (
+        <Row>
+          {unavailableProperties.map(savedProp => renderPropertyCard(savedProp))}
+        </Row>
+      )}
 
       {/* Status Modal */}
       <Modal show={showStatusModal} onHide={() => setShowStatusModal(false)}>
