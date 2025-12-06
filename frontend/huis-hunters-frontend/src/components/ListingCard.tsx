@@ -1340,7 +1340,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
 
     <Modal show={showModal} onHide={handleHideModal} size="lg" centered>
         <Modal.Header style={{ position: 'relative' }}>
-          {/* Close button - Top right corner of modal header (matching MapListingCard style) */}
+          {/* Close button - Top right corner of modal header */}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -1350,7 +1350,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
               position: 'absolute',
               top: '10px',
               right: '10px',
-              backgroundColor: 'rgba(0,0,0,0.6)',
+              backgroundColor: '#e9ecef',
               border: 'none',
               borderRadius: '50%',
               width: '24px',
@@ -1360,16 +1360,16 @@ const ListingCard: React.FC<ListingCardProps> = ({
               justifyContent: 'center',
               cursor: 'pointer',
               zIndex: 10,
-              color: 'white',
+              color: '#495057',
               fontSize: '16px',
               lineHeight: '1',
               padding: 0
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.8)';
+              e.currentTarget.style.backgroundColor = '#dee2e6';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.6)';
+              e.currentTarget.style.backgroundColor = '#e9ecef';
             }}
           >
             ×
