@@ -327,15 +327,50 @@ def get_listing_html(listing_id):
         # Build URL
         listing_url = f'https://www.huishunters.com/listings/{listing_id}'
         
+        # Add cache-busting query parameter to image URL to force WhatsApp refresh
+        # Use listing's publishedAt or scrapedAt timestamp, or current time as fallback
+        # This ensures the cache key changes when the listing is updated
+        from datetime import datetime
+        
+        # Prefer publishedAt (when listing was published), then scrapedAt, then current time
+        cache_timestamp = None
+        if listing_data.get('publishedAt'):
+            pub_date = listing_data.get('publishedAt')
+            if hasattr(pub_date, 'seconds'):
+                cache_timestamp = pub_date.seconds
+        elif listing_data.get('scrapedAt'):
+            scraped = listing_data.get('scrapedAt')
+            if hasattr(scraped, 'seconds'):
+                cache_timestamp = scraped.seconds
+        
+        # If no timestamp found, use current time
+        if not cache_timestamp:
+            cache_timestamp = int(datetime.now().timestamp())
+        
+        # Add cache-busting parameter to image URL
+        # Using timestamp ensures URL changes when listing is updated
+        if '?' in image_url:
+            image_url_with_cache = f"{image_url}&v={cache_timestamp}"
+        else:
+            image_url_with_cache = f"{image_url}?v={cache_timestamp}"
+        
         # Render HTML with meta tags
         html = HTML_TEMPLATE.format(
             title=title,
             description=description,
-            image_url=image_url,
+            image_url=image_url_with_cache,
             listing_url=listing_url
         )
         
-        return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+        # Add headers to prevent caching by WhatsApp
+        headers = {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        }
+        
+        return html, 200, headers
         
     except Exception as e:
         logger.error(f"Error fetching listing {listing_id}: {str(e)}")
