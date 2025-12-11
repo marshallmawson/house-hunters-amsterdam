@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from apify_client import ApifyClient
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1.field_path import FieldPath
+from email_utils import send_email_alert
 
 # --- INITIALIZATION ---
 print("--- Initializing Scraper ---")
@@ -61,7 +62,12 @@ def fetch_and_store_listings():
         run = apify_client.actor("isEqQn5XKtr3D3fRW").call(run_input=run_input)
         print("✅ Actor run finished.")
     except Exception as e:
-        print(f"❗️ Actor run failed: {e}")
+        error_msg = f"Scraper failed: Actor run failed with error: {e}"
+        print(f"❗️ {error_msg}")
+        send_email_alert(
+            subject="🚨 Scraper Failed - House Hunters Amsterdam",
+            body=f"The scraper encountered an error while running the Apify actor.\n\nError details:\n{error_msg}"
+        )
         return
 
     # 3. Iterate through the results and prepare data for Firestore
@@ -88,6 +94,10 @@ def fetch_and_store_listings():
     if not listings_to_process:
         print("No new listings to process.")
         print(f"--- ✨ Run Complete. Processed 0 listings. ---")
+        send_email_alert(
+            subject="⚠️ Scraper Returned 0 Results - House Hunters Amsterdam",
+            body="The scraper completed successfully but returned 0 listings.\n\nThis could indicate:\n- No new listings available\n- An issue with the scraping process\n- Filtering removed all results"
+        )
         return
 
     # Check for existing documents in batches of 30
@@ -505,6 +515,15 @@ def check_removed_listings():
 
 # This line makes the script run when you execute it from the terminal
 if __name__ == "__main__":
-    fetch_and_store_listings()
-    check_unavailable_listings()
-    check_removed_listings()
+    try:
+        fetch_and_store_listings()
+        check_unavailable_listings()
+        check_removed_listings()
+    except Exception as e:
+        error_msg = f"Scraper failed with unexpected error: {e}"
+        print(f"❗️ {error_msg}")
+        send_email_alert(
+            subject="🚨 Scraper Failed - House Hunters Amsterdam",
+            body=f"The scraper encountered an unexpected error.\n\nError details:\n{error_msg}\n\nTraceback:\n{str(e)}"
+        )
+        raise

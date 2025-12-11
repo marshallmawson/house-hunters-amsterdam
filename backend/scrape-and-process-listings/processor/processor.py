@@ -8,6 +8,7 @@ import vertexai
 from vertexai.language_models import TextEmbeddingModel
 import datetime
 import xml.etree.ElementTree as ET
+from email_utils import send_email_alert
 
 def point_in_polygon(lon, lat, polygon):
     """
@@ -351,6 +352,10 @@ def process_listings(limit=None, batch_size=20):
     if not listings_to_update:
         print("No listings found with status 'needs_processing'.")
         print("--- ✨ Processing Run Complete. ---")
+        send_email_alert(
+            subject="⚠️ Processor Returned 0 Results - House Hunters Amsterdam",
+            body="The processor completed successfully but found 0 listings to process.\n\nThis could indicate:\n- No listings with 'needs_processing' status\n- All listings have already been processed"
+        )
         return
 
     print(f"Found {len(listings_to_update)} listings to process. Processing in batches of {batch_size}...")
@@ -473,7 +478,23 @@ def process_listings(limit=None, batch_size=20):
             print(f"❗️ Error during final batch commit: {e}")
 
     print(f"--- ✨ Processing Run Complete. Processed {processed_count} listings, skipped {skipped_count}. ---")
+    
+    # Alert if no listings were processed
+    if processed_count == 0:
+        send_email_alert(
+            subject="⚠️ Processor Processed 0 Results - House Hunters Amsterdam",
+            body=f"The processor completed but processed 0 listings.\n\nDetails:\n- Found {len(listings_to_update)} listings to process\n- Processed: {processed_count}\n- Skipped: {skipped_count}\n\nThis could indicate all listings were skipped or failed to process."
+        )
 
 
 if __name__ == "__main__":
-    process_listings()
+    try:
+        process_listings()
+    except Exception as e:
+        error_msg = f"Processor failed with unexpected error: {e}"
+        log_timestamp(f"❗️ {error_msg}")
+        send_email_alert(
+            subject="🚨 Processor Failed - House Hunters Amsterdam",
+            body=f"The processor encountered an unexpected error.\n\nError details:\n{error_msg}\n\nTraceback:\n{str(e)}"
+        )
+        raise
