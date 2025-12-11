@@ -8,8 +8,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the scraper script into the container
+# Copy the scraper script and email utilities into the container
 COPY scraper.py .
+COPY email_utils.py .
 
 # Command to run the script when the container starts
 CMD ["python", "scraper.py"]

@@ -16,8 +16,9 @@ RUN python -c "from transformers import MarianMTModel, MarianTokenizer; model_na
 # Pre-download the summarization model
 RUN python -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; model_name='sshleifer/distilbart-cnn-12-6'; tk = AutoTokenizer.from_pretrained(model_name); mdl = AutoModelForSeq2SeqLM.from_pretrained(model_name); print(f'Summarization model {model_name} downloaded and cached successfully')"
 
-# Copy the processor script and KML file
+# Copy the processor script, email utilities, and KML file
 COPY processor.py .
+COPY email_utils.py .
 COPY neighborhoods.kml .
 
 # Command to run the processor with unbuffered output
