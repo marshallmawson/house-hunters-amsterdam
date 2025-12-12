@@ -16,3 +16,4 @@ migrate_availability.py
 mark_old_listings_unavailable.py
 test_mark_removed_listings.py
 scrape_individual_listings.py
+check_listing_availability.py

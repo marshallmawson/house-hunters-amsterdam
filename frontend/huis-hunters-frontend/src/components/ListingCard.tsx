@@ -81,6 +81,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const [isModalDescriptionExpanded, setIsModalDescriptionExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [floorPlanZoom, setFloorPlanZoom] = useState(1);
+  const [floorPlanPanX, setFloorPlanPanX] = useState(0);
+  const [floorPlanPanY, setFloorPlanPanY] = useState(0);
   const [imageZoom, setImageZoom] = useState(1);
   const [imagePanX, setImagePanX] = useState(0);
   const [imagePanY, setImagePanY] = useState(0);
@@ -107,6 +109,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const pinchStartZoomRef = useRef<number>(1);
   const floorPlanPinchStartDistanceRef = useRef<number | null>(null);
   const floorPlanPinchStartZoomRef = useRef<number>(1);
+  const floorPlanDragStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const imageDragStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   
   const navigate = useNavigate();
@@ -279,6 +282,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
             : listing.floorPlans!.length - 1;
           setSelectedFloorPlanIndex(prevIndex);
           setFloorPlanZoom(1); // Reset zoom when navigating
+          setFloorPlanPanX(0); // Reset pan when navigating
+          setFloorPlanPanY(0);
         }
         // Right arrow or 'd' key - next floor plan
         else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
@@ -289,6 +294,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
             : 0;
           setSelectedFloorPlanIndex(nextIndex);
           setFloorPlanZoom(1); // Reset zoom when navigating
+          setFloorPlanPanX(0); // Reset pan when navigating
+          setFloorPlanPanY(0);
         }
         // Escape key - close modal
         else if (e.key === 'Escape') {
@@ -652,6 +659,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const handleFloorPlanClick = (index: number) => {
     setSelectedFloorPlanIndex(index);
     setFloorPlanZoom(1); // Reset zoom when opening floor plan
+    setFloorPlanPanX(0); // Reset pan when opening floor plan
+    setFloorPlanPanY(0);
     setShowFloorPlanModal(true);
   };
 
@@ -855,22 +864,52 @@ const ListingCard: React.FC<ListingCardProps> = ({
       
       const handleTouchStart = (e: TouchEvent) => {
         if (e.touches.length === 2) {
+          // Pinch gesture - start zoom
           const distance = getFloorPlanTouchDistance(e.touches[0], e.touches[1]);
           floorPlanPinchStartDistanceRef.current = distance;
           floorPlanPinchStartZoomRef.current = floorPlanZoom;
-          e.preventDefault(); // Prevent default pinch behavior
-          e.stopPropagation(); // Stop event bubbling
+          floorPlanDragStartRef.current = null; // Clear drag when pinching
+          e.preventDefault();
+          e.stopPropagation();
+        } else if (e.touches.length === 1 && floorPlanZoom > 1) {
+          // Single touch - start pan when zoomed in
+          const touch = e.touches[0];
+          floorPlanDragStartRef.current = {
+            x: touch.clientX,
+            y: touch.clientY,
+            panX: floorPlanPanX,
+            panY: floorPlanPanY
+          };
+          e.preventDefault();
+          e.stopPropagation();
         }
       };
 
       const handleTouchMove = (e: TouchEvent) => {
         if (e.touches.length === 2 && floorPlanPinchStartDistanceRef.current !== null) {
+          // Pinch gesture - zoom
           const currentDistance = getFloorPlanTouchDistance(e.touches[0], e.touches[1]);
           const scale = currentDistance / floorPlanPinchStartDistanceRef.current;
           const newZoom = Math.max(0.5, Math.min(3, floorPlanPinchStartZoomRef.current * scale));
           setFloorPlanZoom(newZoom);
-          e.preventDefault(); // Prevent default pinch behavior
-          e.stopPropagation(); // Stop event bubbling
+          e.preventDefault();
+          e.stopPropagation();
+        } else if (e.touches.length === 1 && floorPlanDragStartRef.current !== null && floorPlanZoom > 1) {
+          // Single touch - pan when zoomed in
+          const touch = e.touches[0];
+          const deltaX = touch.clientX - floorPlanDragStartRef.current.x;
+          const deltaY = touch.clientY - floorPlanDragStartRef.current.y;
+          
+          // Calculate new pan position with bounds
+          // Allow panning up to half the zoomed image size beyond the viewport
+          const maxPan = (floorPlanZoom - 1) * 300; // Adjust based on zoom level
+          const newPanX = Math.max(-maxPan, Math.min(maxPan, floorPlanDragStartRef.current.panX + deltaX));
+          const newPanY = Math.max(-maxPan, Math.min(maxPan, floorPlanDragStartRef.current.panY + deltaY));
+          
+          setFloorPlanPanX(newPanX);
+          setFloorPlanPanY(newPanY);
+          e.preventDefault();
+          e.stopPropagation();
         }
       };
 
@@ -878,10 +917,47 @@ const ListingCard: React.FC<ListingCardProps> = ({
         if (e.touches.length < 2) {
           floorPlanPinchStartDistanceRef.current = null;
         }
+        if (e.touches.length === 0) {
+          floorPlanDragStartRef.current = null;
+        }
       };
 
       const handleTouchCancel = (e: TouchEvent) => {
         floorPlanPinchStartDistanceRef.current = null;
+        floorPlanDragStartRef.current = null;
+      };
+
+      // Mouse events for desktop panning
+      const handleMouseDown = (e: MouseEvent) => {
+        if (floorPlanZoom > 1 && e.button === 0) { // Left mouse button
+          floorPlanDragStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            panX: floorPlanPanX,
+            panY: floorPlanPanY
+          };
+          e.preventDefault();
+        }
+      };
+
+      const handleMouseMove = (e: MouseEvent) => {
+        if (floorPlanDragStartRef.current !== null && floorPlanZoom > 1) {
+          const deltaX = e.clientX - floorPlanDragStartRef.current.x;
+          const deltaY = e.clientY - floorPlanDragStartRef.current.y;
+          
+          // Allow panning up to half the zoomed image size beyond the viewport
+          const maxPan = (floorPlanZoom - 1) * 300;
+          const newPanX = Math.max(-maxPan, Math.min(maxPan, floorPlanDragStartRef.current.panX + deltaX));
+          const newPanY = Math.max(-maxPan, Math.min(maxPan, floorPlanDragStartRef.current.panY + deltaY));
+          
+          setFloorPlanPanX(newPanX);
+          setFloorPlanPanY(newPanY);
+          e.preventDefault();
+        }
+      };
+
+      const handleMouseUp = () => {
+        floorPlanDragStartRef.current = null;
       };
 
       const handleWheel = (e: WheelEvent) => {
@@ -891,10 +967,15 @@ const ListingCard: React.FC<ListingCardProps> = ({
           e.stopPropagation();
           
           // Calculate zoom delta from wheel delta
-          // Negative deltaY means zoom in, positive means zoom out
-          const zoomDelta = -e.deltaY * 0.01; // Adjust sensitivity
+          const zoomDelta = -e.deltaY * 0.01;
           const newZoom = Math.max(0.5, Math.min(3, floorPlanZoom + zoomDelta));
           setFloorPlanZoom(newZoom);
+          
+          // Reset pan when zooming out to 1x
+          if (newZoom <= 1) {
+            setFloorPlanPanX(0);
+            setFloorPlanPanY(0);
+          }
         }
       };
 
@@ -904,6 +985,10 @@ const ListingCard: React.FC<ListingCardProps> = ({
       floorPlanContainer.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
       floorPlanContainer.addEventListener('touchend', handleTouchEnd, { passive: false, capture: true });
       floorPlanContainer.addEventListener('touchcancel', handleTouchCancel, { passive: false, capture: true });
+      floorPlanContainer.addEventListener('mousedown', handleMouseDown);
+      floorPlanContainer.addEventListener('mousemove', handleMouseMove);
+      floorPlanContainer.addEventListener('mouseup', handleMouseUp);
+      floorPlanContainer.addEventListener('mouseleave', handleMouseUp); // Reset on mouse leave
       floorPlanContainer.addEventListener('wheel', handleWheel, { passive: false });
 
       return () => {
@@ -911,10 +996,22 @@ const ListingCard: React.FC<ListingCardProps> = ({
         floorPlanContainer.removeEventListener('touchmove', handleTouchMove, { capture: true } as EventListenerOptions);
         floorPlanContainer.removeEventListener('touchend', handleTouchEnd, { capture: true } as EventListenerOptions);
         floorPlanContainer.removeEventListener('touchcancel', handleTouchCancel, { capture: true } as EventListenerOptions);
+        floorPlanContainer.removeEventListener('mousedown', handleMouseDown);
+        floorPlanContainer.removeEventListener('mousemove', handleMouseMove);
+        floorPlanContainer.removeEventListener('mouseup', handleMouseUp);
+        floorPlanContainer.removeEventListener('mouseleave', handleMouseUp);
         floorPlanContainer.removeEventListener('wheel', handleWheel);
       };
     }
-  }, [showFloorPlanModal, floorPlanZoom]);
+  }, [showFloorPlanModal, floorPlanZoom, floorPlanPanX, floorPlanPanY]);
+
+  // Reset pan when zoom is 1x or below
+  useEffect(() => {
+    if (floorPlanZoom <= 1) {
+      setFloorPlanPanX(0);
+      setFloorPlanPanY(0);
+    }
+  }, [floorPlanZoom]);
 
 
   const handleCarouselSelect = (selectedIndex: number | null) => {
@@ -925,7 +1022,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   };
   return (
     <>
-    <Card className="listing-card" style={{ width: '24rem' }}>
+    <Card className="listing-card" style={{ width: isMobile ? '100%' : '24rem' }}>
       <div style={{ position: 'relative' }}>
         <Carousel interval={isAnyModalOpen ? null : 5000}>
           {listing.imageGallery && listing.imageGallery.slice(0, 10).map((url: string, index: number) => (
@@ -2058,7 +2155,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
                     fontWeight: '600',
                     marginBottom: '0.75rem',
                     color: '#1a202c'
-                  }}>Floor Plans</h5>
+                  }}>{listing.floorPlans.length === 1 ? 'Floor Plan' : 'Floor Plans'}</h5>
                   <Carousel indicators={listing.floorPlans.length > 1} controls={listing.floorPlans.length > 1}>
                     {listing.floorPlans.map((url, index) => (
                       <Carousel.Item key={index}>
@@ -2301,8 +2398,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
       <Modal show={showFloorPlanModal} onHide={() => setShowFloorPlanModal(false)} size="xl" centered>
         <Modal.Header closeButton>
           <Modal.Title style={{ fontSize: '0.9rem', fontWeight: '500' }}>
-            Floor Plan {selectedFloorPlanIndex + 1}
-            {listing.floorPlans && listing.floorPlans.length > 1 && ` of ${listing.floorPlans.length}`}
+            {listing.floorPlans && listing.floorPlans.length === 1 
+              ? 'Floor Plan' 
+              : listing.floorPlans && listing.floorPlans.length > 1 
+                ? `Floor Plan ${selectedFloorPlanIndex + 1} of ${listing.floorPlans.length}` 
+                : 'Floor Plan'}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body 
@@ -2319,10 +2419,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
               <div 
                 ref={floorPlanModalRef}
                 style={{ 
-                  transform: `scale(${floorPlanZoom})`, 
+                  transform: `translate(${floorPlanPanX}px, ${floorPlanPanY}px) scale(${floorPlanZoom})`, 
                   transformOrigin: 'center', 
-                  transition: floorPlanPinchStartDistanceRef.current === null ? 'transform 0.2s ease' : 'none',
-                  touchAction: 'none' // Prevent all default touch behaviors on the floor plan container
+                  transition: (floorPlanPinchStartDistanceRef.current === null && floorPlanDragStartRef.current === null) ? 'transform 0.2s ease' : 'none',
+                  touchAction: 'none', // Prevent all default touch behaviors on the floor plan container
+                  cursor: floorPlanZoom > 1 ? 'move' : 'default'
                 }}
               >
                 <img
@@ -2348,6 +2449,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
                       const prevIndex = selectedFloorPlanIndex > 0 ? selectedFloorPlanIndex - 1 : (listing.floorPlans?.length || 1) - 1;
                       setSelectedFloorPlanIndex(prevIndex);
                       setFloorPlanZoom(1);
+                      setFloorPlanPanX(0);
+                      setFloorPlanPanY(0);
                     }}
                     style={{
                       position: 'absolute',
@@ -2383,6 +2486,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
                       const nextIndex = selectedFloorPlanIndex < maxIndex ? selectedFloorPlanIndex + 1 : 0;
                       setSelectedFloorPlanIndex(nextIndex);
                       setFloorPlanZoom(1);
+                      setFloorPlanPanX(0);
+                      setFloorPlanPanY(0);
                     }}
                     style={{
                       position: 'absolute',

@@ -1019,7 +1019,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
 
 
   return (
-    <Container fluid="xl" style={{ position: 'relative', paddingTop: '0', marginTop: '0' }}>
+    <Container fluid="xl" style={{ position: 'relative', paddingTop: '0', marginTop: '0', paddingLeft: isMobile ? '0.5rem' : undefined, paddingRight: isMobile ? '0.5rem' : undefined }}>
       {/* Mobile Filters and Map Buttons - Floating over hero
           Only show after the initial listings load has completed to avoid
           any visible vertical "jump" as data and layout settle. */}
@@ -1812,7 +1812,15 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       {hasLoadedInitialListings && (
         <Row className="listings-grid-row">
           {currentListings.map(listing => (
-            <Col key={listing.id} sm={12} md={6} lg={6} xl={4} className="mb-4">
+            <Col 
+              key={listing.id} 
+              sm={12} 
+              md={6} 
+              lg={6} 
+              xl={4} 
+              className="mb-4"
+              style={isMobile ? { paddingLeft: 0, paddingRight: 0 } : {}}
+            >
               <ListingCard 
                 listing={listing} 
                 isAnyModalOpen={isModalOpen}
