@@ -48,7 +48,6 @@ pip install -r search_requirements.txt
 # Set up environment variables in your .env file
 export GOOGLE_APPLICATION_CREDENTIALS="firebase-credentials.json"
 export GCP_PROJECT_ID="your-gcp-project-id"
-export GEMINI_API_KEY="your-gemini-api-key"
 ```
 
 ### 2. Start the Search API
