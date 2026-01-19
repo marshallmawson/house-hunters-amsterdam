@@ -672,14 +672,16 @@ def passes_filters(listing_data: Dict[str, Any], filters: Dict[str, Any]) -> boo
     """Check if a listing passes the given filters."""
     try:
         # Price range
-        if 'minPrice' in filters and listing_data.get('price', 0) < filters['minPrice']:
+        listing_price = listing_data.get('price') or 0
+        if 'minPrice' in filters and listing_price < filters['minPrice']:
             return False
-        if 'maxPrice' in filters and listing_data.get('price', 0) > filters['maxPrice']:
+        if 'maxPrice' in filters and listing_price > filters['maxPrice']:
             return False
         
         # Bedrooms
         if 'bedrooms' in filters and filters['bedrooms'] != 'any':
-            if listing_data.get('bedrooms', 0) < int(filters['bedrooms']):
+            listing_bedrooms = listing_data.get('bedrooms') or 0
+            if listing_bedrooms < int(filters['bedrooms']):
                 return False
         
         # Floor level
@@ -722,7 +724,8 @@ def passes_filters(listing_data: Dict[str, Any], filters: Dict[str, Any]) -> boo
         
         # Minimum size
         if 'minSize' in filters and filters['minSize']:
-            if listing_data.get('livingArea', 0) < int(filters['minSize']):
+            listing_size = listing_data.get('livingArea') or 0
+            if listing_size < int(filters['minSize']):
                 return False
         
         # Areas
@@ -892,14 +895,15 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
             # Apply all filters in memory to avoid Firestore index requirements
             if filters:
                 # Apply price range filter
-                if 'minPrice' in filters and listing_data.get('price', 0) < filters['minPrice']:
+                listing_price = listing_data.get('price') or 0
+                if 'minPrice' in filters and listing_price < filters['minPrice']:
                     continue
-                if 'maxPrice' in filters and listing_data.get('price', 0) > filters['maxPrice']:
+                if 'maxPrice' in filters and listing_price > filters['maxPrice']:
                     continue
                 
                 # Apply bedroom filter
                 if 'bedrooms' in filters and filters['bedrooms'] != 'any':
-                    listing_bedrooms = listing_data.get('bedrooms', 0)
+                    listing_bedrooms = listing_data.get('bedrooms') or 0
                     if listing_bedrooms < int(filters['bedrooms']):
                         continue
                 
@@ -939,7 +943,7 @@ def apply_structured_filters_then_ai_search(query: str, limit: int = 50, filters
                 
                 # Apply minimum size filter
                 if 'minSize' in filters and filters['minSize']:
-                    listing_size = listing_data.get('livingArea', 0)
+                    listing_size = listing_data.get('livingArea') or 0
                     if listing_size < float(filters['minSize']):
                         continue
                 
