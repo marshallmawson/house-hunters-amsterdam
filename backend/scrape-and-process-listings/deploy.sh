@@ -32,12 +32,23 @@ if [ -z "$SERVICE_NAME" ]; then
   exit 1
 fi
 
+# Ensure we're using the correct project
+echo "Setting gcloud project to: ${PROJECT_ID}"
+gcloud config set project "${PROJECT_ID}"
+
+# Verify the project is set correctly
+CURRENT_PROJECT=$(gcloud config get-value project)
+if [ "$CURRENT_PROJECT" != "$PROJECT_ID" ]; then
+  echo "ERROR: Failed to set project to ${PROJECT_ID}. Current project is: ${CURRENT_PROJECT}"
+  exit 1
+fi
+
 # Construct the full image name
 IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE_NAME}"
 
 # Build and push the image
 echo "Building and pushing image: ${IMAGE_NAME}"
-gcloud builds submit "${SERVICE_NAME}" --tag "${IMAGE_NAME}"
+gcloud builds submit "${SERVICE_NAME}" --tag "${IMAGE_NAME}" --project "${PROJECT_ID}"
 
 # Check if the build was successful
 if [ $? -ne 0 ]; then
@@ -58,7 +69,8 @@ if [ "$SERVICE_NAME" = "search" ]; then
       --memory 2Gi \
       --cpu 2 \
       --timeout 300 \
-      --max-instances 10
+      --max-instances 10 \
+      --project "${PROJECT_ID}"
     echo "Deployment of ${SERVICE_NAME}-service complete."
     echo "You can view your service at the URL provided above."
 else
@@ -81,6 +93,7 @@ else
       --region "${REGION}" \
       --memory "${MEMORY}" \
       --cpu "${CPU}" \
-      --task-timeout 1800 # Set timeout to 30 minutes (1800 seconds)
+      --task-timeout 1800 \
+      --project "${PROJECT_ID}" # Set timeout to 30 minutes (1800 seconds)
     echo "Deployment of ${SERVICE_NAME}-job complete."
 fi

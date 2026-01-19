@@ -6,6 +6,20 @@
 
 set -e  # Exit on error
 
+# Project configuration
+PROJECT_ID="house-hunters-amsterdam"
+
+# Ensure we're using the correct project
+echo "Setting gcloud project to: ${PROJECT_ID}"
+gcloud config set project "${PROJECT_ID}"
+
+# Verify the project is set correctly
+CURRENT_PROJECT=$(gcloud config get-value project)
+if [ "$CURRENT_PROJECT" != "$PROJECT_ID" ]; then
+  echo "ERROR: Failed to set project to ${PROJECT_ID}. Current project is: ${CURRENT_PROJECT}"
+  exit 1
+fi
+
 DEPLOY_SEARCH=false
 DEPLOY_FRONTEND=false
 DEPLOY_SCRAPER=false

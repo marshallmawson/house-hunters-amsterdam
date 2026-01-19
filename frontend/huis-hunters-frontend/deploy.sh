@@ -17,6 +17,17 @@ SERVICE_NAME="frontend"
 
 # --- Script Logic ---
 
+# Ensure we're using the correct project
+echo "Setting gcloud project to: ${PROJECT_ID}"
+gcloud config set project "${PROJECT_ID}"
+
+# Verify the project is set correctly
+CURRENT_PROJECT=$(gcloud config get-value project)
+if [ "$CURRENT_PROJECT" != "$PROJECT_ID" ]; then
+  echo "ERROR: Failed to set project to ${PROJECT_ID}. Current project is: ${CURRENT_PROJECT}"
+  exit 1
+fi
+
 # Construct the full image name
 IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE_NAME}"
 
@@ -51,7 +62,8 @@ fi
 
 gcloud builds submit . \
   --substitutions=_IMAGE_NAME="${IMAGE_NAME}",_REACT_APP_SEARCH_API_URL="https://search-service-315949479081.europe-west4.run.app",_REACT_APP_GOOGLE_MAPS_API_KEY="${GOOGLE_MAPS_API_KEY}" \
-  --config=cloudbuild.yaml
+  --config=cloudbuild.yaml \
+  --project "${PROJECT_ID}"
 
 # Check if the build was successful
 if [ $? -ne 0 ]; then
@@ -66,7 +78,8 @@ gcloud run deploy "${SERVICE_NAME}-service" \
   --region "${REGION}" \
   --platform "managed" \
   --port "80" \
-  --allow-unauthenticated
+  --allow-unauthenticated \
+  --project "${PROJECT_ID}"
 
 echo "Deployment of ${SERVICE_NAME}-service complete."
 echo "You can view your service at the URL provided above."
