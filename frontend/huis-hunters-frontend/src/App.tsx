@@ -403,22 +403,6 @@ const AppContent = () => {
         />
       </Routes>
 
-      {/* Footer with Copyright - Hidden on map page */}
-      {!isMapPage && (
-        <footer
-          style={{
-            textAlign: 'center',
-            padding: '2rem 1rem',
-            marginTop: '3rem',
-            borderTop: '1px solid #e9ecef',
-            backgroundColor: '#f8f9fa',
-            color: '#6c757d',
-            fontSize: '0.875rem'
-          }}
-        >
-          © 2025 Marshall Mawson
-        </footer>
-      )}
     </div>
   );
 };

@@ -73,6 +73,59 @@ def debug_count():
     except Exception as e:
         return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
 
+@app.route('/debug/status', methods=['GET'])
+def debug_status():
+    """Debug endpoint to check initialization status of search service"""
+    try:
+        # Try to import search_service to check its initialization state
+        import search_service
+        
+        # Check if db is initialized
+        db_initialized = search_service.db is not None
+        embedding_initialized = search_service.embedding_model is not None
+        
+        # Try to get project info
+        project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "unknown"
+        google_cloud_project = os.getenv("GOOGLE_CLOUD_PROJECT", "NOT SET")
+        gcp_project_id = os.getenv("GCP_PROJECT_ID", "NOT SET")
+        
+        # Try to test Firebase connection
+        firebase_test = "unknown"
+        if db_initialized:
+            try:
+                test_ref = search_service.db.collection('listings').limit(1)
+                list(test_ref.stream())
+                firebase_test = "working"
+            except Exception as e:
+                firebase_test = f"error: {str(e)}"
+        
+        # Try to test Vertex AI
+        vertex_test = "unknown"
+        if embedding_initialized:
+            try:
+                test_embedding = search_service.generate_query_embedding("test")
+                vertex_test = "working" if test_embedding else "error: returned None"
+            except Exception as e:
+                vertex_test = f"error: {str(e)}"
+        
+        return jsonify({
+            "db_initialized": db_initialized,
+            "embedding_model_initialized": embedding_initialized,
+            "firebase_test": firebase_test,
+            "vertex_ai_test": vertex_test,
+            "project_id": project_id,
+            "GOOGLE_CLOUD_PROJECT": google_cloud_project,
+            "GCP_PROJECT_ID": gcp_project_id,
+            "GOOGLE_APPLICATION_CREDENTIALS": os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "NOT SET (using ADC)")
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }), 500
+
 
 @app.route('/search', methods=['POST'])
 def search_listings():
@@ -128,6 +181,17 @@ def search_listings():
         try:
             hybrid_search, search_listings_by_similarity, text_based_search, apply_structured_filters_then_ai_search = get_search_functions()
             
+            # Check initialization status before searching
+            import search_service
+            if search_service.db is None:
+                logger.error("Firebase database not initialized - search will return no results")
+                return jsonify({
+                    "error": "Search service not properly initialized",
+                    "details": "Firebase database connection failed",
+                    "results": [],
+                    "total": 0
+                }), 500
+            
             if search_type == 'semantic':
                 results = search_listings_by_similarity(query, limit, filters)
                 # Fall back to text-based search if semantic search returns no results
@@ -147,8 +211,17 @@ def search_listings():
             
             logger.info(f"Raw search results: {len(results)} found")
         except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
             logger.error(f"Error during search: {str(e)}")
-            results = []
+            logger.error(f"Traceback: {error_traceback}")
+            # Return error details in development, generic error in production
+            return jsonify({
+                "error": "Search failed",
+                "details": str(e) if os.getenv("FLASK_ENV") == "development" else "Internal server error",
+                "results": [],
+                "total": 0
+            }), 500
         
         # Format results for frontend
         formatted_results = []

@@ -2035,7 +2035,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                View on Funda →
+                View original listing →
               </a>
             </Col>
             <Col md={6}>
