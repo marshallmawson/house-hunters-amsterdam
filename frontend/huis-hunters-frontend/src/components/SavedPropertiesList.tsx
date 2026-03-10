@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { SavedProperty, PropertyStatus } from '../types';
 import ListingCard from './ListingCard';
-import { Container, Row, Col, Dropdown, Button, Badge, Modal, FormGroup, Form } from 'react-bootstrap';
+import { Row, Col, Dropdown, Button, Badge, Modal, FormGroup, Form } from 'react-bootstrap';
 
 interface SavedPropertiesListProps {
   savedProperties: (SavedProperty & { listing?: any })[];
@@ -369,7 +369,7 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
   };
 
   return (
-    <Container>
+    <div>
       {/* Available Properties List */}
       {availableProperties.length > 0 && (
         <Row>
@@ -480,7 +480,7 @@ const SavedPropertiesList: React.FC<SavedPropertiesListProps> = ({
         </Modal.Footer>
       </Modal>
 
-    </Container>
+    </div>
   );
 };
 

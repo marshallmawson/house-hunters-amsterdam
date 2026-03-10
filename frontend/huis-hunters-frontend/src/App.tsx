@@ -46,7 +46,7 @@ const AppContent = () => {
     <div>
       {/* Premium Navigation Bar */}
       <Navbar className="premium-navbar" expand="lg" fixed="top">
-        <Container>
+        <Container className="d-flex flex-nowrap align-items-center">
           <Navbar.Brand 
             className="premium-logo" 
             onClick={() => navigate('/')}
@@ -103,15 +103,45 @@ const AppContent = () => {
             )}
           </div>
 
-          {/* Mobile Hamburger Button */}
+          {/* Mobile: Saved shortcut + Hamburger */}
           {!isAuthPage && (
-            <Navbar.Toggle 
-              aria-controls="mobile-nav"
-              onClick={() => setShowMobileMenu(true)}
-              style={{ border: 'none', padding: '0.25rem 0.5rem' }}
-            >
-              <span style={{ fontSize: '1.5rem' }}>☰</span>
-            </Navbar.Toggle>
+            <div className="d-flex d-lg-none align-items-center gap-1" style={{ flexShrink: 0 }}>
+              <Link
+                to={currentUser ? "/saved-properties" : "#"}
+                onClick={handleSavedPropertiesClick}
+                style={{
+                  textDecoration: 'none',
+                  color: '#6c757d',
+                  fontSize: '0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  padding: '0.25rem 0.25rem',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <svg
+                  width="14"
+                  height="12"
+                  viewBox="0 0 24 21"
+                  fill="#dc3545"
+                  stroke="#dc3545"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+                Saved
+              </Link>
+              <Navbar.Toggle
+                aria-controls="mobile-nav"
+                onClick={() => setShowMobileMenu(true)}
+                style={{ border: 'none', padding: '0.25rem 0.5rem' }}
+              >
+                <span style={{ fontSize: '1.5rem' }}>☰</span>
+              </Navbar.Toggle>
+            </div>
           )}
         </Container>
       </Navbar>
@@ -326,7 +356,7 @@ const AppContent = () => {
                     lineHeight: '1.4'
                   }}
                 >
-                  AI-powered home searching in Amsterdam
+                  Find your perfect home in Amsterdam
                 </p>
               </div>
             </div>

@@ -271,7 +271,7 @@ const SavedProperties: React.FC = () => {
   };
 
   return (
-    <Container className="mt-5" style={{ paddingTop: '60px' }}>
+    <Container fluid="xl" className="mt-5" style={{ paddingTop: '60px', paddingLeft: window.innerWidth < 768 ? '0.5rem' : undefined, paddingRight: window.innerWidth < 768 ? '0.5rem' : undefined }}>
       <h2 className="mb-3">Saved Properties</h2>
       <div className="mb-3">
         <Button
