@@ -4,17 +4,35 @@ import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { SavedProperty, PropertyStatus, Listing } from '../types';
 import SavedPropertiesList from './SavedPropertiesList';
-import { Container, Alert, Button, Card } from 'react-bootstrap';
+import { Container, Alert, Button, Card, Form } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 
 const SavedProperties: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, userData } = useAuth();
   const navigate = useNavigate();
   const { preferences, loading: preferencesLoading } = useUserPreferences();
   const [savedProperties, setSavedProperties] = useState<SavedProperty[]>([]);
   const [loading, setLoading] = useState(true);
   const [listingsMap, setListingsMap] = useState<Map<string, Listing>>(new Map());
+  const [emailAlerts, setEmailAlerts] = useState(false);
+
+  useEffect(() => {
+    if (userData) {
+      setEmailAlerts(!!userData.emailAlerts);
+    }
+  }, [userData]);
+
+  const handleEmailAlertsToggle = async (checked: boolean) => {
+    if (!currentUser) return;
+    setEmailAlerts(checked);
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), { emailAlerts: checked });
+    } catch (error) {
+      console.error('Error updating email alerts preference:', error);
+      setEmailAlerts(!checked);
+    }
+  };
 
   useEffect(() => {
     if (!currentUser) {
@@ -326,10 +344,37 @@ const SavedProperties: React.FC = () => {
             }}>
               {formatPreferences()}
             </p>
+            <div style={{
+              marginBottom: '1rem',
+              paddingTop: '0.75rem',
+              borderTop: '1px solid #dee2e6'
+            }}>
+              <Form.Check
+                type="switch"
+                id="email-alerts-toggle"
+                label="Daily email alerts"
+                checked={emailAlerts}
+                onChange={(e) => handleEmailAlertsToggle(e.target.checked)}
+                style={{
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  fontWeight: '600',
+                  fontSize: '0.95rem',
+                  color: '#212529'
+                }}
+              />
+              <small style={{
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                color: '#6c757d',
+                marginTop: '0.25rem',
+                display: 'block'
+              }}>
+                Get notified when new listings match your search preferences
+              </small>
+            </div>
             <Button
               variant="primary"
               onClick={() => navigate('/')}
-              style={{ 
+              style={{
                 fontFamily: 'system-ui, -apple-system, sans-serif',
                 fontWeight: '500',
                 padding: '0.5rem 1.5rem',

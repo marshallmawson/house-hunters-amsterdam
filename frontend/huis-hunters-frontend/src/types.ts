@@ -102,6 +102,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  emailAlerts?: boolean;
   createdAt: {
     seconds: number;
     nanoseconds: number;

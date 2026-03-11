@@ -82,6 +82,10 @@ else
         # Processor needs more memory for ML models (translation + summarization)
         MEMORY="6Gi"
         CPU="2"
+    elif [ "$SERVICE_NAME" = "email-alerts" ]; then
+        # Email alerts job is lightweight (no ML models)
+        MEMORY="512Mi"
+        CPU="1"
     else
         # Default memory for other jobs
         MEMORY="2Gi"

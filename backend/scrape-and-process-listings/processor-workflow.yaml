@@ -14,3 +14,13 @@ main:
         args:
           - "Processor job run result:"
           - ${processor_run.name}
+    - run_email_alerts:
+        call: googleapis.run.v2.projects.locations.jobs.run
+        args:
+          name: ${"projects/" + project_id + "/locations/" + location + "/jobs/email-alerts-job"}
+        result: email_alerts_run
+    - log_email_alerts_run:
+        call: sys.log
+        args:
+          - "Email alerts job run result:"
+          - ${email_alerts_run.name}

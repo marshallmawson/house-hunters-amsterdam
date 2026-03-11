@@ -1,0 +1,3 @@
+firebase-admin==6.9.0
+google-cloud-firestore==2.21.0
+python-dotenv==1.1.1

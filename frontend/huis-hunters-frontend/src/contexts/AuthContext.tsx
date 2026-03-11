@@ -69,6 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: userCredential.user.uid,
         name: data.name,
         email: data.email,
+        emailAlerts: data.emailAlerts,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt
       });
@@ -114,6 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: user.uid,
             name: data.name,
             email: data.email,
+            emailAlerts: data.emailAlerts,
             createdAt: data.createdAt,
             updatedAt: data.updatedAt
           });
