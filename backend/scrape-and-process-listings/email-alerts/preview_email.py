@@ -1,15 +1,20 @@
+#!/usr/bin/env python3
+"""
+Local email preview script - generates sample email HTML with real Firestore data.
+Run: python preview_email.py
+Then open preview_email.html in your browser or email it to yourself to test.
+"""
+
 import os
 import datetime
 import firebase_admin
-from dotenv import load_dotenv
 from firebase_admin import firestore
-from email_utils import send_email_alert, send_html_email
 
-# --- INITIALIZATION ---
-print("--- Initializing Email Alerts Job ---")
+# Set environment variable for frontend URL
+os.environ['FRONTEND_URL'] = 'https://huishunters.com'
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://huishunters.com")
 
-load_dotenv()
-
+# Initialize Firebase
 try:
     firebase_admin.initialize_app()
     db = firestore.client()
@@ -17,73 +22,6 @@ try:
 except Exception as e:
     print(f"Error initializing Firebase: {e}")
     exit()
-
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://huishunters.com")
-
-
-def matches_preferences(listing, prefs):
-    """
-    Check if a listing matches user search preferences.
-    Replicates the frontend filter logic from Listings.tsx lines 802-849.
-    """
-    # Price range
-    price = listing.get('price', 0) or 0
-    price_range = prefs.get('priceRange', {})
-    min_price = price_range.get('min', 0)
-    max_price = price_range.get('max', float('inf'))
-    if price < min_price or price > max_price:
-        return False
-
-    # Bedrooms
-    bedrooms_pref = prefs.get('bedrooms', 'any')
-    if bedrooms_pref and bedrooms_pref != 'any':
-        min_bedrooms = int(bedrooms_pref.replace('+', ''))
-        listing_bedrooms = listing.get('bedrooms') or 0
-        if listing_bedrooms < min_bedrooms:
-            return False
-
-    # Floor level
-    floor_pref = prefs.get('floorLevel', 'any')
-    if floor_pref and floor_pref != 'any':
-        apt_floor = listing.get('apartmentFloor')
-        if floor_pref == 'ground' and apt_floor != 'Ground':
-            return False
-        if floor_pref == 'top' and apt_floor not in ('Upper', 'Top floor', 'Upper floor'):
-            return False
-
-    # Outdoor spaces
-    outdoor_prefs = prefs.get('selectedOutdoorSpaces', [])
-    if outdoor_prefs:
-        has_match = any(
-            (space == 'garden' and listing.get('hasGarden')) or
-            (space == 'rooftop' and listing.get('hasRooftopTerrace')) or
-            (space == 'balcony' and listing.get('hasBalcony'))
-            for space in outdoor_prefs
-        )
-        if not has_match:
-            return False
-
-    # Minimum size
-    min_size = prefs.get('minSize', '')
-    if min_size:
-        living_area = listing.get('livingArea') or 0
-        if living_area < int(min_size):
-            return False
-
-    # Selected areas
-    selected_areas = prefs.get('selectedAreas', [])
-    if selected_areas:
-        listing_area = listing.get('area')
-        if listing_area not in selected_areas:
-            return False
-
-    # Must have images
-    image_gallery = listing.get('imageGallery', [])
-    if not image_gallery:
-        return False
-
-    return True
-
 
 def get_outdoor_space_string(listing):
     """Build outdoor space description, matching MapListingCard logic."""
@@ -99,9 +37,8 @@ def get_outdoor_space_string(listing):
         return None
 
     area = listing.get('outdoorSpaceArea')
-    area_str = f" ({area} m\u00b2)" if area else ""
+    area_str = f" ({area} m²)" if area else ""
     return f"{' + '.join(spaces)}{area_str}"
-
 
 def get_floor_string(listing):
     """Build floor description."""
@@ -113,7 +50,6 @@ def get_floor_string(listing):
     if 'floor' in str(apt_floor).lower():
         return str(apt_floor)
     return f"{apt_floor} floor"
-
 
 def build_listing_card_html(listing):
     """Build HTML for a single listing card, modelled on MapListingCard."""
@@ -133,19 +69,19 @@ def build_listing_card_html(listing):
     area_html = f'<div style="font-size: 13px; color: #718096; margin-top: 2px;">{area}</div>' if area else ''
 
     price = listing.get('price', 0)
-    price_formatted = f"\u20ac{price:,.0f}" if price else ""
+    price_formatted = f"€{price:,.0f}" if price else ""
 
     living_area = listing.get('livingArea')
     bedrooms = listing.get('bedrooms')
     bathrooms = listing.get('bathrooms')
     energy_label = listing.get('energyLabel')
     price_per_sqm = listing.get('pricePerSquareMeter')
-    price_per_sqm_str = f"\u20ac{price_per_sqm:,.0f}/m\u00b2" if price_per_sqm else ""
+    price_per_sqm_str = f"€{price_per_sqm:,.0f}/m²" if price_per_sqm else ""
 
     # Row 2: main specs - use &nbsp; for energy label to prevent wrapping
     specs = []
     if living_area:
-        specs.append(f"{living_area} m\u00b2")
+        specs.append(f"{living_area} m²")
     if bedrooms:
         specs.append(f"{bedrooms} bed")
     if bathrooms:
@@ -263,7 +199,6 @@ def build_listing_card_html(listing):
 
     return card_html
 
-
 def build_email_html(user_name, listings):
     """Build the full HTML email with listing cards."""
     count = len(listings)
@@ -285,7 +220,7 @@ def build_email_html(user_name, listings):
               <div style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px;">
                 <h2 style="margin: 0 0 8px 0; font-size: 20px; color: #1a202c;">Hoi {user_name},</h2>
                 <p style="margin: 0; font-size: 15px; color: #718096;">
-                  We found {count} new listing{plural} matching your search preferences, sorted by best value (lowest price per m\u00b2).
+                  We found {count} new listing{plural} matching your search preferences, sorted by best value (lowest price per m²).
                 </p>
               </div>
 
@@ -312,118 +247,69 @@ def build_email_html(user_name, listings):
     return html
 
 
-def run_email_alerts():
-    """Main function: iterate users, match listings, send emails."""
-    print("--- Starting Email Alert Job ---")
+def get_real_listings():
+    """Fetch real listings from Firestore for testing."""
+    print("Fetching real listings from Firestore...")
 
-    # 1. Get all users
-    users = list(db.collection('users').stream())
-    print(f"Found {len(users)} users")
+    # Query processed listings (simplified to avoid needing new index)
+    listings_query = (
+        db.collection('listings')
+        .where('status', '==', 'processed')
+        .limit(20)  # Get more to find ones with images
+    )
 
-    if not users:
-        print("No users found. Exiting.")
-        return
+    listings = []
+    for doc in listings_query.stream():
+        listing_data = doc.to_dict()
+        listing_data['id'] = doc.id
 
-    emails_sent = 0
-    skipped_no_optin = 0
-    skipped_no_prefs = 0
-    skipped_no_matches = 0
+        # Only include listings with images and that are available
+        if listing_data.get('imageGallery') and listing_data.get('available'):
+            listings.append(listing_data)
+            print(f"  ✓ {listing_data.get('address')} - {listing_data.get('area', 'No area')}")
 
-    for user_doc in users:
-        user_data = user_doc.to_dict()
-        user_id = user_doc.id
-        user_name = user_data.get('name', 'Huis Hunter')
-        user_email = user_data.get('email')
+            if len(listings) >= 3:
+                break
 
-        # Check opt-in
-        if not user_data.get('emailAlerts'):
-            skipped_no_optin += 1
-            continue
-
-        if not user_email:
-            print(f"Skipping user {user_id} - no email address")
-            continue
-
-        # 2. Load search preferences
-        prefs_doc = db.collection('users').document(user_id).collection('searchPreferences').document('lastUsed').get()
-
-        if not prefs_doc.exists:
-            print(f"Skipping {user_email} - no search preferences")
-            skipped_no_prefs += 1
-            continue
-
-        prefs = prefs_doc.to_dict()
-
-        # 3. Determine cutoff time
-        last_sent = user_data.get('lastEmailSentAt')
-        if last_sent:
-            cutoff = last_sent
-        else:
-            cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
-
-        # 4. Query new processed, available listings since cutoff
-        listings_query = (
+    if not listings:
+        print("⚠️  No listings found with images. Using any processed listings...")
+        # Fallback: just get any processed listings
+        fallback_query = (
             db.collection('listings')
             .where('status', '==', 'processed')
-            .where('available', '==', True)
-            .where('processedAt', '>', cutoff)
+            .limit(3)
         )
-        new_listings = list(listings_query.stream())
+        for doc in fallback_query.stream():
+            listing_data = doc.to_dict()
+            listing_data['id'] = doc.id
+            listings.append(listing_data)
+            if len(listings) >= 3:
+                break
 
-        if not new_listings:
-            print(f"No new listings for {user_email}")
-            skipped_no_matches += 1
-            continue
-
-        # 5. Filter by preferences
-        matched = []
-        for doc in new_listings:
-            listing = doc.to_dict()
-            listing['id'] = doc.id
-            if matches_preferences(listing, prefs):
-                matched.append(listing)
-
-        if not matched:
-            print(f"No matching listings for {user_email} (from {len(new_listings)} new)")
-            skipped_no_matches += 1
-            continue
-
-        # 6. Sort by pricePerSquareMeter ascending (None values last)
-        matched.sort(key=lambda x: x.get('pricePerSquareMeter') or float('inf'))
-
-        # 7. Build and send email
-        html = build_email_html(user_name, matched)
-        count = len(matched)
-        plural = "s" if count != 1 else ""
-        subject = f"🏡 Huis Hunters Daily: {count} new listing{plural} meeting your preferences"
-
-        success = send_html_email(subject, html, user_email)
-
-        if success:
-            # 8. Update lastEmailSentAt
-            db.collection('users').document(user_id).update({
-                'lastEmailSentAt': firestore.SERVER_TIMESTAMP
-            })
-            emails_sent += 1
-            print(f"Sent email to {user_email} with {len(matched)} listings")
-        else:
-            print(f"Failed to send email to {user_email}")
-
-    print(f"--- Email Alert Job Complete ---")
-    print(f"  Emails sent: {emails_sent}")
-    print(f"  Skipped (no opt-in): {skipped_no_optin}")
-    print(f"  Skipped (no prefs): {skipped_no_prefs}")
-    print(f"  Skipped (no matches): {skipped_no_matches}")
+    return listings
 
 
-if __name__ == "__main__":
-    try:
-        run_email_alerts()
-    except Exception as e:
-        error_msg = f"Email alert job failed: {e}"
-        print(f"Error: {error_msg}")
-        send_email_alert(
-            subject="Email Alert Job Failed - House Hunters Amsterdam",
-            body=f"The email alert job encountered an error.\n\nError details:\n{error_msg}"
-        )
-        raise
+if __name__ == '__main__':
+    print("🏡 Generating email preview with real Firestore data...")
+    print()
+
+    # Fetch real listings from Firestore
+    real_listings = get_real_listings()
+
+    if not real_listings:
+        print("❌ No listings found in Firestore. Cannot generate preview.")
+        exit(1)
+
+    print(f"\nFound {len(real_listings)} listings for preview")
+
+    # Generate HTML
+    html = build_email_html("Huis Hunter", real_listings)
+
+    # Write to file
+    output_path = os.path.join(os.path.dirname(__file__), 'preview_email.html')
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(html)
+
+    print(f"\n✅ Preview generated successfully!")
+    print(f"📄 File: {output_path}")
+    print(f"\nOpen the file in your browser to preview, or email it to yourself to test Gmail rendering.")

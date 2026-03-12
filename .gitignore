@@ -1,9 +1,11 @@
 .venv/
 .env
 .DS_Store
+.plans/
 firebase-credentials.json
 test_single_listing.py
 count_listings.py
+preview_email.html
 get_listing.py
 test_google_services.py
 node_modules/
