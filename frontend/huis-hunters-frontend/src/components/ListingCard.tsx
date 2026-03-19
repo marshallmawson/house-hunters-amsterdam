@@ -9,7 +9,7 @@ import BoltIcon from './icons/BoltIcon';
 import CalendarIcon from './icons/CalendarIcon';
 import LayersIcon from './icons/LayersIcon';
 import { BuildingIcon } from './icons/BuildingIcon';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useSavedProperty } from '../hooks/useSavedProperty';
 import ListingDetailContent from './ListingDetailContent';
 
@@ -65,6 +65,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   isNew
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const publishedDate = listing.publishedDate ? listing.publishedDate.toDate() : null;
   const outdoorSpaceString = getOutdoorSpaceString(listing);
 
@@ -105,7 +106,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
       onModalToggle?.(true);
     } else {
       // Grid view: navigate to detail page
-      navigate(`/listings/${listing.id}`);
+      navigate(`/listings/${listing.id}`, { state: { from: location.pathname } });
     }
   };
 

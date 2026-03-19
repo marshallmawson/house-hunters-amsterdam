@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Container } from 'react-bootstrap';
@@ -47,6 +47,7 @@ const resetMetaTags = () => {
 const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ onRequireLogin }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -91,13 +92,8 @@ const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ onRequireLogin })
   }, [id]);
 
   const handleBack = () => {
-    // If there's browser history (user navigated from within the app), go back.
-    // Otherwise navigate to the home page (e.g. direct email link with no history).
-    if (window.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate('/');
-    }
+    const from = (location.state as { from?: string } | null)?.from;
+    navigate(from ?? '/');
   };
 
   if (loading) {
