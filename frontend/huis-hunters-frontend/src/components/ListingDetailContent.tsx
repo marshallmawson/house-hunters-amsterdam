@@ -12,6 +12,7 @@ import { BuildingIcon } from './icons/BuildingIcon';
 import { GlobeIcon } from './icons/GlobeIcon';
 import { useNavigate } from 'react-router-dom';
 import { useSavedProperty } from '../hooks/useSavedProperty';
+import { loadGoogleMapsAPI } from '../config/maps';
 
 interface ListingDetailContentProps {
   listing: Listing;
@@ -87,6 +88,12 @@ const ListingDetailContent: React.FC<ListingDetailContentProps> = ({
   const floorPlanDragStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const imageDragStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
 
+  // Detail page map
+  const detailMapRef = useRef<HTMLDivElement>(null);
+  const detailMapInstanceRef = useRef<google.maps.Map | null>(null);
+  const detailMapLocationMarkerRef = useRef<google.maps.Marker | null>(null);
+  const [detailMapLocationState, setDetailMapLocationState] = useState<'idle' | 'loading' | 'active' | 'denied'>('idle');
+
   // Save functionality
   const {
     isSaved,
@@ -97,10 +104,6 @@ const ListingDetailContent: React.FC<ListingDetailContentProps> = ({
   } = useSavedProperty(listing.id, { onRequireLogin, onUnsave });
 
   const outdoorSpaceString = getOutdoorSpaceString(listing);
-  const mapUrl = listing.coordinates?.lat && listing.coordinates?.lon
-    ? `https://maps.google.com/maps?q=${listing.coordinates.lat},${listing.coordinates.lon}&z=15&output=embed`
-    : listing.googleMapsUrl;
-
   const getListingUrl = () => `https://www.huishunters.com/listings/${listing.id}`;
 
   // Scroll to top when switching from grid view back to carousel
@@ -112,6 +115,58 @@ const ListingDetailContent: React.FC<ListingDetailContentProps> = ({
     }
     wasGridViewRef.current = showGridView;
   }, [showGridView]);
+
+  // Initialize JS API map on listing detail page
+  useEffect(() => {
+    if (!detailMapRef.current || !listing.coordinates?.lat || !listing.coordinates?.lon) return;
+
+    const lat = listing.coordinates.lat;
+    const lng = listing.coordinates.lon;
+
+    loadGoogleMapsAPI().then(() => {
+      if (!detailMapRef.current) return;
+
+      const map = new google.maps.Map(detailMapRef.current, {
+        zoom: 15,
+        center: { lat, lng },
+        mapTypeId: google.maps.MapTypeId.ROADMAP,
+        gestureHandling: 'greedy',
+        styles: [{ featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] }],
+        zoomControl: true,
+        zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+
+      detailMapInstanceRef.current = map;
+
+      new google.maps.Marker({
+        position: { lat, lng },
+        map,
+        title: listing.address,
+        icon: {
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+            `<svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+              <path d="M16 0C7.163 0 0 7.163 0 16c0 11.045 16 24 16 24s16-12.955 16-24C32 7.163 24.837 0 16 0z" fill="#4a90e2" stroke="#fff" stroke-width="2"/>
+              <circle cx="16" cy="16" r="6" fill="#fff"/>
+            </svg>`
+          ),
+          scaledSize: new google.maps.Size(32, 40),
+          anchor: new google.maps.Point(16, 40),
+        },
+      });
+    }).catch(() => {});
+
+    return () => {
+      if (detailMapLocationMarkerRef.current) {
+        detailMapLocationMarkerRef.current.setMap(null);
+        detailMapLocationMarkerRef.current = null;
+      }
+      detailMapInstanceRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Keyboard navigation for fullscreen image modal
   useEffect(() => {
@@ -531,13 +586,13 @@ const ListingDetailContent: React.FC<ListingDetailContentProps> = ({
           </div>
         ) : (
           <div ref={carouselContainerRef} style={{ position: 'relative' }}>
-              <Carousel className={`mb-4 listing-image-carousel ${isManualNavigation ? 'carousel-no-transition' : ''}`} activeIndex={selectedImageIndex} onSelect={handleCarouselSelect}>
+              <Carousel indicators={false} className={`mb-4 listing-image-carousel ${isManualNavigation ? 'carousel-no-transition' : ''}`} activeIndex={selectedImageIndex} onSelect={handleCarouselSelect}>
                 {listing.imageGallery && listing.imageGallery.map((url: string, index: number) => (
                   <Carousel.Item key={index}>
                     <img className="d-block w-100 modal-image" src={url} alt={`Slide ${index}`}
                       style={context === 'page'
                         ? { height: isMobile ? '300px' : '500px', objectFit: 'cover', cursor: 'pointer' }
-                        : { height: isMobile ? '260px' : '450px', objectFit: 'contain', backgroundColor: '#f8f9fa', cursor: 'pointer' }}
+                        : { height: isMobile ? '260px' : '450px', objectFit: 'cover', cursor: 'pointer' }}
                       onClick={(e) => { if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'IMG') handleGridImageClick(index); }}
                       onLoad={(e) => { const img = e.target as HTMLImageElement; if (img.naturalHeight > img.naturalWidth) { img.style.objectFit = 'contain'; img.style.backgroundColor = 'white'; } }}
                     />
@@ -654,11 +709,18 @@ const ListingDetailContent: React.FC<ListingDetailContentProps> = ({
             </div>
           )}
 
-          <div style={{ marginBottom: '1.5rem', fontSize: '0.85rem', color: '#495057' }}>
-            <strong style={{ color: '#1a202c' }}>Agent:</strong>{' '}
-            {listing.agentUrl ? (
-              <a href={listing.agentUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#4a90e2', textDecoration: 'none' }}>{listing.agentName}</a>
-            ) : listing.agentName}
+          <div style={{ marginBottom: '1.5rem', fontSize: '0.85rem', color: '#495057', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>
+              <strong style={{ color: '#1a202c' }}>Agent:</strong>{' '}
+              {listing.agentUrl ? (
+                <a href={listing.agentUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#4a90e2', textDecoration: 'none' }}>{listing.agentName}</a>
+              ) : listing.agentName}
+            </span>
+            {listing.publishedDate && (
+              <span style={{ color: '#6c757d', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                <CalendarIcon /> {listing.publishedDate.toDate().toLocaleDateString()}
+              </span>
+            )}
           </div>
 
           <a href={listing.url} target="_blank" rel="noopener noreferrer"
@@ -670,10 +732,108 @@ const ListingDetailContent: React.FC<ListingDetailContentProps> = ({
           </a>
         </Col>
         <Col md={6}>
-          {mapUrl && (
+          {(listing.coordinates?.lat && listing.coordinates?.lon) && (
             <>
               <h5 style={{ fontFamily: 'Playfair Display, serif', fontSize: '1.25rem', fontWeight: '600', marginBottom: '0.75rem', color: '#1a202c' }}>Location</h5>
-              <iframe src={mapUrl} width="100%" height="300" style={{ border: 0, borderRadius: '6px', marginBottom: '0.5rem' }} allowFullScreen={false} loading="lazy" referrerPolicy="no-referrer-when-downgrade" title={`Map of ${listing.address}`} />
+              <div style={{ position: 'relative', borderRadius: '6px', overflow: 'hidden', marginBottom: '0.5rem' }}>
+                <div ref={detailMapRef} style={{ width: '100%', height: '300px' }} />
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(listing.postalCode ? `${listing.address}, ${listing.postalCode}` : `${listing.address}, Amsterdam`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    position: 'absolute',
+                    top: '10px',
+                    left: '10px',
+                    backgroundColor: 'white',
+                    color: '#4a90e2',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                    textDecoration: 'none',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Open in Maps →
+                </a>
+                {typeof navigator !== 'undefined' && 'geolocation' in navigator && (
+                  <button
+                    onClick={() => {
+                      if (!detailMapInstanceRef.current) return;
+                      setDetailMapLocationState('loading');
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          const userLat = pos.coords.latitude;
+                          const userLng = pos.coords.longitude;
+                          const map = detailMapInstanceRef.current!;
+
+                          if (detailMapLocationMarkerRef.current) {
+                            detailMapLocationMarkerRef.current.setPosition({ lat: userLat, lng: userLng });
+                          } else {
+                            detailMapLocationMarkerRef.current = new google.maps.Marker({
+                              position: { lat: userLat, lng: userLng },
+                              map,
+                              title: 'Your location',
+                              icon: {
+                                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+                                  `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="12" cy="12" r="12" fill="#8b5cf6" fill-opacity="0.15"/>
+                                    <circle cx="12" cy="12" r="7" fill="#fff" stroke="#8b5cf6" stroke-width="3"/>
+                                  </svg>`
+                                ),
+                                scaledSize: new google.maps.Size(24, 24),
+                                anchor: new google.maps.Point(12, 12),
+                              },
+                            });
+                          }
+
+                          map.panTo({ lat: userLat, lng: userLng });
+                          if ((map.getZoom() ?? 0) < 15) map.setZoom(15);
+
+                          setDetailMapLocationState('active');
+                        },
+                        () => setDetailMapLocationState('denied'),
+                        { enableHighAccuracy: true }
+                      );
+                    }}
+                    title={
+                      detailMapLocationState === 'denied' ? 'Location access denied' :
+                      detailMapLocationState === 'active' ? 'Location shown' : 'Show my location'
+                    }
+                    style={{
+                      position: 'absolute',
+                      bottom: '10px',
+                      left: '10px',
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      backgroundColor: 'white',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                      cursor: detailMapLocationState === 'loading' ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
+                    }}
+                  >
+                    {detailMapLocationState === 'loading' ? (
+                      <div className="spinner-border spinner-border-sm text-primary" role="status" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="12" r="3.5"
+                          fill={detailMapLocationState === 'active' ? '#8b5cf6' : 'none'}
+                          stroke={detailMapLocationState === 'denied' ? '#dc3545' : '#8b5cf6'}
+                          strokeWidth="2"
+                        />
+                        <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke={detailMapLocationState === 'denied' ? '#dc3545' : '#8b5cf6'} strokeWidth="2" strokeLinecap="round"/>
+                      </svg>
+                    )}
+                  </button>
+                )}
+              </div>
               {listing.neighborhood && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.75rem', fontSize: '0.85rem', color: '#495057' }}>
                   <span style={{ fontSize: '0.9rem', color: '#4a90e2' }}><GlobeIcon /></span>

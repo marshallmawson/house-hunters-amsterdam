@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Listing } from '../types';
 import { loadGoogleMapsAPI } from '../config/maps';
@@ -22,6 +22,8 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
   const lastMarkerClickTimeRef = useRef<number>(0);
   const pendingListingRef = useRef<Listing | null>(null);
   const isUpdatingFromURLRef = useRef(false);
+  const userLocationMarkerRef = useRef<google.maps.Marker | null>(null);
+  const [locationState, setLocationState] = useState<'idle' | 'loading' | 'active' | 'denied'>('idle');
   const [listings, setListings] = useState<Listing[]>([]);
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [searchParams] = useSearchParams();
@@ -222,7 +224,9 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
       const q = query(
         collection(db, "listings"),
         where("status", "==", "processed"),
-        where("available", "==", true)
+        where("available", "==", true),
+        orderBy("publishedAt", "desc"),
+        limit(500)
       );
       const querySnapshot = await getDocs(q);
       const listingsData = querySnapshot.docs
@@ -492,6 +496,7 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
       zoomControlOptions: {
         position: google.maps.ControlPosition.RIGHT_BOTTOM
       },
+      gestureHandling: 'greedy',
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: true
@@ -838,6 +843,80 @@ const MapView: React.FC<MapViewProps> = ({ onRequireLogin }) => {
               })()}
             </span>
           </Button>
+          {'geolocation' in navigator && (
+            <Button
+              onClick={() => {
+                if (!mapInstanceRef.current) return;
+                setLocationState('loading');
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => {
+                    const userLat = pos.coords.latitude;
+                    const userLng = pos.coords.longitude;
+                    const map = mapInstanceRef.current!;
+
+                    if (userLocationMarkerRef.current) {
+                      userLocationMarkerRef.current.setPosition({ lat: userLat, lng: userLng });
+                    } else {
+                      userLocationMarkerRef.current = new google.maps.Marker({
+                        position: { lat: userLat, lng: userLng },
+                        map,
+                        title: 'Your location',
+                        zIndex: 0,
+                        icon: {
+                          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+                            `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <circle cx="12" cy="12" r="12" fill="#8b5cf6" fill-opacity="0.15"/>
+                              <circle cx="12" cy="12" r="7" fill="#fff" stroke="#8b5cf6" stroke-width="3"/>
+                            </svg>`
+                          ),
+                          scaledSize: new google.maps.Size(24, 24),
+                          anchor: new google.maps.Point(12, 12),
+                        },
+                      });
+                    }
+
+                    map.panTo({ lat: userLat, lng: userLng });
+                    if ((map.getZoom() ?? 0) < 15) map.setZoom(15);
+
+                    setLocationState('active');
+                  },
+                  () => setLocationState('denied'),
+                  { enableHighAccuracy: true }
+                );
+              }}
+              title={
+                locationState === 'denied' ? 'Location access denied' :
+                locationState === 'active' ? 'Location shown on map' : 'Show my location'
+              }
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '44px',
+                height: '44px',
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: '#ffffff',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                cursor: locationState === 'loading' ? 'wait' : 'pointer',
+                padding: 0,
+                flexShrink: 0,
+              }}
+            >
+              {locationState === 'loading' ? (
+                <div className="spinner-border spinner-border-sm text-primary" role="status" style={{ width: '18px', height: '18px', borderWidth: '2px' }} />
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" r="3.5"
+                    fill={locationState === 'active' ? '#8b5cf6' : 'none'}
+                    stroke={locationState === 'denied' ? '#dc3545' : '#8b5cf6'}
+                    strokeWidth="2"
+                  />
+                  <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke={locationState === 'denied' ? '#dc3545' : '#8b5cf6'} strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              )}
+            </Button>
+          )}
         </div>
       )}
 

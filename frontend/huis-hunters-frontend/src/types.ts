@@ -31,6 +31,7 @@ export interface Listing {
     lat: number;
     lon: number;
   };
+  postalCode?: string;
   agentName?: string;
   agentUrl?: string;
   vveContribution?: number;

@@ -13,6 +13,19 @@ export const mapsConfig = {
   libraries: ['geometry'] as const,
 };
 
+// Start loading the Google Maps API script without waiting for it
+// Call this early (e.g. app startup) so the script is already in flight
+// by the time any map component mounts.
+export const preloadGoogleMapsAPI = (): void => {
+  if (window.google && window.google.maps) return;
+  if (document.querySelector('script[src*="maps.googleapis.com"]')) return;
+  const script = document.createElement('script');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsConfig.apiKey}&libraries=${mapsConfig.libraries.join(',')}`;
+  script.async = true;
+  script.defer = true;
+  document.head.appendChild(script);
+};
+
 // Function to dynamically load Google Maps API
 export const loadGoogleMapsAPI = (): Promise<void> => {
   return new Promise((resolve, reject) => {

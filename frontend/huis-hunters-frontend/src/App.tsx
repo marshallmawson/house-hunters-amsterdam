@@ -3,8 +3,12 @@ import React, { useState, Suspense, lazy } from 'react';
 import { Container, Navbar, Dropdown, Nav, Offcanvas, Modal, Button } from 'react-bootstrap';
 import { Route, Routes, useNavigate, useLocation, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { preloadGoogleMapsAPI } from './config/maps';
 import Listings from './components/Listings';
 import './index.css';
+
+// Start loading Maps API immediately so it's ready when any map component mounts
+preloadGoogleMapsAPI();
 
 const LoginPage = lazy(() => import('./components/LoginPage'));
 const SignUpPage = lazy(() => import('./components/SignUpPage'));
@@ -160,7 +164,25 @@ const AppContent = () => {
         </Offcanvas.Header>
         <Offcanvas.Body>
           <Nav className="flex-column gap-3">
-            <Nav.Link 
+            <Nav.Link
+              onClick={() => { setShowMobileMenu(false); navigate(`/map${location.search || sessionStorage.getItem('listingFilters') || ''}`); }}
+              style={{
+                color: '#212529',
+                fontSize: '1rem',
+                fontWeight: '500',
+                padding: '0.5rem 0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4a90e2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+              Map
+            </Nav.Link>
+            <Nav.Link
               onClick={currentUser ? () => handleNavClick('/saved-properties') : (e) => {
                 e.preventDefault();
                 setShowLoginPrompt(true);

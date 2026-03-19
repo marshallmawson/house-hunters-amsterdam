@@ -106,6 +106,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
       onModalToggle?.(true);
     } else {
       // Grid view: navigate to detail page
+      if (location.search) sessionStorage.setItem('listingFilters', location.search);
       navigate(`/listings/${listing.id}`, { state: { from: location.pathname } });
     }
   };
