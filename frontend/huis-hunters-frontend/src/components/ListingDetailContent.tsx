@@ -489,13 +489,13 @@ const ListingDetailContent: React.FC<ListingDetailContentProps> = ({
             </Dropdown>
           </div>
         </div>
-        <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
+        <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap', flex: '0 0 auto', paddingRight: context === 'modal' ? '1.75rem' : undefined }}>
           €{listing.price?.toLocaleString()}
         </span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
         <div>{listing.area && <span className="badge bg-secondary">{listing.area}</span>}</div>
-        <div>
+        <div style={{ paddingRight: context === 'modal' ? '1.75rem' : undefined }}>
           {listing.pricePerSquareMeter && (
             <span style={{ fontSize: '0.9rem', fontWeight: '500', color: '#1a202c', whiteSpace: 'nowrap' }}>
               per m² €{listing.pricePerSquareMeter.toLocaleString()}
