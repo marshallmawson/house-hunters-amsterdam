@@ -10,7 +10,7 @@ import 'rc-slider/assets/index.css';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 import { parseKMLNeighborhoods } from '../utils/neighborhoodParser';
-import { extractFiltersFromQuery } from '../utils/queryFilterExtractor';
+
 
 interface ListingsProps {
   // Optional callback to trigger the global login required prompt
@@ -26,14 +26,11 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
   const { preferences: savedPreferences, loading: preferencesLoading, savePreferences } = useUserPreferences();
   const preferencesLoadedRef = useRef(false);
 
-  // AI Search state
+  // Address Search state
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<Listing[]>([]);
-  const [useAISearch, setUseAISearch] = useState(!!searchQuery);
-  const hasPerformedInitialSearch = useRef(false);
-  const initialSearchQueryRef = useRef(searchParams.get('search') || '');
-  const searchInProgressRef = useRef(false); // Prevent concurrent searches
+  const [addressSearchResults, setAddressSearchResults] = useState<Listing[]>([]);
+  const [useAddressSearch, setUseAddressSearch] = useState(!!searchParams.get('search'));
 
   // Initialize from URL params, then override with saved preferences if logged in
   const [sortOrder, setSortOrder] = useState(searchParams.get('sort') || 'date-new-old');
@@ -357,399 +354,131 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     setSearchParams(params, { replace: true });
   }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, setSearchParams, searchParams]);
 
-  // AI Search function
-  const performAISearch = useCallback(async (query: string) => {
-    console.log('performAISearch called with:', query);
-
-    // Mark that a search has been performed so that future filter changes
-    // can safely trigger auto-search. This covers both URL-initialized
-    // searches and user-initiated searches (Enter key or button click).
-    if (!hasPerformedInitialSearch.current) {
-      hasPerformedInitialSearch.current = true;
-    }
-    
-    // Prevent concurrent searches
-    if (searchInProgressRef.current) {
-      console.log('Search already in progress, skipping...');
-      return;
-    }
-    
-    // Extract filters from query FIRST
-    // Pass available neighborhoods for matching
-    const extractedFilters = extractFiltersFromQuery(query, allNeighborhoods);
-    console.log('Extracted filters from query:', extractedFilters);
-    
-    // Use cleaned query for search (without filter terms)
-    const cleanedQuery = extractedFilters.cleanedQuery.trim();
-    
-    console.log('Original query:', query);
-    console.log('Cleaned query:', cleanedQuery);
-    
-    // Check if we have a valid search query after filter extraction
-    // If no cleaned query and no filters extracted, check original query length
-    if (!cleanedQuery && !extractedFilters.bedrooms && !extractedFilters.floor && (!extractedFilters.outdoor || extractedFilters.outdoor.length === 0)) {
-      // No filters extracted, check original query length
-      if (!query.trim() || query.trim().length < 3) {
-        console.log('Query too short, clearing results');
-        setSearchResults([]);
-        setUseAISearch(false);
-        return;
-      }
-    }
-    
-    // Apply extracted filters to state
-    let filtersChanged = false;
-    
-    if (extractedFilters.bedrooms) {
-      // Map extracted bedroom value to our format
-      // Dropdown expects: "any", "1+", "2+", "3+", "4+"
-      const bedroomValue = extractedFilters.bedrooms;
-      let newBedrooms: string;
-      if (bedroomValue === '1') {
-        newBedrooms = '1+';
-      } else if (bedroomValue === '2') {
-        newBedrooms = '2+';
-      } else if (bedroomValue === '3') {
-        newBedrooms = '3+';
-      } else if (bedroomValue === '4') {
-        newBedrooms = '4+';
-      } else if (bedroomValue === '5') {
-        // No 5+ option, use 4+ as max
-        newBedrooms = '4+';
-      } else {
-        // Default to 1+ for other values
-        newBedrooms = '1+';
-      }
-      if (newBedrooms !== bedrooms) {
-        setBedrooms(newBedrooms);
-        filtersChanged = true;
-      }
-    }
-    
-    if (extractedFilters.floor) {
-      if (extractedFilters.floor !== floorLevel) {
-        setFloorLevel(extractedFilters.floor);
-        filtersChanged = true;
-      }
-    }
-    
-    if (extractedFilters.outdoor && extractedFilters.outdoor.length > 0) {
-      // Merge with existing outdoor spaces (don't override, just add)
-      const newOutdoor = Array.from(new Set([...selectedOutdoorSpaces, ...extractedFilters.outdoor]));
-      if (JSON.stringify(newOutdoor.sort()) !== JSON.stringify(selectedOutdoorSpaces.sort())) {
-        setSelectedOutdoorSpaces(newOutdoor);
-        filtersChanged = true;
-      }
-    }
-    
-    if (extractedFilters.areas && extractedFilters.areas.length > 0) {
-      // Merge with existing areas (don't override, just add)
-      const newAreas = Array.from(new Set([...selectedAreas, ...extractedFilters.areas]));
-      if (JSON.stringify(newAreas.sort()) !== JSON.stringify(selectedAreas.sort())) {
-        setSelectedAreas(newAreas);
-        filtersChanged = true;
-      }
-    }
-    
-    // Use cleaned query for search (without filter terms)
-    // If cleaned query is empty or only contains common words, use empty string
-    // This allows searching with just filters (no semantic search, just filter results)
-    const searchQueryToUse = cleanedQuery && cleanedQuery.trim() ? cleanedQuery.trim() : '';
-    
-    console.log('Filters changed:', filtersChanged);
-    console.log('Search query to use:', searchQueryToUse);
-    
-    // If no cleaned query and no filters changed, can't search
-    if (!searchQueryToUse && !filtersChanged) {
-      console.log('No search query after filter extraction and no filters changed');
+  // Address Search function - shows spinner while fetching, then sets all results at once
+  const performAddressSearch = useCallback(async (searchTerm: string) => {
+    const trimmed = searchTerm.trim();
+    if (!trimmed) {
+      setAddressSearchResults([]);
+      setUseAddressSearch(false);
+      updateURLWithSearch('');
       return;
     }
 
-    console.log('Starting AI search...');
-    searchInProgressRef.current = true;
     setIsSearching(true);
-    
-    // Use current filter state (which may have been updated above)
-    // But we need to use the updated values, so we'll re-read them after a brief delay
-    // Actually, React state updates are async, so we'll use the extracted filters directly
-    const effectiveBedrooms = extractedFilters.bedrooms 
-      ? (extractedFilters.bedrooms === '1' ? '1+' : 
-         extractedFilters.bedrooms === '2' ? '2+' : 
-         extractedFilters.bedrooms === '3' ? '3+' :
-         extractedFilters.bedrooms === '4' ? '4+' :
-         extractedFilters.bedrooms === '5' ? '4+' : // Max is 4+
-         '1+')
-      : bedrooms;
-    const effectiveFloor = extractedFilters.floor || floorLevel;
-    const effectiveOutdoor = extractedFilters.outdoor && extractedFilters.outdoor.length > 0
-      ? Array.from(new Set([...selectedOutdoorSpaces, ...extractedFilters.outdoor]))
-      : selectedOutdoorSpaces;
-    const effectiveAreas = extractedFilters.areas && extractedFilters.areas.length > 0
-      ? Array.from(new Set([...selectedAreas, ...extractedFilters.areas]))
-      : selectedAreas;
-    
-    // Convert bedroom filter to numeric value for backend compatibility
-    // Backend expects '1', '2', '3', '4', '5', or 'any', not '1+', '2+', etc.
-    const bedroomFilter = effectiveBedrooms === 'any' ? 'any' : 
-                         effectiveBedrooms === '1+' ? '1' :
-                         effectiveBedrooms === '2+' ? '2' : 
-                         effectiveBedrooms === '3+' ? '3' :
-                         effectiveBedrooms === '4+' ? '4' :
-                         effectiveBedrooms === '5+' ? '5' :
-                         // If it's already a number without '+', use it
-                         effectiveBedrooms;
-    
-    // Check if any filters are active (not default values)
-    const hasActiveFilters = effectiveBedrooms !== '1+' || 
-                            priceRange.min !== 400000 || 
-                            priceRange.max !== 1250000 || 
-                            effectiveFloor !== 'any' || 
-                            effectiveOutdoor.length > 0 || 
-                            minSize !== '' || 
-                            effectiveAreas.length > 0;
-    
-    const requestBody = {
-      query: searchQueryToUse,
-      limit: 100,
-      filters: {
-        minPrice: priceRange.min,
-        maxPrice: priceRange.max,
-        bedrooms: bedroomFilter,
-        floor: effectiveFloor,
-        outdoor: effectiveOutdoor,
-        minSize: minSize,
-        areas: effectiveAreas,
-        publishedWithinDays: publishedWithin !== 'all' ? parseInt(publishedWithin, 10) : null
-      },
-      // If we have filters but no search query, use 'filtered' type (just filters, no search)
-      // If we have a search query, use appropriate search type based on filters
-      search_type: searchQueryToUse 
-        ? (hasActiveFilters ? 'filtered' : 'semantic')
-        : (hasActiveFilters ? 'filtered' : 'semantic') // If no query but filters exist, use filtered
-    };
-    
-    console.log('Request body:', JSON.stringify(requestBody, null, 2));
-    
+    const lowerQuery = trimmed.toLowerCase();
+
+    // Search available listings in-memory (instant, no network)
+    const availableMatches = listings.filter(listing =>
+      listing.address && listing.address.toLowerCase().includes(lowerQuery)
+    );
+
+    // Fetch unavailable listings from Firestore and merge before showing results
     try {
-        // Use local search API in development, Cloud Run in production
-        const searchApiUrl = process.env.REACT_APP_SEARCH_API_URL || 'http://localhost:8080';
-        const response = await fetch(`${searchApiUrl}/search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        console.error('Search request failed:', response.status, response.statusText);
-        throw new Error('Search request failed');
-      }
-
-      const data = await response.json();
-      console.log('Search response received:', data);
-      console.log('Response results length:', data.results ? data.results.length : 'no results property');
-      console.log('Full response structure:', JSON.stringify(data, null, 2));
-      
-      // Convert search results to Listing format
-      const formattedResults: Listing[] = data.results
-        .filter((result: any) => {
-          // Filter out listings without images
-          return result.imageGallery && result.imageGallery.length > 0;
+      const q = query(
+        collection(db, "listings"),
+        where("status", "==", "processed"),
+        where("available", "==", false),
+        limit(500)
+      );
+      const snapshot = await getDocs(q);
+      const unavailableMatches = snapshot.docs
+        .map(doc => {
+          const { publishDate, publishedAt, ...rest } = doc.data();
+          let finalPublishedDate;
+          if (publishedAt && typeof publishedAt.toDate === 'function') {
+            finalPublishedDate = publishedAt;
+          } else if (typeof publishDate === 'string') {
+            const date = new Date(publishDate);
+            finalPublishedDate = {
+              toDate: () => date,
+              seconds: Math.floor(date.getTime() / 1000),
+              nanoseconds: (date.getTime() % 1000) * 1000000
+            };
+          } else {
+            finalPublishedDate = publishDate;
+          }
+          return { id: doc.id, ...rest, publishedDate: finalPublishedDate } as Listing;
         })
-        .map((result: any) => {
-        // Transform publishedDate to match the format expected by ListingCard
-        let finalPublishedDate;
-        if (typeof result.publishedDate === 'string') {
-          const date = new Date(result.publishedDate);
-          finalPublishedDate = {
-            toDate: () => date,
-            seconds: Math.floor(date.getTime() / 1000),
-            nanoseconds: (date.getTime() % 1000) * 1000000
-          };
-        } else {
-          finalPublishedDate = result.publishedDate;
-        }
-
-        return {
-          id: result.id,
-          address: result.address,
-          price: result.price,
-          pricePerSquareMeter: result.pricePerSquareMeter,
-          bedrooms: result.bedrooms,
-          bathrooms: result.bathrooms,
-          livingArea: result.livingArea,
-          energyLabel: result.energyLabel,
-          scrapedAt: result.scrapedAt,
-          publishedDate: finalPublishedDate,
-          url: result.url,
-          imageGallery: result.imageGallery,
-          embeddingText: result.embeddingText,
-          floor: result.apartmentFloor,
-          hasGarden: result.hasGarden,
-          hasRooftopTerrace: result.hasRooftopTerrace,
-          hasBalcony: result.hasBalcony,
-          outdoorSpaceArea: result.outdoorSpaceArea,
-          apartmentFloor: result.apartmentFloor,
-          status: result.status,
-          numberOfStories: result.numberOfStories,
-          coordinates: result.coordinates,
-          agentName: result.agentName,
-          agentUrl: result.agentUrl,
-          vveContribution: result.vveContribution,
-          cleanedDescription: result.cleanedDescription,
-          floorPlans: result.floorPlans,
-          googleMapsUrl: result.googleMapsUrl,
-          yearBuilt: result.yearBuilt,
-          neighborhood: result.neighborhood,
-          area: result.area,
-          searchScore: result.searchScore,
-          processedAt: result.processedAt
-        };
-      });
-
-      console.log('Setting search results:', formattedResults.length, 'results');
-      setSearchResults(formattedResults);
-      setUseAISearch(true);
-      
-      // Keep the original query in the search input field for user visibility
-      // Only use cleaned query for actual search and URL
-      // Don't update searchQuery state - let user see what they typed
-      
-      // Update URL with cleaned search query and extracted filters after successful search
-      // Note: Filter state updates will trigger URL update via updateURLParams effect
-      // But we need to update search query in URL
-      const params = new URLSearchParams();
-      if (sortOrder !== 'date-new-old') params.set('sort', sortOrder);
-      if (priceRange.min !== 400000) params.set('minPrice', priceRange.min.toString());
-      if (priceRange.max !== 1250000) params.set('maxPrice', priceRange.max.toString());
-      
-      // Use effective values (extracted or existing)
-      const finalBedrooms = extractedFilters.bedrooms 
-        ? (extractedFilters.bedrooms === '1' ? '1+' : 
-           extractedFilters.bedrooms === '2' ? '2+' : 
-           extractedFilters.bedrooms === '3' ? '3+' :
-           extractedFilters.bedrooms === '4' ? '4+' :
-           extractedFilters.bedrooms === '5' ? '4+' : // Max is 4+
-           '1+')
-        : bedrooms;
-      const finalFloor = extractedFilters.floor || floorLevel;
-      const finalOutdoor = extractedFilters.outdoor && extractedFilters.outdoor.length > 0
-        ? Array.from(new Set([...selectedOutdoorSpaces, ...extractedFilters.outdoor]))
-        : selectedOutdoorSpaces;
-      const finalAreas = extractedFilters.areas && extractedFilters.areas.length > 0
-        ? Array.from(new Set([...selectedAreas, ...extractedFilters.areas]))
-        : selectedAreas;
-      
-      if (finalBedrooms !== '1+') params.set('bedrooms', finalBedrooms);
-      if (finalFloor !== 'any') params.set('floor', finalFloor);
-      if (finalOutdoor.length > 0) params.set('outdoor', finalOutdoor.join(','));
-      if (minSize) params.set('minSize', minSize);
-      if (finalAreas.length > 0) params.set('areas', finalAreas.join(','));
-      // Only add search query to URL if it's not empty after cleanup
-      // Keep the original query in the input field for user visibility
-      // Always add search query if it exists, even if short (backend will handle it)
-      if (searchQueryToUse && searchQueryToUse.trim()) {
-        params.set('search', searchQueryToUse.trim());
-      }
-      
-      setSearchParams(params, { replace: true });
+        .filter(listing =>
+          listing.imageGallery && listing.imageGallery.length > 0 &&
+          listing.address && listing.address.toLowerCase().includes(lowerQuery)
+        );
+      setAddressSearchResults([...availableMatches, ...unavailableMatches]);
     } catch (error) {
-      console.error('AI Search error:', error);
-      setSearchResults([]);
-      setUseAISearch(false);
+      console.error('Error fetching unavailable listings for search:', error);
+      setAddressSearchResults(availableMatches);
     } finally {
-      console.log('Search completed, setting isSearching to false');
+      setUseAddressSearch(true);
+      updateURLWithSearch(trimmed);
       setIsSearching(false);
-      searchInProgressRef.current = false;
     }
-  }, [priceRange.min, priceRange.max, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
+  }, [listings, updateURLWithSearch]);
 
-  // Trigger search when component loads with a search query in URL
-  useEffect(() => {
-    console.log('Component mounted, searchQuery:', searchQuery, 'isSearching:', isSearching, 'hasPerformedInitialSearch:', hasPerformedInitialSearch.current);
-    const trimmedSearchQuery = searchQuery.trim();
-    const initialTrimmedQuery = (initialSearchQueryRef.current || '').trim();
-
-    // Only auto-trigger an initial search if:
-    // - There is a non-empty search query
-    // - No search has been performed yet
-    // - The current searchQuery still matches the initial URL search value
-    //   (prevents auto-searching when the user starts typing from an empty box)
-    if (
-      trimmedSearchQuery &&
-      !isSearching &&
-      !hasPerformedInitialSearch.current &&
-      trimmedSearchQuery === initialTrimmedQuery
-    ) {
-      console.log('Triggering initial search for:', searchQuery);
-      hasPerformedInitialSearch.current = true;
-      performAISearch(searchQuery);
+  // Helper to check if a listing passes the current filters (used for "outside filters" indicator)
+  const doesListingPassFilters = useCallback((listing: Listing): boolean => {
+    const price = listing.price || 0;
+    const passesPrice = price >= priceRange.min && price <= priceRange.max;
+    const passesBedrooms = bedrooms === 'any' || (listing.bedrooms || 0) >= parseInt(bedrooms, 10);
+    const passesFloorLevel = floorLevel === 'any' ||
+      (floorLevel === 'ground' && listing.apartmentFloor === 'Ground') ||
+      (floorLevel === 'top' && (listing.apartmentFloor === 'Upper' || listing.apartmentFloor === 'Top floor' || listing.apartmentFloor === 'Upper floor'));
+    const passesOutdoorSpace = selectedOutdoorSpaces.length === 0 ||
+      selectedOutdoorSpaces.some(space =>
+        (space === 'garden' && listing.hasGarden) ||
+        (space === 'rooftop' && listing.hasRooftopTerrace) ||
+        (space === 'balcony' && listing.hasBalcony)
+      );
+    const passesMinSize = !minSize || !!(listing.livingArea && listing.livingArea >= parseInt(minSize, 10));
+    const passesArea = selectedAreas.length === 0 || !!(listing.area && selectedAreas.includes(listing.area));
+    let passesPublishedWithin = true;
+    if (publishedWithin && publishedWithin !== 'all' && listing.publishedDate &&
+        typeof listing.publishedDate.toDate === 'function') {
+      const days = parseInt(publishedWithin, 10);
+      if (!Number.isNaN(days) && days > 0) {
+        const now = new Date();
+        const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        cutoff.setDate(cutoff.getDate() - days);
+        passesPublishedWithin = listing.publishedDate.toDate() >= cutoff;
+      }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery]); // Only run when searchQuery changes
-
-  // Trigger search when filters change (if there's an active search query)
-  // Only trigger if initial search has already been performed (prevents duplicate initial searches)
-  useEffect(() => {
-    if (!hasPerformedInitialSearch.current) {
-      return; // Don't trigger on initial mount, wait for initial search to complete
-    }
-    console.log('Filters changed, searchQuery:', searchQuery, 'isSearching:', isSearching);
-    if (searchQuery.trim() && !isSearching) {
-      console.log('Triggering search due to filter change for:', searchQuery);
-      performAISearch(searchQuery);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [priceRange.min, priceRange.max, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
+    return passesPrice && passesBedrooms && passesFloorLevel && passesOutdoorSpace && passesMinSize && passesArea && passesPublishedWithin;
+  }, [priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
 
   useEffect(() => {
-    // Use AI search results if available, otherwise use regular listings
-    let result = useAISearch ? [...searchResults] : [...listings];
+    // Use address search results if available, otherwise use regular listings
+    let result = useAddressSearch ? [...addressSearchResults] : [...listings];
 
-    // Sorting (skip for AI search results as they're already ranked by relevance)
-    if (!useAISearch) {
-      result.sort((a, b) => {
+    // Sorting (always applied)
+    result.sort((a, b) => {
       switch (sortOrder) {
         case 'price-low-high':
           return (a.price || 0) - (b.price || 0);
-        case 'date-new-old':
+        case 'date-new-old': {
           // Primary sort: Date (day only) DESC (newest day first)
           const dateA = new Date((a.publishedDate?.seconds || 0) * 1000);
           const dateB = new Date((b.publishedDate?.seconds || 0) * 1000);
-          
-          // Normalize to day level (remove time component)
           const dayA = new Date(dateA.getFullYear(), dateA.getMonth(), dateA.getDate()).getTime();
           const dayB = new Date(dateB.getFullYear(), dateB.getMonth(), dateB.getDate()).getTime();
           const dayDiff = dayB - dayA;
-          
-          // Secondary sort: Price ASC (lowest first) when on same day
           if (dayDiff !== 0) return dayDiff;
           return (a.price || 0) - (b.price || 0);
+        }
         case 'date-old-new':
-          // Primary sort: Date ASC (oldest first)
-          const dateA_old = a.publishedDate?.seconds || 0;
-          const dateB_old = b.publishedDate?.seconds || 0;
-          return dateA_old - dateB_old;
-        default:
-          // Default: Date (day only) DESC, then Price DESC
+          return (a.publishedDate?.seconds || 0) - (b.publishedDate?.seconds || 0);
+        default: {
           const defaultDateA = new Date((a.publishedDate?.seconds || 0) * 1000);
           const defaultDateB = new Date((b.publishedDate?.seconds || 0) * 1000);
-          
-          // Normalize to day level (remove time component)
           const defaultDayA = new Date(defaultDateA.getFullYear(), defaultDateA.getMonth(), defaultDateA.getDate()).getTime();
           const defaultDayB = new Date(defaultDateB.getFullYear(), defaultDateB.getMonth(), defaultDateB.getDate()).getTime();
           const defaultDayDiff = defaultDayB - defaultDayA;
-          
-          // Secondary sort: Price ASC when on same day
           if (defaultDayDiff !== 0) return defaultDayDiff;
           return (a.price || 0) - (b.price || 0);
+        }
       }
-      });
-    }
+    });
 
-    // Filtering (skip for AI search results as filters are applied server-side)
-    if (!useAISearch) {
+    // Filtering - only apply to regular (non-search) view
+    if (!useAddressSearch) {
       result = result.filter(listing => {
         const price = listing.price || 0;
         const passesPrice = price >= priceRange.min && price <= priceRange.max;
@@ -757,8 +486,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
         const passesFloorLevel = floorLevel === 'any' ||
           (floorLevel === 'ground' && listing.apartmentFloor === 'Ground') ||
           (floorLevel === 'top' && (listing.apartmentFloor === 'Upper' || listing.apartmentFloor === 'Top floor' || listing.apartmentFloor === 'Upper floor'));
-        const passesOutdoorSpace = selectedOutdoorSpaces.length === 0 || 
-          selectedOutdoorSpaces.some(space => 
+        const passesOutdoorSpace = selectedOutdoorSpaces.length === 0 ||
+          selectedOutdoorSpaces.some(space =>
             (space === 'garden' && listing.hasGarden) ||
             (space === 'rooftop' && listing.hasRooftopTerrace) ||
             (space === 'balcony' && listing.hasBalcony)
@@ -774,13 +503,11 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
             const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const cutoff = new Date(startOfToday);
             cutoff.setDate(startOfToday.getDate() - days);
-
             const publishedJsDate = listing.publishedDate.toDate();
             passesPublishedWithin = publishedJsDate >= cutoff;
           }
         }
 
-        // Filter out listings without images
         const hasImages = listing.imageGallery && listing.imageGallery.length > 0;
 
         return passesPrice &&
@@ -795,13 +522,13 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     }
 
     setFilteredListings(result);
-    // Reset to first page when filters change
+    // Reset to first page when filters/search change
     setCurrentPage(1);
-  }, [listings, searchResults, useAISearch, sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
+  }, [listings, addressSearchResults, useAddressSearch, sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
 
-  // Calculate max processedAt date from all listings (both regular and search results)
+  // Calculate max processedAt date from available listings only (used for "New" badge)
   const maxProcessedAtDate = useMemo(() => {
-    const allListings = useAISearch ? searchResults : listings;
+    const allListings = listings; // Always use available listings — unavailable listings get processedAt updated when marked sold, which would skew the max date
     if (allListings.length === 0) return null;
 
     let maxDate: Date | null = null;
@@ -816,7 +543,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     });
 
     return maxDate;
-  }, [listings, searchResults, useAISearch]);
+  }, [listings]);
 
   // Helper function to normalize date to day level (remove time component)
   const normalizeToDay = (date: Date): Date => {
@@ -825,7 +552,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
 
   // Helper function to check if a listing should show the "New" badge
   const isListingNew = useCallback((listing: Listing): boolean => {
-    if (!maxProcessedAtDate || !listing.processedAt) return false;
+    if (!maxProcessedAtDate || !listing.processedAt || listing.available === false) return false;
 
     try {
       const listingProcessedDate = listing.processedAt.toDate();
@@ -1492,8 +1219,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                     setSelectedAreas([]);
                     setPublishedWithin('all');
                     setSearchQuery('');
-                    setUseAISearch(false);
-                    setSearchResults([]);
+                    setUseAddressSearch(false);
+                    setAddressSearchResults([]);
                   }}
                   style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', width: '100%', borderRadius: '8px' }}
                 >
@@ -1504,59 +1231,62 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
 
             </Row>
             
-            {/* AI-Powered Search + Map view (desktop/tablet) */}
-            <Row className="mt-3 ai-search-row align-items-end">
-              <Col lg={8} md={8} sm={12}>
+            {/* Address Search + Map view (desktop/tablet) */}
+            <Row className="mt-3 ai-search-row">
+              <Col xs={12} md={6} lg={5}>
                 <FormGroup>
                   <Form.Label className="fw-medium mb-2" style={{ fontSize: '0.85rem' }}>
-                    🔍 AI-Powered Search (optional)
+                    Address search
                   </Form.Label>
-                  <div className="d-flex gap-2">
+                  <div className="d-flex gap-2" style={{ width: '100%' }}>
                     <Form.Control
                       type="text"
-                      placeholder={isMobile ? "Search anything…" : "Describe your ideal home (e.g. 'renovated with garden')"}
+                      placeholder="Street name and number"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyPress={(e) => {
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter') {
-                          performAISearch(searchQuery);
+                          performAddressSearch(searchQuery);
                         }
                       }}
                       style={{
+                        flex: 1,
+                        minWidth: 0,
                         borderRadius: '8px',
                         border: '1px solid #dee2e6',
                         fontSize: '0.9rem',
                         padding: '8px 12px'
                       }}
                     />
-                    <Button
-                      variant="primary"
-                      onClick={() => performAISearch(searchQuery)}
-                      disabled={isSearching || searchQuery.trim().length < 3}
-                      style={{ borderRadius: '8px', padding: '8px 16px' }}
-                    >
-                      {isSearching ? 'Searching...' : 'Search'}
-                    </Button>
-                    <Button
-                      variant="outline-secondary"
-                      size="sm"
-                      onClick={() => {
-                        // Clear search only, keep filters
-                        setSearchQuery('');
-                        setUseAISearch(false);
-                        setSearchResults([]);
-                        
-                        // Update URL with cleared search but preserve current filters
-                        updateURLWithSearch('');
-                      }}
-                      style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-                    >
-                      Clear Search
-                    </Button>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                      <Button
+                        variant="primary"
+                        onClick={() => performAddressSearch(searchQuery)}
+                        disabled={isSearching || !searchQuery.trim()}
+                        style={{ borderRadius: '8px', padding: '8px 16px' }}
+                      >
+                        {isSearching ? 'Searching...' : 'Search'}
+                      </Button>
+                      {useAddressSearch && (
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          onClick={() => {
+                            setSearchQuery('');
+                            setUseAddressSearch(false);
+                            setAddressSearchResults([]);
+                            updateURLWithSearch('');
+                          }}
+                          style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </FormGroup>
               </Col>
-              <Col lg={4} md={4} sm={12} className="mt-2 mt-md-0 d-none d-md-flex justify-content-md-end">
+              <Col lg={7} md={6} sm={12} className="mt-2 mt-md-0 d-none d-md-flex justify-content-md-end">
                 <Button
                   className="ai-map-btn"
                   variant="primary"
@@ -1636,13 +1366,13 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                 whiteSpace: 'nowrap'
               }}
             >
-              {sortOrder === 'date-new-old' ? (useAISearch ? 'Best match' : 'Date & Price') :
+              {sortOrder === 'date-new-old' ? ('Date & Price') :
                sortOrder === 'date-old-new' ? 'Oldest first' :
                sortOrder === 'price-low-high' ? 'Price: Low-High' : 'Price: High-Low'}
             </Dropdown.Toggle>
             <Dropdown.Menu align="end">
               <Dropdown.Item onClick={() => setSortOrder('date-new-old')} active={sortOrder === 'date-new-old'}>
-                {useAISearch ? 'Best match' : 'Date & Price'}
+                {'Date & Price'}
               </Dropdown.Item>
               <Dropdown.Item onClick={() => setSortOrder('date-old-new')} active={sortOrder === 'date-old-new'}>
                 Oldest first
@@ -1690,7 +1420,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                     paddingRight: '2.25rem'
                   }}
                 >
-                  <option value="date-new-old">{useAISearch ? 'Best match' : 'Date & Price'}</option>
+                  <option value="date-new-old">{'Date & Price'}</option>
                   <option value="date-old-new">Date (Old to New)</option>
                   <option value="price-low-high">Price (Low to High)</option>
                   <option value="price-high-low">Price (High to Low)</option>
@@ -1701,7 +1431,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
         </div>
       )}
 
-      {/* Loading message */}
+      {/* Initial loading message */}
       {!hasLoadedInitialListings && (
         <Row>
           <Col>
@@ -1719,12 +1449,12 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       {hasLoadedInitialListings && (
         <Row className="listings-grid-row">
           {currentListings.map(listing => (
-            <Col 
-              key={listing.id} 
-              sm={12} 
-              md={6} 
-              lg={6} 
-              xl={4} 
+            <Col
+              key={listing.id}
+              sm={12}
+              md={6}
+              lg={6}
+              xl={4}
               className="mb-4"
               style={isMobile ? { paddingLeft: 0, paddingRight: 0 } : {}}
             >
@@ -1732,6 +1462,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
                 listing={listing}
                 onRequireLogin={onRequireLogin}
                 isNew={isListingNew(listing)}
+                isUnavailable={listing.available === false}
+                isOutsideFilters={useAddressSearch && !doesListingPassFilters(listing)}
               />
             </Col>
           ))}
@@ -1760,8 +1492,8 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       )}
 
       {/* No results message */}
-      {filteredListings.length === 0 && 
-       ((!useAISearch && hasLoadedInitialListings) || (useAISearch && !isSearching)) && (
+      {filteredListings.length === 0 && !isSearching &&
+       ((!useAddressSearch && hasLoadedInitialListings) || useAddressSearch) && (
         <Row>
           <Col>
             <div className="text-center py-5">

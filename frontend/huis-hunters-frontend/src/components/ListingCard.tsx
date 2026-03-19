@@ -35,6 +35,8 @@ interface ListingCardProps {
   onNoteEditStart?: () => void;
   onNoteEditCancel?: () => void;
   isNew?: boolean;
+  isUnavailable?: boolean;
+  isOutsideFilters?: boolean;
 }
 
 const getOutdoorSpaceString = (listing: Listing) => {
@@ -62,7 +64,9 @@ const ListingCard: React.FC<ListingCardProps> = ({
   isNoteEditing,
   onNoteEditStart,
   onNoteEditCancel,
-  isNew
+  isNew,
+  isUnavailable,
+  isOutsideFilters
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -183,6 +187,48 @@ const ListingCard: React.FC<ListingCardProps> = ({
             }}
           >
             New
+          </div>
+        )}
+        {/* Unavailable Badge - Below New badge if both present */}
+        {isUnavailable && (
+          <div
+            style={{
+              position: 'absolute',
+              top: isNew ? '42px' : '10px',
+              left: '10px',
+              backgroundColor: 'rgba(220, 53, 69, 0.75)',
+              color: 'white',
+              fontSize: '0.7rem',
+              fontWeight: '600',
+              padding: '0.25rem 0.5rem',
+              borderRadius: '4px',
+              zIndex: 5,
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Unavailable
+          </div>
+        )}
+        {/* Outside Filters Badge - Bottom Left Corner */}
+        {isOutsideFilters && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '10px',
+              left: '10px',
+              backgroundColor: 'rgba(255, 193, 7, 0.9)',
+              color: '#1a1a1a',
+              fontSize: '0.65rem',
+              fontWeight: '600',
+              padding: '0.25rem 0.5rem',
+              borderRadius: '4px',
+              zIndex: 5,
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Outside your filters
           </div>
         )}
         {/* Heart Save Button - Top Right Corner */}
