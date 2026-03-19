@@ -1,22 +1,24 @@
 
-import React, { useState } from 'react';
-import Listings from './components/Listings';
-import LoginPage from './components/LoginPage';
-import SignUpPage from './components/SignUpPage';
-import ProfilePage from './components/ProfilePage';
-import SavedProperties from './components/SavedProperties';
-import MapView from './components/MapView';
+import React, { useState, Suspense, lazy } from 'react';
 import { Container, Navbar, Dropdown, Nav, Offcanvas, Modal, Button } from 'react-bootstrap';
-import './index.css';
 import { Route, Routes, useNavigate, useLocation, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Listings from './components/Listings';
+import './index.css';
+
+const LoginPage = lazy(() => import('./components/LoginPage'));
+const SignUpPage = lazy(() => import('./components/SignUpPage'));
+const ProfilePage = lazy(() => import('./components/ProfilePage'));
+const SavedProperties = lazy(() => import('./components/SavedProperties'));
+const MapView = lazy(() => import('./components/MapView'));
+const ListingDetailPage = lazy(() => import('./components/ListingDetailPage'));
 
 const AppContent = () => {
   const { currentUser, userData, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
-  const isHomePage = location.pathname === '/' || location.pathname.startsWith('/listings/');
+  const isHomePage = location.pathname === '/';
   const isMapPage = location.pathname === '/map';
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
@@ -393,45 +395,47 @@ const AppContent = () => {
         </div>
       )}
 
-      <Routes>
-        <Route
-          path="/map"
-          element={
-            <MapView
-              onRequireLogin={() => setShowLoginPrompt(true)}
-            />
-          }
-        />
-        <Route
-          path="/*"
-          element={
-            <Container fluid>
-              <Routes>
-                <Route
-                  path="/"
-                  element={
-                    <Listings
-                      onRequireLogin={() => setShowLoginPrompt(true)}
-                    />
-                  }
-                />
-                <Route
-                  path="/listings/:id"
-                  element={
-                    <Listings
-                      onRequireLogin={() => setShowLoginPrompt(true)}
-                    />
-                  }
-                />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/signup" element={<SignUpPage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/saved-properties" element={<SavedProperties />} />
-              </Routes>
-            </Container>
-          }
-        />
-      </Routes>
+      <Suspense fallback={<div style={{ textAlign: 'center', paddingTop: '8rem' }}><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>}>
+        <Routes>
+          <Route
+            path="/map"
+            element={
+              <MapView
+                onRequireLogin={() => setShowLoginPrompt(true)}
+              />
+            }
+          />
+          <Route
+            path="/listings/:id"
+            element={
+              <ListingDetailPage
+                onRequireLogin={() => setShowLoginPrompt(true)}
+              />
+            }
+          />
+          <Route
+            path="/*"
+            element={
+              <Container fluid>
+                <Routes>
+                  <Route
+                    path="/"
+                    element={
+                      <Listings
+                        onRequireLogin={() => setShowLoginPrompt(true)}
+                      />
+                    }
+                  />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/signup" element={<SignUpPage />} />
+                  <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/saved-properties" element={<SavedProperties />} />
+                </Routes>
+              </Container>
+            }
+          />
+        </Routes>
+      </Suspense>
 
     </div>
   );

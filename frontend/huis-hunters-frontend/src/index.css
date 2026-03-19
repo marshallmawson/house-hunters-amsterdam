@@ -745,6 +745,20 @@ html {
   outline: none !important;
 }
 
+/* Detail page carousel arrows — understated, close to edges */
+.listing-detail-page .listing-image-carousel .carousel-control-prev,
+.listing-detail-page .listing-image-carousel .carousel-control-next {
+  width: 10% !important;
+  opacity: 0.6 !important;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6)) !important;
+  transition: opacity 0.15s ease !important;
+}
+
+.listing-detail-page .listing-image-carousel .carousel-control-prev:hover,
+.listing-detail-page .listing-image-carousel .carousel-control-next:hover {
+  opacity: 1 !important;
+}
+
 /* Hide Bootstrap's default dropdown arrow for custom dropdown */
 .custom-dropdown-toggle::after {
   display: none !important;
@@ -918,3 +932,76 @@ html {
   display: none !important;
 }
 
+
+/* ===== Listing Detail Page ===== */
+
+.listing-detail-page {
+  padding-top: 5rem; /* clear fixed navbar */
+  padding-bottom: 3rem;
+  min-height: 100vh;
+}
+
+.listing-detail-container {
+  max-width: 800px;
+}
+
+.listing-detail-carousel-wrapper {
+  width: min(950px, 100vw);
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 1.5rem;
+}
+
+.listing-detail-back {
+  margin-bottom: 1rem;
+}
+
+.listing-detail-back-btn {
+  background: none;
+  border: none;
+  color: #6c757d;
+  font-size: 0.9rem;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: color 0.15s ease;
+}
+
+.listing-detail-back-btn:hover {
+  color: #212529;
+}
+
+.listing-detail-header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.listing-detail-body {
+  /* inherits all the existing modal body styles */
+}
+
+@media (max-width: 768px) {
+  .listing-detail-page {
+    padding-top: 4.5rem;
+    padding-bottom: 2rem;
+  }
+
+  .listing-detail-container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .listing-detail-body {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  .listing-detail-page {
+    overflow-y: auto;
+    padding-bottom: 5rem;
+  }
+}
