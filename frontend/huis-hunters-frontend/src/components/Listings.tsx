@@ -147,7 +147,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
           where("status", "==", "processed"),
           where("available", "==", true),
           orderBy("publishedAt", "desc"),
-          limit(200)
+          limit(500)
         );
         const querySnapshot = await getDocs(q);
         const listingsData = querySnapshot.docs
