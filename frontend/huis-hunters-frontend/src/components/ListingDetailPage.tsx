@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useListingsContext } from '../contexts/ListingsContext';
 import { Container } from 'react-bootstrap';
 import { parseListingDoc } from '../utils/listingParser';
 import ListingDetailContent from './ListingDetailContent';
@@ -48,6 +49,7 @@ const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ onRequireLogin })
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { getListingById } = useListingsContext();
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -64,6 +66,19 @@ const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ onRequireLogin })
     const fetchListing = async () => {
       if (!id) { setNotFound(true); setLoading(false); return; }
 
+      // Try in-memory cache first (instant for in-app navigation)
+      const cached = getListingById(id);
+      if (cached) {
+        setListing(cached);
+        setLoading(false);
+        const imageUrl = cached.imageGallery[0];
+        const title = `${cached.address} - €${cached.price?.toLocaleString()}`;
+        const description = `${cached.address} - €${cached.price?.toLocaleString()}${cached.bedrooms ? `, ${cached.bedrooms} bedrooms` : ''}${cached.livingArea ? `, ${cached.livingArea} m²` : ''}`;
+        updateMetaTags(imageUrl, title, description, `https://www.huishunters.com/listings/${id}`);
+        return;
+      }
+
+      // Fallback: fetch from Firestore (direct/email links, or context not yet loaded)
       try {
         const docSnap = await getDoc(doc(db, 'listings', id));
         const parsed = parseListingDoc(docSnap);
@@ -89,11 +104,11 @@ const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ onRequireLogin })
     fetchListing();
 
     return () => { resetMetaTags(); };
-  }, [id]);
+  }, [id, getListingById]);
 
   const handleBack = () => {
-    const from = (location.state as { from?: string } | null)?.from;
-    navigate(from ?? '/');
+    const state = location.state as { from?: string; scrollY?: number } | null;
+    navigate(state?.from ?? '/', { state: { scrollY: state?.scrollY } });
   };
 
   if (loading) {

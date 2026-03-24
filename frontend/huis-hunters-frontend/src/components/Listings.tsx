@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, where, limit, QueryDocumentSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useListingsContext } from '../contexts/ListingsContext';
 import ListingCard from './ListingCard';
 import NeighborhoodMap from './NeighborhoodMap';
 import { Container, Row, Col, Form, FormGroup, Pagination, Button, Dropdown } from 'react-bootstrap';
@@ -18,13 +19,16 @@ interface ListingsProps {
 }
 
 const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
-  const [listings, setListings] = useState<Listing[]>([]);
+  const { listings, loading: listingsLoading } = useListingsContext();
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { preferences: savedPreferences, loading: preferencesLoading, savePreferences } = useUserPreferences();
   const preferencesLoadedRef = useRef(false);
+  // Tracks location.state so the filter effect can read it without adding location to its deps
+  const locationStateRef = useRef<unknown>(location.state);
+  locationStateRef.current = location.state;
 
   // Address Search state
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
@@ -47,7 +51,6 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [showNeighborhoodMap, setShowNeighborhoodMap] = useState(false);
   const [allNeighborhoods, setAllNeighborhoods] = useState<string[]>([]);
-  const [hasLoadedInitialListings, setHasLoadedInitialListings] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   // Pagination state
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1', 10));
@@ -63,6 +66,26 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Restore scroll position when returning from a listing detail page.
+  // Must depend on filteredListings — the mount-time scroll fires before listing cards
+  // are in the DOM (filteredListings starts as [] and is populated by a later effect).
+  const scrollRestoredRef = useRef(false);
+  useEffect(() => {
+    if (scrollRestoredRef.current || filteredListings.length === 0) return;
+    const scrollY = (location.state as { scrollY?: number } | null)?.scrollY;
+    if (scrollY) {
+      scrollRestoredRef.current = true;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollY, behavior: 'instant' as ScrollBehavior });
+          // Clear the navigation state so the filter effect resets pages normally
+          // on any subsequent filter changes
+          navigate('.', { replace: true, state: null, preventScrollReset: true });
+        });
+      });
+    }
+  }, [filteredListings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load saved preferences on mount if logged in and no URL params
   useEffect(() => {
@@ -136,53 +159,6 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     return Array.from(areas).sort();
   }, [listings]);
 
-  useEffect(() => {
-    const fetchListings = async () => {
-      try {
-        const q = query(
-          collection(db, "listings"),
-          where("status", "==", "processed"),
-          where("available", "==", true),
-          orderBy("publishedAt", "desc"),
-          limit(500)
-        );
-        const querySnapshot = await getDocs(q);
-        const listingsData = querySnapshot.docs
-          .map(doc => {
-            const { publishDate, publishedAt, ...rest } = doc.data();
-            let finalPublishedDate;
-
-            if (publishedAt && typeof publishedAt.toDate === 'function') {
-              // Preferred canonical Firestore Timestamp
-              finalPublishedDate = publishedAt;
-            } else if (typeof publishDate === 'string') {
-              const date = new Date(publishDate);
-              finalPublishedDate = {
-                toDate: () => date,
-                seconds: Math.floor(date.getTime() / 1000),
-                nanoseconds: (date.getTime() % 1000) * 1000000
-              };
-            } else {
-              finalPublishedDate = publishDate;
-            }
-
-            return { id: doc.id, ...rest, publishedDate: finalPublishedDate } as Listing;
-          })
-          .filter(listing => {
-            // Filter out listings without images
-            return listing.imageGallery && listing.imageGallery.length > 0;
-          });
-        
-        setListings(listingsData);
-      } finally {
-        // Ensure we mark the initial load as complete even if the request fails,
-        // so the UI doesn't get stuck in a "pre-load" visual state.
-        setHasLoadedInitialListings(true);
-      }
-    };
-
-    fetchListings();
-  }, []);
 
   // URL params update function (for filter changes, not search queries)
   // Note: This should NOT modify the search parameter - that's handled by updateURLWithSearch
@@ -263,7 +239,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       params.delete('search');
     }
     
-    setSearchParams(params, { replace: true });
+    setSearchParams(params, { replace: true, preventScrollReset: true });
   }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, currentPage, setSearchParams, searchParams, searchQuery]);
 
   // Separate function for updating URL with search query
@@ -351,7 +327,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       params.delete('search'); // Explicitly remove search parameter
     }
     
-    setSearchParams(params, { replace: true });
+    setSearchParams(params, { replace: true, preventScrollReset: true });
   }, [sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin, setSearchParams, searchParams]);
 
   // Address Search function - shows spinner while fetching, then sets all results at once
@@ -382,7 +358,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       );
       const snapshot = await getDocs(q);
       const unavailableMatches = snapshot.docs
-        .map(doc => {
+        .map((doc: QueryDocumentSnapshot) => {
           const { publishDate, publishedAt, ...rest } = doc.data();
           let finalPublishedDate;
           if (publishedAt && typeof publishedAt.toDate === 'function') {
@@ -399,7 +375,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
           }
           return { id: doc.id, ...rest, publishedDate: finalPublishedDate } as Listing;
         })
-        .filter(listing =>
+        .filter((listing: Listing) =>
           listing.imageGallery && listing.imageGallery.length > 0 &&
           listing.address && listing.address.toLowerCase().includes(lowerQuery)
         );
@@ -522,8 +498,11 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
     }
 
     setFilteredListings(result);
-    // Reset to first page when filters/search change
-    setCurrentPage(1);
+    // Skip page reset when navigating back from a listing (location.state.scrollY is set).
+    // We read from a ref so location doesn't need to be in the deps array.
+    if (!(locationStateRef.current as any)?.scrollY) {
+      setCurrentPage(1);
+    }
   }, [listings, addressSearchResults, useAddressSearch, sortOrder, priceRange, bedrooms, floorLevel, selectedOutdoorSpaces, minSize, selectedAreas, publishedWithin]);
 
   // Calculate max processedAt date from available listings only (used for "New" badge)
@@ -672,7 +651,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       {/* Mobile Filters and Map Buttons - Floating over hero
           Only show after the initial listings load has completed to avoid
           any visible vertical "jump" as data and layout settle. */}
-      {hasLoadedInitialListings && (
+      {!listingsLoading && (
         <div className="mobile-filters-button d-md-none">
           <div className="mobile-buttons-container" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             <Button 
@@ -1339,7 +1318,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       </div>
       
       {/* Mobile Sort Bar */}
-      {hasLoadedInitialListings && filteredListings.length > 0 && (
+      {!listingsLoading && filteredListings.length > 0 && (
         <div className="d-md-none mb-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', paddingTop: showFilters ? '680px' : '0', transition: 'padding-top 0.3s ease', position: 'relative', zIndex: 100 }}>
           {/* Left: Results count */}
           <div style={{
@@ -1389,7 +1368,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       )}
       
       {/* Desktop Sort and Pagination info */}
-      {hasLoadedInitialListings && filteredListings.length > 0 && (
+      {!listingsLoading && filteredListings.length > 0 && (
         <div className="mb-2 d-none d-md-flex" style={{ maxWidth: '1180px', marginLeft: 'auto', marginRight: 'auto' }}>
           <div style={{ width: '100%' }}>
             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2" style={{ fontSize: '0.85rem' }}>
@@ -1432,7 +1411,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       )}
 
       {/* Initial loading message */}
-      {!hasLoadedInitialListings && (
+      {listingsLoading && (
         <Row>
           <Col>
             <div className="text-center py-5">
@@ -1446,7 +1425,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       )}
 
       {/* Listings */}
-      {hasLoadedInitialListings && (
+      {!listingsLoading && (
         <Row className="listings-grid-row">
           {currentListings.map(listing => (
             <Col
@@ -1471,7 +1450,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
       )}
 
       {/* Pagination controls */}
-      {hasLoadedInitialListings && totalPages > 1 && (
+      {!listingsLoading && totalPages > 1 && (
         <Row className="mt-4">
           <Col>
             <div className="d-flex justify-content-center">
@@ -1493,7 +1472,7 @@ const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
 
       {/* No results message */}
       {filteredListings.length === 0 && !isSearching &&
-       ((!useAddressSearch && hasLoadedInitialListings) || useAddressSearch) && (
+       ((!useAddressSearch && !listingsLoading) || useAddressSearch) && (
         <Row>
           <Col>
             <div className="text-center py-5">

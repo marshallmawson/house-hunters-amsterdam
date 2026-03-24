@@ -3,6 +3,7 @@ import React, { useState, Suspense, lazy } from 'react';
 import { Container, Navbar, Dropdown, Nav, Offcanvas, Modal, Button } from 'react-bootstrap';
 import { Route, Routes, useNavigate, useLocation, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ListingsProvider } from './contexts/ListingsContext';
 import { preloadGoogleMapsAPI } from './config/maps';
 import Listings from './components/Listings';
 import './index.css';
@@ -466,7 +467,9 @@ const AppContent = () => {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <ListingsProvider>
+        <AppContent />
+      </ListingsProvider>
     </AuthProvider>
   );
 }

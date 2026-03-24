@@ -111,7 +111,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
     } else {
       // Grid view: navigate to detail page
       if (location.search) sessionStorage.setItem('listingFilters', location.search);
-      navigate(`/listings/${listing.id}`, { state: { from: location.pathname } });
+      navigate(`/listings/${listing.id}`, { state: { from: location.pathname + location.search, scrollY: window.scrollY } });
     }
   };
 
