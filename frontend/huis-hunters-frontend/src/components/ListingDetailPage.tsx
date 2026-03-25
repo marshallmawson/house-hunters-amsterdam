@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -54,6 +54,11 @@ const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ onRequireLogin })
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  // iOS doesn't reset scroll on SPA navigation — force top before first paint
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
