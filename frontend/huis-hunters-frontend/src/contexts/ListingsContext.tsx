@@ -7,6 +7,7 @@ interface ListingsContextType {
   listings: Listing[];
   loading: boolean;
   getListingById: (id: string) => Listing | undefined;
+  ensureLoaded: () => void;
 }
 
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
@@ -19,9 +20,16 @@ export const useListingsContext = (): ListingsContextType => {
 
 export const ListingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [listings, setListings] = useState<Listing[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [fetchStarted, setFetchStarted] = useState(false);
+
+  const ensureLoaded = useCallback(() => {
+    setFetchStarted(true);
+  }, []);
 
   useEffect(() => {
+    if (!fetchStarted) return;
+    setLoading(true);
     const fetchListings = async () => {
       try {
         const q = query(
@@ -64,7 +72,7 @@ export const ListingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     fetchListings();
-  }, []);
+  }, [fetchStarted]);
 
   const getListingById = useCallback(
     (id: string) => listings.find(l => l.id === id),
@@ -72,7 +80,7 @@ export const ListingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 
   return (
-    <ListingsContext.Provider value={{ listings, loading, getListingById }}>
+    <ListingsContext.Provider value={{ listings, loading, getListingById, ensureLoaded }}>
       {children}
     </ListingsContext.Provider>
   );

@@ -19,7 +19,8 @@ interface ListingsProps {
 }
 
 const Listings: React.FC<ListingsProps> = ({ onRequireLogin }) => {
-  const { listings, loading: listingsLoading } = useListingsContext();
+  const { listings, loading: listingsLoading, ensureLoaded } = useListingsContext();
+  useEffect(() => { ensureLoaded(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();

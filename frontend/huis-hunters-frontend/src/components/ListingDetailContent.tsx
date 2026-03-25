@@ -116,49 +116,67 @@ const ListingDetailContent: React.FC<ListingDetailContentProps> = ({
     wasGridViewRef.current = showGridView;
   }, [showGridView]);
 
-  // Initialize JS API map on listing detail page
+  // Initialize JS API map on listing detail page — deferred until map div is in view
+  // so Google Maps cannot steal focus and scroll the page on mobile before the user
+  // has scrolled down to the map section.
   useEffect(() => {
     if (!detailMapRef.current || !listing.coordinates?.lat || !listing.coordinates?.lon) return;
 
+    const container = detailMapRef.current;
     const lat = listing.coordinates.lat;
     const lng = listing.coordinates.lon;
 
-    loadGoogleMapsAPI().then(() => {
-      if (!detailMapRef.current) return;
+    const initMap = () => {
+      loadGoogleMapsAPI().then(() => {
+        if (!detailMapRef.current || detailMapInstanceRef.current) return;
 
-      const map = new google.maps.Map(detailMapRef.current, {
-        zoom: 15,
-        center: { lat, lng },
-        mapTypeId: google.maps.MapTypeId.ROADMAP,
-        gestureHandling: 'greedy',
-        styles: [{ featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] }],
-        zoomControl: true,
-        zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false,
-      });
+        const map = new google.maps.Map(detailMapRef.current, {
+          zoom: 15,
+          center: { lat, lng },
+          mapTypeId: google.maps.MapTypeId.ROADMAP,
+          gestureHandling: 'greedy',
+          styles: [{ featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] }],
+          zoomControl: true,
+          zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+        });
 
-      detailMapInstanceRef.current = map;
+        detailMapInstanceRef.current = map;
 
-      new google.maps.Marker({
-        position: { lat, lng },
-        map,
-        title: listing.address,
-        icon: {
-          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
-            `<svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
-              <path d="M16 0C7.163 0 0 7.163 0 16c0 11.045 16 24 16 24s16-12.955 16-24C32 7.163 24.837 0 16 0z" fill="#4a90e2" stroke="#fff" stroke-width="2"/>
-              <circle cx="16" cy="16" r="6" fill="#fff"/>
-            </svg>`
-          ),
-          scaledSize: new google.maps.Size(32, 40),
-          anchor: new google.maps.Point(16, 40),
-        },
-      });
-    }).catch(() => {});
+        new google.maps.Marker({
+          position: { lat, lng },
+          map,
+          title: listing.address,
+          icon: {
+            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+              `<svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 0C7.163 0 0 7.163 0 16c0 11.045 16 24 16 24s16-12.955 16-24C32 7.163 24.837 0 16 0z" fill="#4a90e2" stroke="#fff" stroke-width="2"/>
+                <circle cx="16" cy="16" r="6" fill="#fff"/>
+              </svg>`
+            ),
+            scaledSize: new google.maps.Size(32, 40),
+            anchor: new google.maps.Point(16, 40),
+          },
+        });
+      }).catch(() => {});
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          observer.disconnect();
+          initMap();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    observer.observe(container);
 
     return () => {
+      observer.disconnect();
       if (detailMapLocationMarkerRef.current) {
         detailMapLocationMarkerRef.current.setMap(null);
         detailMapLocationMarkerRef.current = null;
