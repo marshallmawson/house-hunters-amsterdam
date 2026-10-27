@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from html import escape
 import os
 from dotenv import load_dotenv
 
@@ -20,7 +21,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend requests
+# Only the frontend may call this API from a browser
+CORS(app, origins=[
+    r"^https://huishunters\.com$",
+    r"^https://[a-z0-9-]+\.huishunters\.com$",
+    r"^http://localhost(:\d+)?$",
+])
+
+MAX_QUERY_LENGTH = 200
 
 # Import search functions after Flask app creation
 def get_search_functions():
@@ -32,100 +40,6 @@ def get_search_functions():
 def health_check():
     """Health check endpoint."""
     return jsonify({"status": "healthy", "service": "search-api"})
-
-@app.route('/debug/count', methods=['GET'])
-def debug_count():
-    """Debug endpoint to check listing count"""
-    try:
-        # Use the exact same imports as search_service.py
-        import firebase_admin
-        from firebase_admin import credentials, firestore
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app()
-        db = firestore.client()
-        
-        # Get project info
-        project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "unknown"
-        
-        listings_ref = db.collection('listings')
-        count = len(list(listings_ref.limit(1000).stream()))
-        
-        # Check status distribution
-        status_counts = {}
-        all_docs = list(listings_ref.limit(1000).stream())
-        for doc in all_docs:
-            status = doc.to_dict().get('status', 'no_status')
-            status_counts[status] = status_counts.get(status, 0) + 1
-        
-        # Also try to get a sample document to see the structure
-        sample_docs = list(listings_ref.limit(1).stream())
-        sample_structure = {}
-        if sample_docs:
-            sample_doc = sample_docs[0].to_dict()
-            sample_structure = {key: type(value).__name__ for key, value in sample_doc.items()}
-        
-        return jsonify({
-            "total_listings": count,
-            "project_id": project_id,
-            "status_distribution": status_counts,
-            "sample_document_structure": sample_structure
-        })
-    except Exception as e:
-        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
-
-@app.route('/debug/status', methods=['GET'])
-def debug_status():
-    """Debug endpoint to check initialization status of search service"""
-    try:
-        # Try to import search_service to check its initialization state
-        import search_service
-        
-        # Check if db is initialized
-        db_initialized = search_service.db is not None
-        embedding_initialized = search_service.embedding_model is not None
-        
-        # Try to get project info
-        project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "unknown"
-        google_cloud_project = os.getenv("GOOGLE_CLOUD_PROJECT", "NOT SET")
-        gcp_project_id = os.getenv("GCP_PROJECT_ID", "NOT SET")
-        
-        # Try to test Firebase connection
-        firebase_test = "unknown"
-        if db_initialized:
-            try:
-                test_ref = search_service.db.collection('listings').limit(1)
-                list(test_ref.stream())
-                firebase_test = "working"
-            except Exception as e:
-                firebase_test = f"error: {str(e)}"
-        
-        # Try to test Vertex AI
-        vertex_test = "unknown"
-        if embedding_initialized:
-            try:
-                test_embedding = search_service.generate_query_embedding("test")
-                vertex_test = "working" if test_embedding else "error: returned None"
-            except Exception as e:
-                vertex_test = f"error: {str(e)}"
-        
-        return jsonify({
-            "db_initialized": db_initialized,
-            "embedding_model_initialized": embedding_initialized,
-            "firebase_test": firebase_test,
-            "vertex_ai_test": vertex_test,
-            "project_id": project_id,
-            "GOOGLE_CLOUD_PROJECT": google_cloud_project,
-            "GCP_PROJECT_ID": gcp_project_id,
-            "GOOGLE_APPLICATION_CREDENTIALS": os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "NOT SET (using ADC)")
-        })
-    except Exception as e:
-        import traceback
-        return jsonify({
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "traceback": traceback.format_exc()
-        }), 500
-
 
 @app.route('/search', methods=['POST'])
 def search_listings():
@@ -157,7 +71,9 @@ def search_listings():
         query = data.get('query', '').strip()
         if not query:
             return jsonify({"error": "Query is required"}), 400
-        
+        if len(query) > MAX_QUERY_LENGTH:
+            return jsonify({"error": f"Query must be at most {MAX_QUERY_LENGTH} characters"}), 400
+
         limit = min(data.get('limit', 50), 100)  # Cap at 100 results
         filters = data.get('filters', {})
         search_type = data.get('search_type', 'hybrid')
@@ -427,12 +343,12 @@ def get_listing_html(listing_id):
         else:
             image_url_with_cache = f"{image_url}?v={cache_timestamp}"
         
-        # Render HTML with meta tags
+        # Render HTML with meta tags (escaped, since listing fields come from scraped data)
         html = HTML_TEMPLATE.format(
-            title=title,
-            description=description,
-            image_url=image_url_with_cache,
-            listing_url=listing_url
+            title=escape(title),
+            description=escape(description),
+            image_url=escape(image_url_with_cache),
+            listing_url=escape(listing_url)
         )
         
         # Add headers to prevent caching by WhatsApp

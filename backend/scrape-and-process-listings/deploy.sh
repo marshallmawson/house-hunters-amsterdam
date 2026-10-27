@@ -69,7 +69,7 @@ if [ "$SERVICE_NAME" = "search" ]; then
       --memory 2Gi \
       --cpu 2 \
       --timeout 300 \
-      --max-instances 10 \
+      --max-instances 3 \
       --project "${PROJECT_ID}"
     echo "Deployment of ${SERVICE_NAME}-service complete."
     echo "You can view your service at the URL provided above."

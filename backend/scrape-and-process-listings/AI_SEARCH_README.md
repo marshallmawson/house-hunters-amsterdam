@@ -39,28 +39,24 @@ This implementation adds natural language search capabilities to your house hunt
 ### 1. Backend Setup
 
 ```bash
-# Navigate to the backend directory
-cd backend/scrape-and-process-listings
+# Navigate to the search service directory
+cd backend/scrape-and-process-listings/search
 
 # Install search API requirements
-pip install -r search_requirements.txt
+pip install -r requirements.txt
 
-# Set up environment variables in your .env file
-export GOOGLE_APPLICATION_CREDENTIALS="firebase-credentials.json"
+# Authenticate with your own Google account (no service account key file needed)
+gcloud auth application-default login
 export GCP_PROJECT_ID="your-gcp-project-id"
 ```
 
 ### 2. Start the Search API
 
 ```bash
-# Option 1: Use the startup script
-./start_search_api.sh
-
-# Option 2: Run directly
-python search_api.py
+PORT=8080 python search_api.py
 ```
 
-The API will start on `http://localhost:5000`
+The API will start on `http://localhost:8080`
 
 ### 3. Test the Search Functionality
 

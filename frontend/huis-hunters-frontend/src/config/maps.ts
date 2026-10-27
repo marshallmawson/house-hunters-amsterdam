@@ -1,12 +1,6 @@
 // Google Maps API configuration
 const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || 'YOUR_GOOGLE_MAPS_API_KEY';
 
-// Debug logging
-console.log('Environment variables check:');
-console.log('- REACT_APP_GOOGLE_MAPS_API_KEY exists:', !!process.env.REACT_APP_GOOGLE_MAPS_API_KEY);
-console.log('- API Key value:', apiKey ? `${apiKey.substring(0, 10)}...` : 'NO KEY');
-console.log('- All env vars:', Object.keys(process.env).filter(key => key.includes('GOOGLE') || key.includes('MAPS')));
-
 export const mapsConfig = {
   // Replace this with your actual Google Maps API key
   apiKey,
@@ -34,10 +28,6 @@ export const loadGoogleMapsAPI = (): Promise<void> => {
       resolve();
       return;
     }
-
-    // Debug: Log the API key being used
-    console.log('Loading Google Maps API with key:', mapsConfig.apiKey ? `${mapsConfig.apiKey.substring(0, 10)}...` : 'NO KEY');
-    console.log('Full URL being loaded:', `https://maps.googleapis.com/maps/api/js?key=${mapsConfig.apiKey}&libraries=${mapsConfig.libraries.join(',')}`);
 
     // Check if script is already being loaded
     const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
