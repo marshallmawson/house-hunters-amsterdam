@@ -40,28 +40,57 @@ ls -la
 # Pass build arguments for production environment variables using substitutions
 # Note: --tag is not used when --config is specified (cloudbuild.yaml handles tagging)
 
-# Get Google Maps API key from environment variable or .env file
-# Check root .env file first, then local .env file
-if [ -f ../../.env ]; then
-  GOOGLE_MAPS_API_KEY=$(grep "REACT_APP_GOOGLE_MAPS_API_KEY" ../../.env | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
-elif [ -f .env ]; then
-  GOOGLE_MAPS_API_KEY=$(grep "REACT_APP_GOOGLE_MAPS_API_KEY" .env | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
+# Load values from .env file
+ENV_FILE=""
+if [ -f .env ]; then
+  ENV_FILE=".env"
+elif [ -f ../../.env ]; then
+  ENV_FILE="../../.env"
 fi
 
-# Use environment variable if .env file doesn't have it or value is empty
+load_env_var() {
+  local key="$1"
+  local val=""
+  if [ -n "$ENV_FILE" ]; then
+    val=$(grep "^${key}=" "$ENV_FILE" | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
+  fi
+  # Fall back to environment variable if not found in file
+  if [ -z "$val" ]; then
+    val="${!key}"
+  fi
+  echo "$val"
+}
+
+GOOGLE_MAPS_API_KEY=$(load_env_var "REACT_APP_GOOGLE_MAPS_API_KEY")
+FIREBASE_API_KEY=$(load_env_var "REACT_APP_FIREBASE_API_KEY")
+FIREBASE_AUTH_DOMAIN=$(load_env_var "REACT_APP_FIREBASE_AUTH_DOMAIN")
+FIREBASE_PROJECT_ID=$(load_env_var "REACT_APP_FIREBASE_PROJECT_ID")
+FIREBASE_STORAGE_BUCKET=$(load_env_var "REACT_APP_FIREBASE_STORAGE_BUCKET")
+FIREBASE_MESSAGING_SENDER_ID=$(load_env_var "REACT_APP_FIREBASE_MESSAGING_SENDER_ID")
+FIREBASE_APP_ID=$(load_env_var "REACT_APP_FIREBASE_APP_ID")
+FIREBASE_MEASUREMENT_ID=$(load_env_var "REACT_APP_FIREBASE_MEASUREMENT_ID")
+
 if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
-  GOOGLE_MAPS_API_KEY="${REACT_APP_GOOGLE_MAPS_API_KEY}"
+  echo "ERROR: REACT_APP_GOOGLE_MAPS_API_KEY is not set in .env or environment"
+  exit 1
 fi
 
-# Check if API key is set
-if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
-  echo "ERROR: REACT_APP_GOOGLE_MAPS_API_KEY is not set!"
-  echo "Please set it in your .env file or as an environment variable"
+if [ -z "$FIREBASE_API_KEY" ]; then
+  echo "ERROR: REACT_APP_FIREBASE_API_KEY is not set in .env or environment"
   exit 1
 fi
 
 gcloud builds submit . \
-  --substitutions=_IMAGE_NAME="${IMAGE_NAME}",_REACT_APP_SEARCH_API_URL="https://search-service-315949479081.europe-west4.run.app",_REACT_APP_GOOGLE_MAPS_API_KEY="${GOOGLE_MAPS_API_KEY}" \
+  --substitutions=_IMAGE_NAME="${IMAGE_NAME}",\
+_REACT_APP_SEARCH_API_URL="https://search-service-315949479081.europe-west4.run.app",\
+_REACT_APP_GOOGLE_MAPS_API_KEY="${GOOGLE_MAPS_API_KEY}",\
+_REACT_APP_FIREBASE_API_KEY="${FIREBASE_API_KEY}",\
+_REACT_APP_FIREBASE_AUTH_DOMAIN="${FIREBASE_AUTH_DOMAIN}",\
+_REACT_APP_FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID}",\
+_REACT_APP_FIREBASE_STORAGE_BUCKET="${FIREBASE_STORAGE_BUCKET}",\
+_REACT_APP_FIREBASE_MESSAGING_SENDER_ID="${FIREBASE_MESSAGING_SENDER_ID}",\
+_REACT_APP_FIREBASE_APP_ID="${FIREBASE_APP_ID}",\
+_REACT_APP_FIREBASE_MEASUREMENT_ID="${FIREBASE_MEASUREMENT_ID}" \
   --config=cloudbuild.yaml \
   --project "${PROJECT_ID}"
 
