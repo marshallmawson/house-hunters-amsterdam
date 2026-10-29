@@ -70,6 +70,7 @@ if [ "$SERVICE_NAME" = "search" ]; then
       --cpu 2 \
       --timeout 300 \
       --max-instances 3 \
+      --service-account "search-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
       --project "${PROJECT_ID}"
     echo "Deployment of ${SERVICE_NAME}-service complete."
     echo "You can view your service at the URL provided above."
@@ -98,6 +99,7 @@ else
       --memory "${MEMORY}" \
       --cpu "${CPU}" \
       --task-timeout 1800 \
+      --service-account "${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
       --project "${PROJECT_ID}" # Set timeout to 30 minutes (1800 seconds)
     echo "Deployment of ${SERVICE_NAME}-job complete."
 fi

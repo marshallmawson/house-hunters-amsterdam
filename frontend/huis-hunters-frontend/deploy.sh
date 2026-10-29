@@ -108,6 +108,7 @@ gcloud run deploy "${SERVICE_NAME}-service" \
   --platform "managed" \
   --port "80" \
   --allow-unauthenticated \
+  --service-account "frontend-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --project "${PROJECT_ID}"
 
 echo "Deployment of ${SERVICE_NAME}-service complete."
