@@ -69,7 +69,7 @@ if [ "$SERVICE_NAME" = "search" ]; then
       --memory 2Gi \
       --cpu 2 \
       --timeout 300 \
-      --max-instances 3 \
+      --max-instances 2 \
       --service-account "search-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
       --project "${PROJECT_ID}"
     echo "Deployment of ${SERVICE_NAME}-service complete."
