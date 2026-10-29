@@ -12,5 +12,5 @@ main:
     - log_scraper_run:
         call: sys.log
         args:
-          - "Scraper job run result:"
-          - ${scraper_run.name}
+          text: '${"Scraper job run result: " + scraper_run.name}'
+          severity: INFO
